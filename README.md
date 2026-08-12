@@ -1,33 +1,130 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 💵 Control de Gastos - Aplicación Personal
 
-## Getting Started
+Una aplicación web moderna y sencilla para gestionar tus ingresos, gastos y ahorros personales.
 
-First, run the development server:
+## 🎯 Características
+
+- 📊 **Dashboard** - Resumen visual de tu situación financiera
+- 📈 **Ingresos** - Registra ingresos mensuales, quincenales o únicos
+- 💸 **Gastos** - Controla gastos fijos y variables
+- 🏦 **Ahorros** - Administra múltiples cuentas de ahorro
+- ⏰ **Movimientos Programados** - Gastos y ahorros automáticos
+- 📊 **Historial** - Consulta todas tus transacciones
+- 🏷️ **Categorías** - Organiza gastos por categoría
+
+## 🛠️ Tech Stack
+
+- **Frontend**: Next.js 16 + React 19 + TypeScript
+- **Styling**: Tailwind CSS 4
+- **Database**: SQLite + Prisma ORM
+- **Backend**: Next.js API Routes
+
+## 📥 Instalación
+
+### Requisitos
+- Node.js 20+ (se recomienda 22+)
+- npm 10+
+
+### Pasos
+
+1. **Instalar dependencias**
+   ```bash
+   npm install
+   ```
+
+2. **Configurar base de datos**
+   ```bash
+   npm run db:push
+   ```
+
+3. **Inicializar datos (categorías predeterminadas)**
+   ```bash
+   node scripts/init-db.js
+   ```
+
+4. **Iniciar en desarrollo**
+   ```bash
+   npm run dev
+   ```
+
+5. Abre [http://localhost:3000](http://localhost:3000) en tu navegador
+
+## 📚 Scripts Disponibles
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run dev          # Inicia servidor de desarrollo
+npm run build        # Construye para producción
+npm run start        # Inicia servidor de producción
+npm run lint         # Ejecuta linter
+npm run db:push      # Sincroniza schema con BD
+npm run db:generate  # Genera cliente Prisma
+npm run db:studio    # Abre Prisma Studio para inspeccionar datos
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 📊 Estructura de Carpetas
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+src/
+├── app/
+│   ├── api/          # Rutas API
+│   ├── layout.tsx    # Layout principal
+│   └── page.tsx      # Página principal (Dashboard)
+├── components/       # Componentes React reutilizables
+├── lib/             # Utilidades (Prisma, etc)
+├── types/           # Tipos TypeScript
+└── utils/           # Funciones auxiliares
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+prisma/
+├── schema.prisma    # Definición de BD
+└── migrations/      # Histórico de migraciones
+```
 
-## Learn More
+## 🗄️ Estructura de Base de Datos
 
-To learn more about Next.js, take a look at the following resources:
+### Modelos principales
+- **Categoria** - Categorías de gastos
+- **Ingreso** - Ingresos personales
+- **AhorroLugar** - Cuentas de ahorro
+- **MovimientoAhorro** - Depósitos, retiros, transferencias
+- **GastoDomiciliado** - Gastos automáticos
+- **AhorroDomiciliado** - Ahorros automáticos
+- **GastoFijo** - Gastos fijos mensuales
+- **GastoVariable** - Gastos registrados manualmente
+- **Transaccion** - Historial unificado de movimientos
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 💡 Cálculos principales
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Dinero Disponible
+```
+Dinero Disponible = 
+  Ingresos 
+  - Gastos Domiciliados 
+  - Gastos Fijos 
+  - Gastos Variables 
+  - Ahorros Programados
+```
+
+### Ahorros
+- **Ahorros Domiciliados** NO son gastos
+- Se descuentan del dinero disponible
+- Se suman al saldo de la cuenta de ahorro
+
+## 🚀 Próximas Funcionalidades
+
+- [ ] Gráficos y visualizaciones
+- [ ] Reportes mensuales
+- [ ] Proyecciones futuras
+- [ ] Autenticación de usuarios
+- [ ] Sincronización con bancos
+- [ ] Aplicación móvil
+
+## 📝 Licencia
+
+MIT
+
+## 👨‍💻 Autor
+
+Creado con ❤️ para gestionar tus finanzas personales
 
 ## Deploy on Vercel
 

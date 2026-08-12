@@ -1,0 +1,189 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Categorías
+model Categoria {
+  id                  Int      @id @default(autoincrement())
+  nombre              String   @unique
+  color               String   @default("#3b82f6")
+  icono               String?
+  esDelSistema        Boolean  @default(false)
+  fechaCreacion       DateTime @default(now())
+
+  // Relaciones
+  gastosFijos         GastoFijo[]
+  gastosVariables     GastoVariable[]
+  gatosDomiciliados   GastoDomiciliado[]
+
+  @@map("categorias")
+}
+
+// Ingresos
+model Ingreso {
+  id                  Int      @id @default(autoincrement())
+  nombre              String
+  cantidad            Float
+  frecuencia          String   // "mensual", "quincenal", "unico"
+  fechaInicio         DateTime @default(now())
+  activo              Boolean  @default(true)
+  notas               String?
+  fechaCreacion       DateTime @default(now())
+  fechaActualizacion  DateTime @updatedAt
+
+  @@map("ingresos")
+}
+
+// Lugares de Ahorro
+model AhorroLugar {
+  id                  Int      @id @default(autoincrement())
+  nombre              String   @unique
+  tipo                String   // "cuenta_ahorro", "inversion", "efectivo", "otra"
+  saldoActual         Float    @default(0)
+  notas               String?
+  fechaCreacion       DateTime @default(now())
+  fechaActualizacion  DateTime @updatedAt
+
+  // Relaciones
+  movimientos         MovimientoAhorro[]
+  ahorrosDomiciliados AhorroDomiciliado[]
+
+  @@map("ahorro_lugares")
+}
+
+// Movimientos de Ahorro (depósitos, retiros, transferencias)
+model MovimientoAhorro {
+  id                  Int      @id @default(autoincrement())
+  ahorroId            Int
+  ahorro              AhorroLugar @relation(fields: [ahorroId], references: [id], onDelete: Cascade)
+  tipo                String   // "deposito", "retiro", "transferencia"
+  cantidad            Float
+  fecha               DateTime @default(now())
+  concepto            String
+  ahorroOrigenId      Int?     // Para transferencias
+  ahorroOrigen        AhorroLugar? @relation("transferenciasOrigen", fields: [ahorroOrigenId], references: [id], onDelete: SetNull)
+  
+  // Relación con transacción general
+  transaccionId       Int?
+  transaccion         Transaccion? @relation(fields: [transaccionId], references: [id], onDelete: SetNull)
+
+  @@map("movimientos_ahorro")
+}
+
+// Gastos Fijos (domiciliados)
+model GastoDomiciliado {
+  id                  Int      @id @default(autoincrement())
+  nombre              String
+  cantidad            Float
+  fechaCobro          Int      // Día del mes (1-31)
+  frecuencia          String   // "mensual", "quincenal"
+  categoriaId         Int
+  categoria           Categoria @relation(fields: [categoriaId], references: [id])
+  cuentaPago          String
+  activo              Boolean  @default(true)
+  notas               String?
+  fechaCreacion       DateTime @default(now())
+  fechaActualizacion  DateTime @updatedAt
+
+  // Relaciones
+  transacciones       Transaccion[]
+
+  @@map("gastos_domiciliados")
+}
+
+// Ahorros Domiciliados (transferencias automáticas a ahorro)
+model AhorroDomiciliado {
+  id                  Int      @id @default(autoincrement())
+  nombre              String
+  cantidad            Float
+  frecuencia          String   // "mensual", "quincenal", "semanal"
+  ahorroDestinoId     Int
+  ahorroDestino       AhorroLugar @relation(fields: [ahorroDestinoId], references: [id])
+  fechaInicio         DateTime @default(now())
+  activo              Boolean  @default(true)
+  notas               String?
+  fechaCreacion       DateTime @default(now())
+  fechaActualizacion  DateTime @updatedAt
+
+  // Relaciones
+  transacciones       Transaccion[]
+
+  @@map("ahorros_domiciliados")
+}
+
+// Gastos Fijos Manuales
+model GastoFijo {
+  id                  Int      @id @default(autoincrement())
+  nombre              String
+  cantidad            Float
+  categoriaId         Int
+  categoria           Categoria @relation(fields: [categoriaId], references: [id])
+  fechaPago           Int      // Día del mes (1-31)
+  activo              Boolean  @default(true)
+  notas               String?
+  fechaCreacion       DateTime @default(now())
+  fechaActualizacion  DateTime @updatedAt
+
+  @@map("gastos_fijos")
+}
+
+// Gastos Variables
+model GastoVariable {
+  id                  Int      @id @default(autoincrement())
+  nombre              String
+  cantidad            Float
+  categoriaId         Int
+  categoria           Categoria @relation(fields: [categoriaId], references: [id])
+  fecha               DateTime @default(now())
+  notas               String?
+  fechaCreacion       DateTime @default(now())
+
+  // Relación con transacción general
+  transaccionId       Int?
+  transaccion         Transaccion? @relation(fields: [transaccionId], references: [id], onDelete: SetNull)
+
+  @@map("gastos_variables")
+}
+
+// Historial unificado de transacciones
+model Transaccion {
+  id                  Int      @id @default(autoincrement())
+  tipo                String   // "ingreso", "gasto_fijo", "gasto_variable", "ahorro", "transferencia"
+  subtipo             String?
+  cantidad            Float
+  fecha               DateTime @default(now())
+  concepto            String
+  categoriaId         Int?
+  cuenta              String?
+  estado              String   @default("completado") // "completado", "programado", "pendiente"
+  
+  // Relaciones
+  gastoDomiciliadoId  Int?
+  gastoDomiciliado    GastoDomiciliado? @relation(fields: [gastoDomiciliadoId], references: [id], onDelete: SetNull)
+  
+  ahorroDomiciliadoId Int?
+  ahorroDomiciliado   AhorroDomiciliado? @relation(fields: [ahorroDomiciliadoId], references: [id], onDelete: SetNull)
+  
+  movimientoAhorroId  Int?
+  movimientoAhorro    MovimientoAhorro? @relation(fields: [movimientoAhorroId], references: [id], onDelete: SetNull)
+  
+  gastoVariableId     Int?
+  gastoVariable       GastoVariable? @relation(fields: [gastoVariableId], references: [id], onDelete: SetNull)
+
+  @@map("transacciones")
+}
+
+// Configuración
+model Configuracion {
+  clave               String   @id
+  valor               String
+  fechaActualizacion  DateTime @updatedAt
+
+  @@map("configuraciones")
+}
