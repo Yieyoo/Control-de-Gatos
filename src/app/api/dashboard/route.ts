@@ -49,6 +49,7 @@ function construirPeriodo(
   etiqueta: string,
   rangoTexto: string,
   rangos: RangoFechas[],
+  esQuincena: boolean,
   hoy: Date,
   ingresos: Ingreso[],
   gastosFijos: GastoFijoConCategoria[],
@@ -58,10 +59,14 @@ function construirPeriodo(
 ): IResumenPeriodo {
   const hoyFinDelDia = finDelDia(hoy);
 
+  // Ingreso no tiene un día fijo como los gastos domiciliados, así que se prorratea
+  // según el tipo de periodo: una quincena ve una vez el monto quincenal (y la mitad
+  // del mensual); el mes completo ve el doble del quincenal (dos quincenas) y el
+  // mensual completo.
   const ingresosPeriodo = ingresos.reduce((sum, ing) => {
     if (!ing.activo) return sum;
-    if (ing.frecuencia === 'quincenal') return sum + ing.cantidad;
-    if (ing.frecuencia === 'mensual') return sum + ing.cantidad / 2;
+    if (ing.frecuencia === 'quincenal') return sum + (esQuincena ? ing.cantidad : ing.cantidad * 2);
+    if (ing.frecuencia === 'mensual') return sum + (esQuincena ? ing.cantidad / 2 : ing.cantidad);
     if (ing.frecuencia === 'unico') {
       return fechaEnRangos(new Date(ing.fechaInicio), rangos) ? sum + ing.cantidad : sum;
     }
@@ -196,12 +201,13 @@ export async function GET() {
 
     const args = [ingresos, gastosFijos, gastosDomiciliados, ahorrosDomiciliados, gastosVariables] as const;
 
-    const mes = construirPeriodo('mes', 'Este mes', formatearRango(rangoMes), [rangoMes], hoy, ...args);
+    const mes = construirPeriodo('mes', 'Este mes', formatearRango(rangoMes), [rangoMes], false, hoy, ...args);
     const quincena1 = construirPeriodo(
       'quincena1',
       'la quincena actual',
       formatearRango(periodoActual),
       [periodoActual],
+      true,
       hoy,
       ...args
     );
@@ -210,6 +216,7 @@ export async function GET() {
       'la próxima quincena',
       formatearRango(periodoProximo),
       [periodoProximo],
+      true,
       hoy,
       ...args
     );
