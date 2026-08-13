@@ -43,7 +43,7 @@ export default function AhorrosPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
-          saldoActual: parseFloat(formData.saldoActual || 0),
+          saldoActual: parseFloat(formData.saldoActual || '0'),
         }),
       });
 

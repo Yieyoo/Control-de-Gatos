@@ -32,7 +32,7 @@ export async function GET() {
     const gastosVariablesMes = calcularGastosVariablesMes(gastosVariables);
 
     // Ahorro total
-    const ahorroTotal = ahorrosLugares.reduce((sum, ahorro) => sum + ahorro.saldoActual, 0);
+    const ahorroTotal = ahorrosLugares.reduce((sum: number, ahorro) => sum + ahorro.saldoActual, 0);
 
     // Dinero disponible
     const dineroDisponible = calcularDineroDisponible(

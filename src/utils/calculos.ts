@@ -1,10 +1,10 @@
 // src/utils/calculos.ts
-import type { IIngreso, IGastoDomiciliado, IAhorroDomiciliado, IGastoFijo, IGastoVariable } from '@/types';
+import type { Ingreso, GastoDomiciliado, AhorroDomiciliado, GastoFijo, GastoVariable } from '@prisma/client';
 
 /**
  * Calcula el total de ingresos del mes actual
  */
-export function calcularIngresosMes(ingresos: IIngreso[]): number {
+export function calcularIngresosMes(ingresos: Ingreso[]): number {
   return ingresos.reduce((total, ingreso) => {
     if (!ingreso.activo) return total;
     
@@ -13,10 +13,12 @@ export function calcularIngresosMes(ingresos: IIngreso[]): number {
         return total + ingreso.cantidad;
       case 'quincenal':
         return total + ingreso.cantidad * 2;
-      case 'unico':
-        // Solo si es de este mes
-        const hoyEsMes = new Date().getMonth() === new Date(ingreso.fechaInicio).getMonth();
-        return hoyEsMes ? total + ingreso.cantidad : total;
+      case 'unico': {
+        const hoy = new Date();
+        const inicio = new Date(ingreso.fechaInicio);
+        const esEsteMes = hoy.getMonth() === inicio.getMonth() && hoy.getFullYear() === inicio.getFullYear();
+        return esEsteMes ? total + ingreso.cantidad : total;
+      }
       default:
         return total;
     }
@@ -26,7 +28,7 @@ export function calcularIngresosMes(ingresos: IIngreso[]): number {
 /**
  * Calcula gastos domiciliados del mes actual
  */
-export function calcularGastosDomiciliadosMes(gastos: IGastoDomiciliado[]): number {
+export function calcularGastosDomiciliadosMes(gastos: GastoDomiciliado[]): number {
   return gastos.reduce((total, gasto) => {
     if (!gasto.activo) return total;
     
@@ -44,7 +46,7 @@ export function calcularGastosDomiciliadosMes(gastos: IGastoDomiciliado[]): numb
 /**
  * Calcula ahorros domiciliados del mes actual
  */
-export function calcularAhorrosDomiciliadosMes(ahorros: IAhorroDomiciliado[]): number {
+export function calcularAhorrosDomiciliadosMes(ahorros: AhorroDomiciliado[]): number {
   return ahorros.reduce((total, ahorro) => {
     if (!ahorro.activo) return total;
     
@@ -64,7 +66,7 @@ export function calcularAhorrosDomiciliadosMes(ahorros: IAhorroDomiciliado[]): n
 /**
  * Calcula gastos fijos del mes actual
  */
-export function calcularGastosFijosMes(gastos: IGastoFijo[]): number {
+export function calcularGastosFijosMes(gastos: GastoFijo[]): number {
   return gastos.reduce((total, gasto) => {
     if (!gasto.activo) return total;
     return total + gasto.cantidad;
@@ -75,7 +77,7 @@ export function calcularGastosFijosMes(gastos: IGastoFijo[]): number {
  * Calcula gastos variables de una fecha específica
  */
 export function calcularGastosVariablesMes(
-  gastos: IGastoVariable[],
+  gastos: GastoVariable[],
   fecha: Date = new Date()
 ): number {
   const mes = fecha.getMonth();
@@ -106,8 +108,8 @@ export function calcularDineroDisponible(
  * Calcula próximos movimientos programados (próximos 30 días)
  */
 export function calcularMovimientosProgramados(
-  gastosDomiciliados: IGastoDomiciliado[],
-  ahorrosDomiciliados: IAhorroDomiciliado[],
+  gastosDomiciliados: GastoDomiciliado[],
+  ahorrosDomiciliados: AhorroDomiciliado[],
   hoy: Date = new Date()
 ): number {
   const hace30Dias = new Date(hoy.getTime() + 30 * 24 * 60 * 60 * 1000);

@@ -53,6 +53,7 @@ model AhorroLugar {
   // Relaciones
   movimientos         MovimientoAhorro[]
   ahorrosDomiciliados AhorroDomiciliado[]
+  transferenciasOrigen MovimientoAhorro[] @relation("transferenciasOrigen")
 
   @@map("ahorro_lugares")
 }
@@ -68,10 +69,9 @@ model MovimientoAhorro {
   concepto            String
   ahorroOrigenId      Int?     // Para transferencias
   ahorroOrigen        AhorroLugar? @relation("transferenciasOrigen", fields: [ahorroOrigenId], references: [id], onDelete: SetNull)
-  
+
   // Relación con transacción general
-  transaccionId       Int?
-  transaccion         Transaccion? @relation(fields: [transaccionId], references: [id], onDelete: SetNull)
+  transacciones       Transaccion[]
 
   @@map("movimientos_ahorro")
 }
@@ -145,8 +145,7 @@ model GastoVariable {
   fechaCreacion       DateTime @default(now())
 
   // Relación con transacción general
-  transaccionId       Int?
-  transaccion         Transaccion? @relation(fields: [transaccionId], references: [id], onDelete: SetNull)
+  transacciones       Transaccion[]
 
   @@map("gastos_variables")
 }

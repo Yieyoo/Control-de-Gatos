@@ -64,6 +64,7 @@ export interface IGastoVariable {
   nombre: string;
   cantidad: number;
   categoriaId: number;
+  categoria?: ICategoria;
   fecha: Date;
   notas?: string;
 }
