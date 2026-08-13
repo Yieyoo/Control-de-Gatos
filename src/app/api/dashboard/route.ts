@@ -10,6 +10,8 @@ import {
   ocurrenciasSemanales,
   parseDiasSemana,
   finDelDia,
+  fechaEnRangos,
+  type RangoFechas,
 } from '@/utils/calculos';
 import type {
   IDashboardResumen,
@@ -19,13 +21,15 @@ import type {
 } from '@/types';
 import type { Ingreso, GastoFijo, GastoDomiciliado, AhorroDomiciliado, GastoVariable } from '@prisma/client';
 
-// Día de corte de quincena del usuario: quincena 1 = 1-10, quincena 2 = 11-fin de mes
-const CORTE_QUINCENA = 10;
+// Días de pago del usuario: quincena 1 = del 10 al 25; quincena 2 = el resto del mes
+const CORTE_1 = 10;
+const CORTE_2 = 25;
 
 function construirPeriodo(
   id: 'quincena1' | 'quincena2',
   etiqueta: string,
-  rango: { inicio: Date; fin: Date },
+  rangoTexto: string,
+  rangos: RangoFechas[],
   hoy: Date,
   ingresos: Ingreso[],
   gastosFijos: GastoFijo[],
@@ -33,61 +37,58 @@ function construirPeriodo(
   ahorrosDomiciliados: AhorroDomiciliado[],
   gastosVariables: GastoVariable[]
 ): IResumenPeriodo {
-  const finRango = finDelDia(rango.fin);
-
   const ingresosPeriodo = ingresos.reduce((sum, ing) => {
     if (!ing.activo) return sum;
     if (ing.frecuencia === 'quincenal') return sum + ing.cantidad;
     if (ing.frecuencia === 'mensual') return sum + ing.cantidad / 2;
     if (ing.frecuencia === 'unico') {
-      const f = new Date(ing.fechaInicio);
-      return f >= rango.inicio && f <= finRango ? sum + ing.cantidad : sum;
+      return fechaEnRangos(new Date(ing.fechaInicio), rangos) ? sum + ing.cantidad : sum;
     }
     return sum;
   }, 0);
 
   const fijosManuales = calcularPagadoPendiente(
     gastosFijos.filter((g) => g.activo).map((g) => ({ dia: g.fechaPago, cantidad: g.cantidad })),
-    rango,
+    rangos,
     hoy,
-    CORTE_QUINCENA
+    CORTE_1
   );
   const domiciliadosActivos = gastosDomiciliados.filter((g) => g.activo);
   const fijosDomiciliados = calcularPagadoPendiente(
     domiciliadosActivos
       .filter((g) => g.frecuencia !== 'semanal' && g.fechaCobro != null)
       .map((g) => ({ dia: g.fechaCobro as number, frecuencia: g.frecuencia, cantidad: g.cantidad })),
-    rango,
+    rangos,
     hoy,
-    CORTE_QUINCENA
+    CORTE_1
   );
   const fijosDomiciliadosSemanales = calcularPagadoPendienteSemanal(
     domiciliadosActivos
       .filter((g) => g.frecuencia === 'semanal')
       .map((g) => ({ diasSemana: parseDiasSemana(g.diasSemana), cantidad: g.cantidad })),
-    rango,
+    rangos,
     hoy
   );
 
-  const gastosVariablesPeriodo = gastosVariables.reduce((sum, g) => {
-    const f = new Date(g.fecha);
-    return f >= rango.inicio && f <= finRango ? sum + g.cantidad : sum;
-  }, 0);
+  const gastosVariablesPeriodo = gastosVariables.reduce(
+    (sum, g) => (fechaEnRangos(new Date(g.fecha), rangos) ? sum + g.cantidad : sum),
+    0
+  );
 
   const ahorrosActivos = ahorrosDomiciliados.filter((a) => a.activo);
   const ahorrosNoSemanal = calcularPagadoPendiente(
     ahorrosActivos
       .filter((a) => a.frecuencia !== 'semanal')
       .map((a) => ({ dia: new Date(a.fechaInicio).getDate(), frecuencia: a.frecuencia, cantidad: a.cantidad })),
-    rango,
+    rangos,
     hoy,
-    CORTE_QUINCENA
+    CORTE_1
   );
   const ahorrosSemanales = calcularPagadoPendienteSemanal(
     ahorrosActivos
       .filter((a) => a.frecuencia === 'semanal')
       .map((a) => ({ diasSemana: parseDiasSemana(a.diasSemana), cantidad: a.cantidad })),
-    rango,
+    rangos,
     hoy
   );
 
@@ -103,8 +104,9 @@ function construirPeriodo(
   return {
     id,
     etiqueta,
-    inicio: rango.inicio.toISOString(),
-    fin: rango.fin.toISOString(),
+    inicio: rangos[0].inicio.toISOString(),
+    fin: rangos[rangos.length - 1].fin.toISOString(),
+    rangoTexto,
     ingresos: ingresosPeriodo,
     gastosFijos: gastosFijosPagado,
     gastosFijosPendiente,
@@ -115,12 +117,13 @@ function construirPeriodo(
   };
 }
 
-function sumarPeriodos(a: IResumenPeriodo, b: IResumenPeriodo, inicio: string, fin: string): IResumenPeriodo {
+function sumarPeriodos(a: IResumenPeriodo, b: IResumenPeriodo, rangoTexto: string): IResumenPeriodo {
   return {
     id: 'mes',
     etiqueta: 'Este mes',
-    inicio,
-    fin,
+    inicio: a.inicio,
+    fin: a.fin,
+    rangoTexto,
     ingresos: a.ingresos + b.ingresos,
     gastosFijos: a.gastosFijos + b.gastosFijos,
     gastosFijosPendiente: a.gastosFijosPendiente + b.gastosFijosPendiente,
@@ -146,11 +149,13 @@ export async function GET() {
     const ahorroTotal = ahorrosLugares.reduce((sum: number, ahorro) => sum + ahorro.saldoActual, 0);
 
     const hoy = new Date();
-    const rangos = obtenerPeriodosDelMes(hoy, CORTE_QUINCENA);
+    const rangos = obtenerPeriodosDelMes(hoy, CORTE_1, CORTE_2);
+    const ultimoDia = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate();
 
     const quincena1 = construirPeriodo(
       'quincena1',
-      `Quincena 1 (1-${CORTE_QUINCENA})`,
+      `Quincena 1 (${CORTE_1}-${CORTE_2})`,
+      `${CORTE_1} - ${CORTE_2}`,
       rangos.quincena1,
       hoy,
       ingresos,
@@ -161,7 +166,8 @@ export async function GET() {
     );
     const quincena2 = construirPeriodo(
       'quincena2',
-      `Quincena 2 (${CORTE_QUINCENA + 1}-fin)`,
+      'Quincena 2 (resto del mes)',
+      `1-${CORTE_1 - 1} y ${CORTE_2 + 1}-${ultimoDia}`,
       rangos.quincena2,
       hoy,
       ingresos,
@@ -170,7 +176,7 @@ export async function GET() {
       ahorrosDomiciliados,
       gastosVariables
     );
-    const mes = sumarPeriodos(quincena1, quincena2, rangos.mes.inicio.toISOString(), rangos.mes.fin.toISOString());
+    const mes = sumarPeriodos(quincena1, quincena2, `1 - ${ultimoDia}`);
 
     // Gastos por categoría del mes (fijos + domiciliados en su equivalente mensual + variables de este mes)
     const montosPorCategoria = new Map<number, { nombre: string; color: string; monto: number }>();
@@ -198,8 +204,7 @@ export async function GET() {
       }
     });
     gastosVariables.forEach((g) => {
-      const fecha = new Date(g.fecha);
-      if (fecha >= rangos.mes.inicio && fecha <= finDelDia(rangos.mes.fin)) {
+      if (fechaEnRangos(new Date(g.fecha), rangos.mes)) {
         acumular(g.categoriaId, g.categoria, g.cantidad);
       }
     });

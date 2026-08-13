@@ -108,6 +108,7 @@ export interface IResumenPeriodo {
   etiqueta: string;
   inicio: string;
   fin: string;
+  rangoTexto: string;
   ingresos: number;
   gastosFijos: number;
   gastosFijosPendiente: number;

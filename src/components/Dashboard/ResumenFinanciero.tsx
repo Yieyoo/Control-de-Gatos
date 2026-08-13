@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { formatearMoneda } from '@/utils/calculos';
 import type { IDashboardResumen, IResumenPeriodo } from '@/types';
 
@@ -8,16 +8,24 @@ interface ResumenFinancieroProps {
   resumen: IDashboardResumen;
 }
 
-function formatearRango(inicioISO: string, finISO: string): string {
-  const inicio = new Date(inicioISO);
-  const fin = new Date(finISO);
-  const opciones: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
-  return `${inicio.toLocaleDateString('es-MX', opciones)} – ${fin.toLocaleDateString('es-MX', opciones)}`;
-}
+const CLAVE_OCULTAR_AHORRO = 'ocultarAhorroTotal';
 
 export function ResumenFinanciero({ resumen }: ResumenFinancieroProps) {
   const [vista, setVista] = useState<'mes' | 'quincena1' | 'quincena2'>('mes');
+  const [ocultarAhorro, setOcultarAhorro] = useState(false);
   const p: IResumenPeriodo = resumen.periodos[vista];
+
+  useEffect(() => {
+    setOcultarAhorro(localStorage.getItem(CLAVE_OCULTAR_AHORRO) === '1');
+  }, []);
+
+  const alternarOcultarAhorro = () => {
+    setOcultarAhorro((previo) => {
+      const nuevo = !previo;
+      localStorage.setItem(CLAVE_OCULTAR_AHORRO, nuevo ? '1' : '0');
+      return nuevo;
+    });
+  };
 
   const tarjetas = [
     {
@@ -67,7 +75,7 @@ export function ResumenFinanciero({ resumen }: ResumenFinancieroProps) {
         </div>
       </div>
 
-      <p className="text-xs text-gray-500 mb-4">{formatearRango(p.inicio, p.fin)}</p>
+      <p className="text-xs text-gray-500 mb-4">{p.rangoTexto}</p>
 
       <div className="grid grid-cols-2 gap-4 mb-4">
         {tarjetas.map((tarjeta) => (
@@ -99,12 +107,22 @@ export function ResumenFinanciero({ resumen }: ResumenFinancieroProps) {
           </p>
         </div>
         <div className="rounded-xl bg-blue-50 p-4">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-lg">🏛️</span>
-            <p className="text-xs font-medium text-blue-800">Ahorro total</p>
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">🏛️</span>
+              <p className="text-xs font-medium text-blue-800">Ahorro total</p>
+            </div>
+            <button
+              type="button"
+              onClick={alternarOcultarAhorro}
+              aria-label={ocultarAhorro ? 'Mostrar ahorro total' : 'Ocultar ahorro total'}
+              className="text-blue-700/60 hover:text-blue-700"
+            >
+              {ocultarAhorro ? '🙈' : '👁️'}
+            </button>
           </div>
           <p className="text-base sm:text-xl font-bold text-blue-700 leading-tight">
-            {formatearMoneda(resumen.ahorroTotal)}
+            {ocultarAhorro ? '•••••••' : formatearMoneda(resumen.ahorroTotal)}
           </p>
         </div>
       </div>

@@ -85,28 +85,47 @@ export function calcularProximaFechaSemanal(diasSemana: number[], hoy: Date = ne
   return cursor;
 }
 
+export interface RangoFechas {
+  inicio: Date;
+  fin: Date;
+}
+
 /**
- * Rango de fechas de cada período del mes actual: quincena 1 (día 1 al corte),
- * quincena 2 (corte+1 al último día) y el mes completo. quincena1 + quincena2 = mes.
+ * Rangos de fechas de cada período del mes actual, según los días de pago del
+ * usuario (por defecto 10 y 25): quincena 1 = del corte1 al corte2 (ej. 10-25);
+ * quincena 2 = el resto del mes, que queda en dos pedazos (1 al corte1-1, y
+ * corte2+1 al último día) porque en un mes de calendario no es continua.
+ * quincena1 ∪ quincena2 = mes completo, sin traslapes.
  */
 export function obtenerPeriodosDelMes(
   hoy: Date = new Date(),
-  corte: number = 10
-): { mes: { inicio: Date; fin: Date }; quincena1: { inicio: Date; fin: Date }; quincena2: { inicio: Date; fin: Date } } {
+  corte1: number = 10,
+  corte2: number = 25
+): { mes: RangoFechas[]; quincena1: RangoFechas[]; quincena2: RangoFechas[] } {
   const año = hoy.getFullYear();
   const mes = hoy.getMonth();
   const ultimoDia = new Date(año, mes + 1, 0).getDate();
+  const enDia = (dia: number) => new Date(año, mes, dia);
+
+  const quincena2: RangoFechas[] = [];
+  if (corte1 > 1) quincena2.push({ inicio: enDia(1), fin: enDia(corte1 - 1) });
+  if (corte2 < ultimoDia) quincena2.push({ inicio: enDia(corte2 + 1), fin: enDia(ultimoDia) });
 
   return {
-    mes: { inicio: new Date(año, mes, 1), fin: new Date(año, mes, ultimoDia) },
-    quincena1: { inicio: new Date(año, mes, 1), fin: new Date(año, mes, corte) },
-    quincena2: { inicio: new Date(año, mes, corte + 1), fin: new Date(año, mes, ultimoDia) },
+    mes: [{ inicio: enDia(1), fin: enDia(ultimoDia) }],
+    quincena1: [{ inicio: enDia(corte1), fin: enDia(corte2) }],
+    quincena2,
   };
 }
 
 /** Fin del día (23:59:59.999) de una fecha, para incluir todo el último día de un rango. */
 export function finDelDia(fecha: Date): Date {
   return new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate(), 23, 59, 59, 999);
+}
+
+/** Si una fecha cae dentro de alguno de una lista de rangos (inclusive). */
+export function fechaEnRangos(fecha: Date, rangos: RangoFechas[]): boolean {
+  return rangos.some((r) => fecha >= r.inicio && fecha <= finDelDia(r.fin));
 }
 
 /**
@@ -138,23 +157,25 @@ export function ocurrenciasDelMes(
 
 /**
  * Todas las ocurrencias de un gasto/ahorro semanal (ej. "cada martes", o
- * "de lunes a viernes") dentro de un rango de fechas.
+ * "de lunes a viernes") dentro de una lista de rangos de fechas.
  */
 export function ocurrenciasSemanales(
   diasSemana: number[],
   cantidad: number,
-  rango: { inicio: Date; fin: Date }
+  rangos: RangoFechas[]
 ): { cantidad: number; fecha: Date }[] {
   if (diasSemana.length === 0) return [];
   const ocurrencias: { cantidad: number; fecha: Date }[] = [];
-  const cursor = new Date(rango.inicio.getFullYear(), rango.inicio.getMonth(), rango.inicio.getDate());
-  const fin = finDelDia(rango.fin);
 
-  while (cursor <= fin) {
-    if (diasSemana.includes(cursor.getDay())) {
-      ocurrencias.push({ cantidad, fecha: new Date(cursor) });
+  for (const rango of rangos) {
+    const cursor = new Date(rango.inicio.getFullYear(), rango.inicio.getMonth(), rango.inicio.getDate());
+    const fin = finDelDia(rango.fin);
+    while (cursor <= fin) {
+      if (diasSemana.includes(cursor.getDay())) {
+        ocurrencias.push({ cantidad, fecha: new Date(cursor) });
+      }
+      cursor.setDate(cursor.getDate() + 1);
     }
-    cursor.setDate(cursor.getDate() + 1);
   }
 
   return ocurrencias;
@@ -162,18 +183,18 @@ export function ocurrenciasSemanales(
 
 /**
  * Suma las ocurrencias de gastos/ahorros fijos (mensuales o quincenales, con día
- * del mes) que caen dentro de un rango de fechas, separando lo que ya pasó
- * (pagado) de lo que todavía no llega (pendiente). "Ya pasó" incluye hoy.
+ * del mes) que caen dentro de una lista de rangos de fechas, separando lo que
+ * ya pasó (pagado) de lo que todavía no llega (pendiente). "Ya pasó" incluye hoy.
  */
 export function calcularPagadoPendiente(
   items: { dia: number; frecuencia?: string; cantidad: number }[],
-  rango: { inicio: Date; fin: Date },
+  rangos: RangoFechas[],
   hoy: Date = new Date(),
   corte: number = 10
 ): { pagado: number; pendiente: number } {
-  const año = rango.inicio.getFullYear();
-  const mes = rango.inicio.getMonth();
-  const finRango = finDelDia(rango.fin);
+  if (rangos.length === 0) return { pagado: 0, pendiente: 0 };
+  const año = rangos[0].inicio.getFullYear();
+  const mes = rangos[0].inicio.getMonth();
   const hoyFinDelDia = finDelDia(hoy);
 
   let pagado = 0;
@@ -182,7 +203,7 @@ export function calcularPagadoPendiente(
   for (const item of items) {
     const ocurrencias = ocurrenciasDelMes(item.dia, item.frecuencia ?? 'mensual', item.cantidad, año, mes, corte);
     for (const oc of ocurrencias) {
-      if (oc.fecha >= rango.inicio && oc.fecha <= finRango) {
+      if (fechaEnRangos(oc.fecha, rangos)) {
         if (oc.fecha <= hoyFinDelDia) pagado += oc.cantidad;
         else pendiente += oc.cantidad;
       }
@@ -198,7 +219,7 @@ export function calcularPagadoPendiente(
  */
 export function calcularPagadoPendienteSemanal(
   items: { diasSemana: number[]; cantidad: number }[],
-  rango: { inicio: Date; fin: Date },
+  rangos: RangoFechas[],
   hoy: Date = new Date()
 ): { pagado: number; pendiente: number } {
   const hoyFinDelDia = finDelDia(hoy);
@@ -206,7 +227,7 @@ export function calcularPagadoPendienteSemanal(
   let pendiente = 0;
 
   for (const item of items) {
-    const ocurrencias = ocurrenciasSemanales(item.diasSemana, item.cantidad, rango);
+    const ocurrencias = ocurrenciasSemanales(item.diasSemana, item.cantidad, rangos);
     for (const oc of ocurrencias) {
       if (oc.fecha <= hoyFinDelDia) pagado += oc.cantidad;
       else pendiente += oc.cantidad;
