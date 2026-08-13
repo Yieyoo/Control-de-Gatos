@@ -163,17 +163,17 @@ export default function IngresosPage() {
         {ingresos.map((ingreso) => (
           <div
             key={ingreso.id}
-            className="bg-white border border-gray-200 rounded-lg p-4 flex justify-between items-center"
+            className="bg-white border border-gray-200 rounded-lg p-4 flex justify-between items-center gap-3"
           >
-            <div>
-              <p className="font-semibold">{ingreso.nombre}</p>
-              <p className="text-sm text-gray-600">
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold truncate">{ingreso.nombre}</p>
+              <p className="text-sm text-gray-600 truncate">
                 {ingreso.frecuencia.charAt(0).toUpperCase() + ingreso.frecuencia.slice(1)}
                 {ingreso.notas && ` • ${ingreso.notas}`}
               </p>
             </div>
-            <div className="flex items-center gap-4">
-              <p className="text-lg font-bold text-green-600">{formatearMoneda(ingreso.cantidad)}</p>
+            <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
+              <p className="text-lg font-bold text-green-600 whitespace-nowrap">{formatearMoneda(ingreso.cantidad)}</p>
               <button
                 onClick={() => handleEliminar(ingreso.id)}
                 className="text-red-600 hover:text-red-800"
