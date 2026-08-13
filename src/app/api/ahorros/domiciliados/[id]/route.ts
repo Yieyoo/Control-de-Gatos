@@ -8,7 +8,7 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { nombre, cantidad, frecuencia, ahorroDestinoId, activo, notas } = body;
+    const { nombre, cantidad, frecuencia, diasSemana, ahorroDestinoId, activo, notas } = body;
 
     const ahorro = await prisma.ahorroDomiciliado.update({
       where: { id: parseInt(id) },
@@ -16,6 +16,7 @@ export async function PUT(
         ...(nombre && { nombre }),
         ...(cantidad !== undefined && { cantidad: parseFloat(cantidad) }),
         ...(frecuencia && { frecuencia }),
+        ...(diasSemana !== undefined && { diasSemana }),
         ...(ahorroDestinoId && { ahorroDestinoId: parseInt(ahorroDestinoId) }),
         ...(activo !== undefined && { activo }),
         ...(notas !== undefined && { notas }),

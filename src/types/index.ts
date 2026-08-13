@@ -31,8 +31,9 @@ export interface IGastoDomiciliado {
   id: number;
   nombre: string;
   cantidad: number;
-  fechaCobro: number;
-  frecuencia: 'mensual' | 'quincenal';
+  fechaCobro?: number;
+  frecuencia: 'mensual' | 'quincenal' | 'semanal';
+  diasSemana?: string;
   categoriaId: number;
   categoria?: ICategoria;
   cuentaPago: string;
@@ -45,6 +46,7 @@ export interface IAhorroDomiciliado {
   nombre: string;
   cantidad: number;
   frecuencia: 'mensual' | 'quincenal' | 'semanal';
+  diasSemana?: string;
   ahorroDestinoId: number;
   ahorroDestino?: IAhorroLugar;
   activo: boolean;

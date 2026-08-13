@@ -5,7 +5,7 @@ export async function GET() {
   try {
     const gastos = await prisma.gastoDomiciliado.findMany({
       include: { categoria: true },
-      orderBy: { fechaCobro: 'asc' },
+      orderBy: { nombre: 'asc' },
     });
     return Response.json(gastos);
   } catch (error) {
@@ -17,13 +17,19 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { nombre, cantidad, categoriaId, fechaCobro, frecuencia, cuentaPago, notas } = body;
+    const { nombre, cantidad, categoriaId, fechaCobro, frecuencia, diasSemana, cuentaPago, notas } = body;
 
-    if (!nombre || !cantidad || !categoriaId || !fechaCobro || !frecuencia || !cuentaPago) {
+    if (!nombre || !cantidad || !categoriaId || !frecuencia || !cuentaPago) {
       return Response.json(
         { error: 'Faltan campos requeridos' },
         { status: 400 }
       );
+    }
+    if (frecuencia === 'semanal' && !diasSemana) {
+      return Response.json({ error: 'Selecciona al menos un día de la semana' }, { status: 400 });
+    }
+    if (frecuencia !== 'semanal' && !fechaCobro) {
+      return Response.json({ error: 'Falta el día de cobro' }, { status: 400 });
     }
 
     const gasto = await prisma.gastoDomiciliado.create({
@@ -31,8 +37,9 @@ export async function POST(request: Request) {
         nombre,
         cantidad: parseFloat(cantidad),
         categoriaId: parseInt(categoriaId),
-        fechaCobro: parseInt(fechaCobro),
+        fechaCobro: frecuencia === 'semanal' ? null : parseInt(fechaCobro),
         frecuencia,
+        diasSemana: frecuencia === 'semanal' ? diasSemana : null,
         cuentaPago,
         notas,
       },

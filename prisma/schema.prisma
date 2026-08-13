@@ -81,8 +81,9 @@ model GastoDomiciliado {
   id                  Int      @id @default(autoincrement())
   nombre              String
   cantidad            Float
-  fechaCobro          Int      // Día del mes (1-31)
-  frecuencia          String   // "mensual", "quincenal"
+  fechaCobro          Int?     // Día del mes (1-31); no aplica si frecuencia = "semanal"
+  frecuencia          String   // "mensual", "quincenal", "semanal"
+  diasSemana          String?  // solo si frecuencia = "semanal": ej "1,2,3,4,5" (0=domingo..6=sábado)
   categoriaId         Int
   categoria           Categoria @relation(fields: [categoriaId], references: [id])
   cuentaPago          String
@@ -103,6 +104,7 @@ model AhorroDomiciliado {
   nombre              String
   cantidad            Float
   frecuencia          String   // "mensual", "quincenal", "semanal"
+  diasSemana          String?  // solo si frecuencia = "semanal": ej "2" (0=domingo..6=sábado)
   ahorroDestinoId     Int
   ahorroDestino       AhorroLugar @relation(fields: [ahorroDestinoId], references: [id])
   fechaInicio         DateTime @default(now())

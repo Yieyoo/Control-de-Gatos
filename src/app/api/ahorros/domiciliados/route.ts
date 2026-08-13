@@ -17,7 +17,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { nombre, cantidad, frecuencia, ahorroDestinoId, notas } = body;
+    const { nombre, cantidad, frecuencia, diasSemana, ahorroDestinoId, notas } = body;
 
     if (!nombre || !cantidad || !frecuencia || !ahorroDestinoId) {
       return Response.json(
@@ -25,12 +25,16 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+    if (frecuencia === 'semanal' && !diasSemana) {
+      return Response.json({ error: 'Selecciona al menos un día de la semana' }, { status: 400 });
+    }
 
     const ahorro = await prisma.ahorroDomiciliado.create({
       data: {
         nombre,
         cantidad: parseFloat(cantidad),
         frecuencia,
+        diasSemana: frecuencia === 'semanal' ? diasSemana : null,
         ahorroDestinoId: parseInt(ahorroDestinoId),
         notas,
       },

@@ -1,95 +1,4 @@
 // src/utils/calculos.ts
-import type { Ingreso, GastoDomiciliado, AhorroDomiciliado, GastoFijo, GastoVariable } from '@prisma/client';
-
-/**
- * Calcula el total de ingresos del mes actual
- */
-export function calcularIngresosMes(ingresos: Ingreso[]): number {
-  return ingresos.reduce((total, ingreso) => {
-    if (!ingreso.activo) return total;
-    
-    switch (ingreso.frecuencia) {
-      case 'mensual':
-        return total + ingreso.cantidad;
-      case 'quincenal':
-        return total + ingreso.cantidad * 2;
-      case 'unico': {
-        const hoy = new Date();
-        const inicio = new Date(ingreso.fechaInicio);
-        const esEsteMes = hoy.getMonth() === inicio.getMonth() && hoy.getFullYear() === inicio.getFullYear();
-        return esEsteMes ? total + ingreso.cantidad : total;
-      }
-      default:
-        return total;
-    }
-  }, 0);
-}
-
-/**
- * Calcula gastos domiciliados del mes actual
- */
-export function calcularGastosDomiciliadosMes(gastos: GastoDomiciliado[]): number {
-  return gastos.reduce((total, gasto) => {
-    if (!gasto.activo) return total;
-    
-    switch (gasto.frecuencia) {
-      case 'mensual':
-        return total + gasto.cantidad;
-      case 'quincenal':
-        return total + gasto.cantidad * 2;
-      default:
-        return total;
-    }
-  }, 0);
-}
-
-/**
- * Calcula ahorros domiciliados del mes actual
- */
-export function calcularAhorrosDomiciliadosMes(ahorros: AhorroDomiciliado[]): number {
-  return ahorros.reduce((total, ahorro) => {
-    if (!ahorro.activo) return total;
-    
-    switch (ahorro.frecuencia) {
-      case 'mensual':
-        return total + ahorro.cantidad;
-      case 'quincenal':
-        return total + ahorro.cantidad * 2;
-      case 'semanal':
-        return total + ahorro.cantidad * 4;
-      default:
-        return total;
-    }
-  }, 0);
-}
-
-/**
- * Calcula gastos fijos del mes actual
- */
-export function calcularGastosFijosMes(gastos: GastoFijo[]): number {
-  return gastos.reduce((total, gasto) => {
-    if (!gasto.activo) return total;
-    return total + gasto.cantidad;
-  }, 0);
-}
-
-/**
- * Calcula gastos variables de una fecha específica
- */
-export function calcularGastosVariablesMes(
-  gastos: GastoVariable[],
-  fecha: Date = new Date()
-): number {
-  const mes = fecha.getMonth();
-  const año = fecha.getFullYear();
-  
-  return gastos.reduce((total, gasto) => {
-    const gastoMes = new Date(gasto.fecha).getMonth();
-    const gastoAño = new Date(gasto.fecha).getFullYear();
-    
-    return gastoMes === mes && gastoAño === año ? total + gasto.cantidad : total;
-  }, 0);
-}
 
 /**
  * Calcula el dinero disponible
@@ -152,6 +61,31 @@ export function calcularProximaFechaDesdeInicio(
 }
 
 /**
+ * Convierte el string guardado en BD ("1,2,3,4,5") a una lista de números de
+ * día de la semana (0 = domingo ... 6 = sábado).
+ */
+export function parseDiasSemana(diasSemana: string | null | undefined): number[] {
+  if (!diasSemana) return [];
+  return diasSemana
+    .split(',')
+    .map((d) => parseInt(d.trim(), 10))
+    .filter((d) => !isNaN(d) && d >= 0 && d <= 6);
+}
+
+/**
+ * Próxima fecha (hoy o después) cuyo día de la semana esté en diasSemana.
+ */
+export function calcularProximaFechaSemanal(diasSemana: number[], hoy: Date = new Date()): Date {
+  const cursor = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+  if (diasSemana.length === 0) return cursor;
+  for (let i = 0; i < 14; i++) {
+    if (diasSemana.includes(cursor.getDay())) return new Date(cursor);
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return cursor;
+}
+
+/**
  * Rango de fechas de cada período del mes actual: quincena 1 (día 1 al corte),
  * quincena 2 (corte+1 al último día) y el mes completo. quincena1 + quincena2 = mes.
  */
@@ -203,9 +137,33 @@ export function ocurrenciasDelMes(
 }
 
 /**
- * Suma las ocurrencias de gastos/ahorros fijos que caen dentro de un rango de fechas,
- * separando lo que ya pasó (pagado) de lo que todavía no llega (pendiente). "Ya pasó"
- * incluye el día de hoy.
+ * Todas las ocurrencias de un gasto/ahorro semanal (ej. "cada martes", o
+ * "de lunes a viernes") dentro de un rango de fechas.
+ */
+export function ocurrenciasSemanales(
+  diasSemana: number[],
+  cantidad: number,
+  rango: { inicio: Date; fin: Date }
+): { cantidad: number; fecha: Date }[] {
+  if (diasSemana.length === 0) return [];
+  const ocurrencias: { cantidad: number; fecha: Date }[] = [];
+  const cursor = new Date(rango.inicio.getFullYear(), rango.inicio.getMonth(), rango.inicio.getDate());
+  const fin = finDelDia(rango.fin);
+
+  while (cursor <= fin) {
+    if (diasSemana.includes(cursor.getDay())) {
+      ocurrencias.push({ cantidad, fecha: new Date(cursor) });
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return ocurrencias;
+}
+
+/**
+ * Suma las ocurrencias de gastos/ahorros fijos (mensuales o quincenales, con día
+ * del mes) que caen dentro de un rango de fechas, separando lo que ya pasó
+ * (pagado) de lo que todavía no llega (pendiente). "Ya pasó" incluye hoy.
  */
 export function calcularPagadoPendiente(
   items: { dia: number; frecuencia?: string; cantidad: number }[],
@@ -228,6 +186,30 @@ export function calcularPagadoPendiente(
         if (oc.fecha <= hoyFinDelDia) pagado += oc.cantidad;
         else pendiente += oc.cantidad;
       }
+    }
+  }
+
+  return { pagado, pendiente };
+}
+
+/**
+ * Igual que calcularPagadoPendiente, pero para gastos/ahorros semanales
+ * (definidos por una lista de días de la semana en vez de un día del mes).
+ */
+export function calcularPagadoPendienteSemanal(
+  items: { diasSemana: number[]; cantidad: number }[],
+  rango: { inicio: Date; fin: Date },
+  hoy: Date = new Date()
+): { pagado: number; pendiente: number } {
+  const hoyFinDelDia = finDelDia(hoy);
+  let pagado = 0;
+  let pendiente = 0;
+
+  for (const item of items) {
+    const ocurrencias = ocurrenciasSemanales(item.diasSemana, item.cantidad, rango);
+    for (const oc of ocurrencias) {
+      if (oc.fecha <= hoyFinDelDia) pagado += oc.cantidad;
+      else pendiente += oc.cantidad;
     }
   }
 

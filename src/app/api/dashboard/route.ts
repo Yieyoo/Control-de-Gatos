@@ -3,8 +3,12 @@ import { prisma } from '@/lib/prisma';
 import {
   calcularProximaFechaMensual,
   calcularProximaFechaDesdeInicio,
+  calcularProximaFechaSemanal,
   obtenerPeriodosDelMes,
   calcularPagadoPendiente,
+  calcularPagadoPendienteSemanal,
+  ocurrenciasSemanales,
+  parseDiasSemana,
   finDelDia,
 } from '@/utils/calculos';
 import type {
@@ -48,13 +52,21 @@ function construirPeriodo(
     hoy,
     CORTE_QUINCENA
   );
+  const domiciliadosActivos = gastosDomiciliados.filter((g) => g.activo);
   const fijosDomiciliados = calcularPagadoPendiente(
-    gastosDomiciliados
-      .filter((g) => g.activo)
-      .map((g) => ({ dia: g.fechaCobro, frecuencia: g.frecuencia, cantidad: g.cantidad })),
+    domiciliadosActivos
+      .filter((g) => g.frecuencia !== 'semanal' && g.fechaCobro != null)
+      .map((g) => ({ dia: g.fechaCobro as number, frecuencia: g.frecuencia, cantidad: g.cantidad })),
     rango,
     hoy,
     CORTE_QUINCENA
+  );
+  const fijosDomiciliadosSemanales = calcularPagadoPendienteSemanal(
+    domiciliadosActivos
+      .filter((g) => g.frecuencia === 'semanal')
+      .map((g) => ({ diasSemana: parseDiasSemana(g.diasSemana), cantidad: g.cantidad })),
+    rango,
+    hoy
   );
 
   const gastosVariablesPeriodo = gastosVariables.reduce((sum, g) => {
@@ -62,22 +74,28 @@ function construirPeriodo(
     return f >= rango.inicio && f <= finRango ? sum + g.cantidad : sum;
   }, 0);
 
+  const ahorrosActivos = ahorrosDomiciliados.filter((a) => a.activo);
   const ahorrosNoSemanal = calcularPagadoPendiente(
-    ahorrosDomiciliados
-      .filter((a) => a.activo && a.frecuencia !== 'semanal')
+    ahorrosActivos
+      .filter((a) => a.frecuencia !== 'semanal')
       .map((a) => ({ dia: new Date(a.fechaInicio).getDate(), frecuencia: a.frecuencia, cantidad: a.cantidad })),
     rango,
     hoy,
     CORTE_QUINCENA
   );
-  const ahorroSemanalPagado = ahorrosDomiciliados
-    .filter((a) => a.activo && a.frecuencia === 'semanal')
-    .reduce((sum, a) => sum + a.cantidad * 2, 0);
+  const ahorrosSemanales = calcularPagadoPendienteSemanal(
+    ahorrosActivos
+      .filter((a) => a.frecuencia === 'semanal')
+      .map((a) => ({ diasSemana: parseDiasSemana(a.diasSemana), cantidad: a.cantidad })),
+    rango,
+    hoy
+  );
 
-  const gastosFijosPagado = fijosManuales.pagado + fijosDomiciliados.pagado;
-  const gastosFijosPendiente = fijosManuales.pendiente + fijosDomiciliados.pendiente;
-  const ahorroDelMesPagado = ahorrosNoSemanal.pagado + ahorroSemanalPagado;
-  const ahorroDelMesPendiente = ahorrosNoSemanal.pendiente;
+  const gastosFijosPagado = fijosManuales.pagado + fijosDomiciliados.pagado + fijosDomiciliadosSemanales.pagado;
+  const gastosFijosPendiente =
+    fijosManuales.pendiente + fijosDomiciliados.pendiente + fijosDomiciliadosSemanales.pendiente;
+  const ahorroDelMesPagado = ahorrosNoSemanal.pagado + ahorrosSemanales.pagado;
+  const ahorroDelMesPendiente = ahorrosNoSemanal.pendiente + ahorrosSemanales.pendiente;
 
   const dineroDisponible =
     ingresosPeriodo - gastosFijosPagado - gastosVariablesPeriodo - ahorroDelMesPagado;
@@ -171,9 +189,14 @@ export async function GET() {
     };
 
     gastosFijos.forEach((g) => acumular(g.categoriaId, g.categoria, g.cantidad));
-    gastosDomiciliados.forEach((g) =>
-      acumular(g.categoriaId, g.categoria, g.frecuencia === 'quincenal' ? g.cantidad * 2 : g.cantidad)
-    );
+    gastosDomiciliados.forEach((g) => {
+      if (g.frecuencia === 'semanal') {
+        const ocurrencias = ocurrenciasSemanales(parseDiasSemana(g.diasSemana), g.cantidad, rangos.mes);
+        acumular(g.categoriaId, g.categoria, ocurrencias.reduce((sum, oc) => sum + oc.cantidad, 0));
+      } else {
+        acumular(g.categoriaId, g.categoria, g.frecuencia === 'quincenal' ? g.cantidad * 2 : g.cantidad);
+      }
+    });
     gastosVariables.forEach((g) => {
       const fecha = new Date(g.fecha);
       if (fecha >= rangos.mes.inicio && fecha <= finDelDia(rangos.mes.fin)) {
@@ -199,7 +222,11 @@ export async function GET() {
       nombre: g.nombre,
       cantidad: g.cantidad,
       frecuencia: g.frecuencia,
-      proximaFecha: calcularProximaFechaMensual(g.fechaCobro, hoy).toISOString(),
+      proximaFecha: (
+        g.frecuencia === 'semanal'
+          ? calcularProximaFechaSemanal(parseDiasSemana(g.diasSemana), hoy)
+          : calcularProximaFechaMensual(g.fechaCobro ?? 1, hoy)
+      ).toISOString(),
       categoriaColor: g.categoria?.color,
     }));
     const proximosAhorros: IProximoMovimiento[] = ahorrosDomiciliados.map((a) => ({
@@ -208,7 +235,11 @@ export async function GET() {
       nombre: a.nombre,
       cantidad: a.cantidad,
       frecuencia: a.frecuencia,
-      proximaFecha: calcularProximaFechaDesdeInicio(new Date(a.fechaInicio), a.frecuencia, hoy).toISOString(),
+      proximaFecha: (
+        a.frecuencia === 'semanal'
+          ? calcularProximaFechaSemanal(parseDiasSemana(a.diasSemana), hoy)
+          : calcularProximaFechaDesdeInicio(new Date(a.fechaInicio), a.frecuencia, hoy)
+      ).toISOString(),
     }));
     const proximosMovimientos = [...proximosGastos, ...proximosAhorros]
       .sort((a, b) => new Date(a.proximaFecha).getTime() - new Date(b.proximaFecha).getTime())

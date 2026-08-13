@@ -11,6 +11,59 @@ const etiquetaFrecuencia: Record<string, string> = {
   semanal: 'Semanal',
 };
 
+const NOMBRES_DIAS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+const OPCIONES_DIAS_SEMANA = [
+  { valor: 1, etiqueta: 'Lun' },
+  { valor: 2, etiqueta: 'Mar' },
+  { valor: 3, etiqueta: 'Mié' },
+  { valor: 4, etiqueta: 'Jue' },
+  { valor: 5, etiqueta: 'Vie' },
+  { valor: 6, etiqueta: 'Sáb' },
+  { valor: 0, etiqueta: 'Dom' },
+];
+
+function formatearDiasSemana(diasSemana?: string): string {
+  if (!diasSemana) return '';
+  return diasSemana
+    .split(',')
+    .map((d) => NOMBRES_DIAS[parseInt(d, 10)])
+    .join(', ');
+}
+
+function SelectorDiasSemana({
+  seleccionados,
+  onChange,
+}: {
+  seleccionados: number[];
+  onChange: (dias: number[]) => void;
+}) {
+  const alternar = (dia: number) => {
+    onChange(seleccionados.includes(dia) ? seleccionados.filter((d) => d !== dia) : [...seleccionados, dia]);
+  };
+
+  return (
+    <div>
+      <p className="text-sm text-gray-600 mb-1">¿Qué días de la semana?</p>
+      <div className="flex flex-wrap gap-1.5">
+        {OPCIONES_DIAS_SEMANA.map((opcion) => (
+          <button
+            key={opcion.valor}
+            type="button"
+            onClick={() => alternar(opcion.valor)}
+            className={`px-2.5 py-1.5 rounded text-sm font-medium border ${
+              seleccionados.includes(opcion.valor)
+                ? 'bg-blue-600 text-white border-blue-600'
+                : 'bg-white text-gray-600 border-gray-300'
+            }`}
+          >
+            {opcion.etiqueta}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function MovimientosPage() {
   const [error, setError] = useState<string | null>(null);
 
@@ -19,12 +72,13 @@ export default function MovimientosPage() {
   const [categorias, setCategorias] = useState<ICategoria[]>([]);
   const [cargandoGastos, setCargandoGastos] = useState(true);
   const [mostrarFormGasto, setMostrarFormGasto] = useState(false);
+  const [diasSemanaGasto, setDiasSemanaGasto] = useState<number[]>([]);
   const [formGasto, setFormGasto] = useState({
     nombre: '',
     cantidad: '',
     categoriaId: '',
     fechaCobro: '',
-    frecuencia: 'mensual' as const,
+    frecuencia: 'mensual' as 'mensual' | 'quincenal' | 'semanal',
     cuentaPago: '',
   });
 
@@ -33,10 +87,11 @@ export default function MovimientosPage() {
   const [ahorroLugares, setAhorroLugares] = useState<IAhorroLugar[]>([]);
   const [cargandoAhorros, setCargandoAhorros] = useState(true);
   const [mostrarFormAhorro, setMostrarFormAhorro] = useState(false);
+  const [diasSemanaAhorro, setDiasSemanaAhorro] = useState<number[]>([]);
   const [formAhorro, setFormAhorro] = useState({
     nombre: '',
     cantidad: '',
-    frecuencia: 'mensual' as const,
+    frecuencia: 'mensual' as 'mensual' | 'quincenal' | 'semanal',
     ahorroDestinoId: '',
   });
 
@@ -91,14 +146,22 @@ export default function MovimientosPage() {
 
   const handleSubmitGasto = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (formGasto.frecuencia === 'semanal' && diasSemanaGasto.length === 0) {
+      setError('Selecciona al menos un día de la semana');
+      return;
+    }
     try {
       const resp = await fetch('/api/gastos/domiciliados', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formGasto),
+        body: JSON.stringify({
+          ...formGasto,
+          diasSemana: formGasto.frecuencia === 'semanal' ? diasSemanaGasto.join(',') : undefined,
+        }),
       });
       if (!resp.ok) throw new Error('Error al crear gasto domiciliado');
       setFormGasto({ nombre: '', cantidad: '', categoriaId: '', fechaCobro: '', frecuencia: 'mensual', cuentaPago: '' });
+      setDiasSemanaGasto([]);
       setMostrarFormGasto(false);
       cargarGastos();
     } catch (err) {
@@ -119,14 +182,22 @@ export default function MovimientosPage() {
 
   const handleSubmitAhorro = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (formAhorro.frecuencia === 'semanal' && diasSemanaAhorro.length === 0) {
+      setError('Selecciona al menos un día de la semana');
+      return;
+    }
     try {
       const resp = await fetch('/api/ahorros/domiciliados', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formAhorro),
+        body: JSON.stringify({
+          ...formAhorro,
+          diasSemana: formAhorro.frecuencia === 'semanal' ? diasSemanaAhorro.join(',') : undefined,
+        }),
       });
       if (!resp.ok) throw new Error('Error al crear ahorro domiciliado');
       setFormAhorro({ nombre: '', cantidad: '', frecuencia: 'mensual', ahorroDestinoId: '' });
+      setDiasSemanaAhorro([]);
       setMostrarFormAhorro(false);
       cargarAhorrosDom();
     } catch (err) {
@@ -174,7 +245,7 @@ export default function MovimientosPage() {
             <form onSubmit={handleSubmitGasto} className="space-y-3 bg-gray-50 rounded-lg p-4">
               <input
                 type="text"
-                placeholder="Nombre (ej: Netflix)"
+                placeholder="Nombre (ej: Netflix, Estacionamiento)"
                 value={formGasto.nombre}
                 onChange={(e) => setFormGasto({ ...formGasto, nombre: e.target.value })}
                 required
@@ -200,27 +271,32 @@ export default function MovimientosPage() {
                   <option key={cat.id} value={cat.id}>{cat.nombre}</option>
                 ))}
               </select>
-              <input
-                type="number"
-                placeholder="Día de cobro (1-31)"
-                value={formGasto.fechaCobro}
-                onChange={(e) => setFormGasto({ ...formGasto, fechaCobro: e.target.value })}
-                required
-                min={1}
-                max={31}
-                className="w-full border border-gray-300 rounded px-3 py-2"
-              />
               <select
                 value={formGasto.frecuencia}
-                onChange={(e) => setFormGasto({ ...formGasto, frecuencia: e.target.value as 'mensual' })}
+                onChange={(e) => setFormGasto({ ...formGasto, frecuencia: e.target.value as typeof formGasto.frecuencia })}
                 className="w-full border border-gray-300 rounded px-3 py-2"
               >
                 <option value="mensual">Mensual</option>
                 <option value="quincenal">Quincenal</option>
+                <option value="semanal">Semanal (elige los días)</option>
               </select>
+              {formGasto.frecuencia === 'semanal' ? (
+                <SelectorDiasSemana seleccionados={diasSemanaGasto} onChange={setDiasSemanaGasto} />
+              ) : (
+                <input
+                  type="number"
+                  placeholder="Día de cobro (1-31)"
+                  value={formGasto.fechaCobro}
+                  onChange={(e) => setFormGasto({ ...formGasto, fechaCobro: e.target.value })}
+                  required
+                  min={1}
+                  max={31}
+                  className="w-full border border-gray-300 rounded px-3 py-2"
+                />
+              )}
               <input
                 type="text"
-                placeholder="Cuenta de pago (ej: Tarjeta BBVA)"
+                placeholder="Cuenta de pago (ej: Tarjeta BBVA, Efectivo)"
                 value={formGasto.cuentaPago}
                 onChange={(e) => setFormGasto({ ...formGasto, cuentaPago: e.target.value })}
                 required
@@ -232,7 +308,10 @@ export default function MovimientosPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setMostrarFormGasto(false)}
+                  onClick={() => {
+                    setMostrarFormGasto(false);
+                    setDiasSemanaGasto([]);
+                  }}
                   className="bg-gray-400 text-white px-4 py-2 rounded hover:bg-gray-500"
                 >
                   Cancelar
@@ -252,7 +331,10 @@ export default function MovimientosPage() {
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold truncate">{g.nombre}</p>
                     <p className="text-xs text-gray-500 truncate">
-                      {g.categoria?.nombre} • Día {g.fechaCobro} • {etiquetaFrecuencia[g.frecuencia]}
+                      {g.categoria?.nombre} •{' '}
+                      {g.frecuencia === 'semanal'
+                        ? formatearDiasSemana(g.diasSemana)
+                        : `Día ${g.fechaCobro} • ${etiquetaFrecuencia[g.frecuencia]}`}
                     </p>
                   </div>
                   <div className="flex items-center gap-3 flex-shrink-0">
@@ -307,13 +389,16 @@ export default function MovimientosPage() {
                   />
                   <select
                     value={formAhorro.frecuencia}
-                    onChange={(e) => setFormAhorro({ ...formAhorro, frecuencia: e.target.value as 'mensual' })}
+                    onChange={(e) => setFormAhorro({ ...formAhorro, frecuencia: e.target.value as typeof formAhorro.frecuencia })}
                     className="w-full border border-gray-300 rounded px-3 py-2"
                   >
                     <option value="mensual">Mensual</option>
                     <option value="quincenal">Quincenal</option>
-                    <option value="semanal">Semanal</option>
+                    <option value="semanal">Semanal (elige los días)</option>
                   </select>
+                  {formAhorro.frecuencia === 'semanal' && (
+                    <SelectorDiasSemana seleccionados={diasSemanaAhorro} onChange={setDiasSemanaAhorro} />
+                  )}
                   <select
                     value={formAhorro.ahorroDestinoId}
                     onChange={(e) => setFormAhorro({ ...formAhorro, ahorroDestinoId: e.target.value })}
@@ -331,7 +416,10 @@ export default function MovimientosPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setMostrarFormAhorro(false)}
+                      onClick={() => {
+                        setMostrarFormAhorro(false);
+                        setDiasSemanaAhorro([]);
+                      }}
                       className="bg-gray-400 text-white px-4 py-2 rounded hover:bg-gray-500"
                     >
                       Cancelar
@@ -353,7 +441,8 @@ export default function MovimientosPage() {
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold truncate">{a.nombre}</p>
                     <p className="text-xs text-gray-500 truncate">
-                      → {a.ahorroDestino?.nombre} • {etiquetaFrecuencia[a.frecuencia]}
+                      → {a.ahorroDestino?.nombre} •{' '}
+                      {a.frecuencia === 'semanal' ? formatearDiasSemana(a.diasSemana) : etiquetaFrecuencia[a.frecuencia]}
                     </p>
                   </div>
                   <div className="flex items-center gap-3 flex-shrink-0">
