@@ -81,6 +81,24 @@ export interface ITransaccion {
   estado: 'completado' | 'programado' | 'pendiente';
 }
 
+export interface IGastoPorCategoria {
+  categoriaId: number;
+  nombre: string;
+  color: string;
+  monto: number;
+  porcentaje: number;
+}
+
+export interface IProximoMovimiento {
+  id: string;
+  tipo: 'gasto_domiciliado' | 'ahorro_domiciliado';
+  nombre: string;
+  cantidad: number;
+  frecuencia: string;
+  proximaFecha: string;
+  categoriaColor?: string;
+}
+
 export interface IDashboardResumen {
   ingresosTotales: number;
   gastosFijos: number;
@@ -88,5 +106,6 @@ export interface IDashboardResumen {
   ahorroTotal: number;
   ahorroDelMes: number;
   dineroDisponible: number;
-  comprometido: number;
+  gastosPorCategoria: IGastoPorCategoria[];
+  proximosMovimientos: IProximoMovimiento[];
 }

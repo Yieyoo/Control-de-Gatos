@@ -1,7 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { ResumenFinanciero } from '@/components/Dashboard/ResumenFinanciero';
+import { GastosPorCategoria } from '@/components/Dashboard/GastosPorCategoria';
+import { ProximosMovimientos } from '@/components/Dashboard/ProximosMovimientos';
 import type { IDashboardResumen } from '@/types';
 
 export default function Home() {
@@ -56,42 +59,41 @@ export default function Home() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div>
-        <h1 className="text-4xl font-bold text-gray-900 mb-2">📊 Dashboard</h1>
+        <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">📊 Dashboard</h1>
         <p className="text-gray-600">
           Bienvenido a tu aplicación de control de gastos
         </p>
       </div>
 
       <ResumenFinanciero resumen={resumen} />
-
-      {/* Sección de próximos movimientos */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">⏰ Próximos Movimientos</h2>
-        <p className="text-gray-600">
-          En los próximos 30 días tienes comprometido{' '}
-          <span className="font-bold text-blue-600">
-            ${resumen.comprometido.toLocaleString('es-MX')}
-          </span>
-          {' '}en movimientos programados.
-        </p>
-      </div>
+      <GastosPorCategoria categorias={resumen.gastosPorCategoria} />
+      <ProximosMovimientos movimientos={resumen.proximosMovimientos} />
 
       {/* Accesos rápidos */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow cursor-pointer">
+        <Link
+          href="/gastos"
+          className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow"
+        >
           <h3 className="text-lg font-semibold text-gray-900 mb-2">📝 Registrar Gasto</h3>
           <p className="text-gray-600 text-sm">Agrega un nuevo gasto a tu registro</p>
-        </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow cursor-pointer">
+        </Link>
+        <Link
+          href="/ingresos"
+          className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow"
+        >
           <h3 className="text-lg font-semibold text-gray-900 mb-2">💰 Registrar Ingreso</h3>
           <p className="text-gray-600 text-sm">Registra un nuevo ingreso o pago recibido</p>
-        </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow cursor-pointer">
+        </Link>
+        <Link
+          href="/ahorros"
+          className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow"
+        >
           <h3 className="text-lg font-semibold text-gray-900 mb-2">🏦 Ahorros</h3>
           <p className="text-gray-600 text-sm">Administra tus cuentas de ahorro</p>
-        </div>
+        </Link>
       </div>
     </div>
   );

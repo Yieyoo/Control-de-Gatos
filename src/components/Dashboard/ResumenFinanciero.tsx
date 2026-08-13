@@ -1,4 +1,3 @@
-// src/components/Dashboard/ResumenFinanciero.tsx
 'use client';
 
 import { formatearMoneda } from '@/utils/calculos';
@@ -11,72 +10,75 @@ interface ResumenFinancieroProps {
 export function ResumenFinanciero({ resumen }: ResumenFinancieroProps) {
   const tarjetas = [
     {
-      titulo: 'Ingresos Estimados',
+      titulo: 'Ingresos',
       cantidad: resumen.ingresosTotales,
-      color: 'bg-green-50 border-green-200',
-      textColor: 'text-green-600',
+      badge: 'bg-blue-100',
+      textColor: 'text-gray-900',
       icono: '📈',
     },
     {
-      titulo: 'Ahorro Total',
-      cantidad: resumen.ahorroTotal,
-      color: 'bg-blue-50 border-blue-200',
-      textColor: 'text-blue-600',
-      icono: '🏦',
-    },
-    {
-      titulo: 'Ahorro del Mes',
+      titulo: 'Ahorro del mes',
       cantidad: resumen.ahorroDelMes,
-      color: 'bg-purple-50 border-purple-200',
-      textColor: 'text-purple-600',
-      icono: '💜',
+      badge: 'bg-violet-100',
+      textColor: 'text-gray-900',
+      icono: '🐷',
     },
     {
-      titulo: 'Gastos Fijos',
+      titulo: 'Gastos fijos',
       cantidad: resumen.gastosFijos,
-      color: 'bg-orange-50 border-orange-200',
-      textColor: 'text-orange-600',
-      icono: '📌',
+      badge: 'bg-orange-100',
+      textColor: 'text-gray-900',
+      icono: '📄',
     },
     {
-      titulo: 'Gastos Variables',
+      titulo: 'Gastos variables',
       cantidad: resumen.gastosVariables,
-      color: 'bg-red-50 border-red-200',
-      textColor: 'text-red-600',
+      badge: 'bg-pink-100',
+      textColor: 'text-gray-900',
       icono: '🛒',
-    },
-    {
-      titulo: 'Dinero Disponible',
-      cantidad: resumen.dineroDisponible,
-      color: 'bg-emerald-50 border-emerald-200',
-      textColor: 'text-emerald-600',
-      icono: '💰',
-      destacado: true,
     },
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      {tarjetas.map((tarjeta) => (
-        <div
-          key={tarjeta.titulo}
-          className={`
-            p-6 rounded-lg border-2 transition-all
-            ${tarjeta.color}
-            ${tarjeta.destacado ? 'lg:col-span-3 ring-2 ring-offset-2 ring-emerald-400' : ''}
-          `}
-        >
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-sm text-gray-600 font-medium">{tarjeta.titulo}</p>
-              <p className={`text-3xl font-bold mt-2 ${tarjeta.textColor}`}>
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+      <h2 className="text-lg font-bold text-gray-900 mb-4">Resumen del mes</h2>
+
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        {tarjetas.map((tarjeta) => (
+          <div key={tarjeta.titulo} className="flex items-start gap-3">
+            <div className={`w-10 h-10 rounded-xl ${tarjeta.badge} flex items-center justify-center text-lg flex-shrink-0`}>
+              {tarjeta.icono}
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-gray-500 leading-tight">{tarjeta.titulo}</p>
+              <p className={`text-sm sm:text-lg font-bold ${tarjeta.textColor} leading-tight`}>
                 {formatearMoneda(tarjeta.cantidad)}
               </p>
             </div>
-            <span className="text-3xl">{tarjeta.icono}</span>
           </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-xl bg-green-50 p-4">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-lg">💵</span>
+            <p className="text-xs font-medium text-green-800">Dinero disponible</p>
+          </div>
+          <p className="text-base sm:text-xl font-bold text-green-700 leading-tight">
+            {formatearMoneda(resumen.dineroDisponible)}
+          </p>
         </div>
-      ))}
+        <div className="rounded-xl bg-blue-50 p-4">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-lg">🏛️</span>
+            <p className="text-xs font-medium text-blue-800">Ahorro total</p>
+          </div>
+          <p className="text-base sm:text-xl font-bold text-blue-700 leading-tight">
+            {formatearMoneda(resumen.ahorroTotal)}
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

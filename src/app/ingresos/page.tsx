@@ -1,15 +1,25 @@
 // src/app/ingresos/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import type { IIngreso } from '@/types';
 import { formatearMoneda } from '@/utils/calculos';
 
 export default function IngresosPage() {
+  return (
+    <Suspense fallback={<div>Cargando...</div>}>
+      <IngresosContenido />
+    </Suspense>
+  );
+}
+
+function IngresosContenido() {
+  const searchParams = useSearchParams();
   const [ingresos, setIngresos] = useState<IIngreso[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [mostrarFormulario, setMostrarFormulario] = useState(false);
+  const [mostrarFormulario, setMostrarFormulario] = useState(() => searchParams.get('nuevo') === '1');
   
   const [formData, setFormData] = useState({
     nombre: '',

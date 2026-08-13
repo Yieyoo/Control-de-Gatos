@@ -6,22 +6,23 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('Inicializando categorías predeterminadas...');
   
+  // Colores tomados de la paleta categórica validada (accesible / daltonismo) del proyecto.
   const categorias = [
-    { nombre: 'Comida', color: '#f59e0b' },
-    { nombre: 'Transporte', color: '#ef4444' },
-    { nombre: 'Entretenimiento', color: '#8b5cf6' },
-    { nombre: 'Compras', color: '#ec4899' },
-    { nombre: 'Servicios', color: '#06b6d4' },
-    { nombre: 'Salud', color: '#10b981' },
-    { nombre: 'Educación', color: '#3b82f6' },
-    { nombre: 'Viajes', color: '#f97316' },
-    { nombre: 'Otros', color: '#6b7280' },
+    { nombre: 'Comida', color: '#2a78d6' },
+    { nombre: 'Transporte', color: '#eb6834' },
+    { nombre: 'Entretenimiento', color: '#1baf7a' },
+    { nombre: 'Compras', color: '#eda100' },
+    { nombre: 'Servicios', color: '#e87ba4' },
+    { nombre: 'Salud', color: '#008300' },
+    { nombre: 'Educación', color: '#4a3aa7' },
+    { nombre: 'Viajes', color: '#e34948' },
+    { nombre: 'Otros', color: '#898781' },
   ];
 
   for (const cat of categorias) {
     await prisma.categoria.upsert({
       where: { nombre: cat.nombre },
-      update: {},
+      update: { color: cat.color },
       create: {
         ...cat,
         esDelSistema: true,

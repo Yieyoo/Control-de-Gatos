@@ -1,16 +1,26 @@
 // src/app/gastos/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import type { IGastoVariable, ICategoria } from '@/types';
 import { formatearMoneda } from '@/utils/calculos';
 
 export default function GastosPage() {
+  return (
+    <Suspense fallback={<div>Cargando...</div>}>
+      <GastosContenido />
+    </Suspense>
+  );
+}
+
+function GastosContenido() {
+  const searchParams = useSearchParams();
   const [gastos, setGastos] = useState<IGastoVariable[]>([]);
   const [categorias, setCategorias] = useState<ICategoria[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [mostrarFormulario, setMostrarFormulario] = useState(false);
+  const [mostrarFormulario, setMostrarFormulario] = useState(() => searchParams.get('nuevo') === '1');
   
   const [formData, setFormData] = useState({
     nombre: '',

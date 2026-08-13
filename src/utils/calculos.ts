@@ -105,30 +105,50 @@ export function calcularDineroDisponible(
 }
 
 /**
- * Calcula próximos movimientos programados (próximos 30 días)
+ * Calcula la próxima fecha en que cae un día fijo del mes (ej. "se cobra el día 15").
+ * Si ese día ya pasó este mes, regresa la del mes siguiente. Si el mes no tiene
+ * ese día (ej. 31 en febrero), usa el último día del mes.
  */
-export function calcularMovimientosProgramados(
-  gastosDomiciliados: GastoDomiciliado[],
-  ahorrosDomiciliados: AhorroDomiciliado[],
+export function calcularProximaFechaMensual(diaDelMes: number, hoy: Date = new Date()): Date {
+  const intentar = (año: number, mes: number) => {
+    const ultimoDiaDelMes = new Date(año, mes + 1, 0).getDate();
+    return new Date(año, mes, Math.min(diaDelMes, ultimoDiaDelMes));
+  };
+
+  const esteMes = intentar(hoy.getFullYear(), hoy.getMonth());
+  if (esteMes >= new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate())) {
+    return esteMes;
+  }
+  return intentar(hoy.getFullYear(), hoy.getMonth() + 1);
+}
+
+/**
+ * Calcula la próxima fecha de un movimiento recurrente que se define por una
+ * fecha de inicio + frecuencia (ej. ahorros domiciliados), avanzando desde el
+ * inicio hasta encontrar la primera ocurrencia igual o posterior a hoy.
+ */
+export function calcularProximaFechaDesdeInicio(
+  fechaInicio: Date,
+  frecuencia: string,
   hoy: Date = new Date()
-): number {
-  const hace30Dias = new Date(hoy.getTime() + 30 * 24 * 60 * 60 * 1000);
-  let total = 0;
+): Date {
+  const diasPorFrecuencia: Record<string, number> = {
+    semanal: 7,
+    quincenal: 15,
+    mensual: 30,
+  };
+  const pasoDias = diasPorFrecuencia[frecuencia] ?? 30;
 
-  // Gastos domiciliados
-  gastosDomiciliados.forEach((gasto) => {
-    if (!gasto.activo) return;
-    // Simplificación: asumir que ocurren en la próxima fecha
-    total += gasto.cantidad;
-  });
+  let proxima = new Date(fechaInicio);
+  const hoyInicioDelDia = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
 
-  // Ahorros domiciliados
-  ahorrosDomiciliados.forEach((ahorro) => {
-    if (!ahorro.activo) return;
-    total += ahorro.cantidad;
-  });
+  if (proxima >= hoyInicioDelDia) return proxima;
 
-  return total;
+  const msPorPaso = pasoDias * 24 * 60 * 60 * 1000;
+  const pasosFaltantes = Math.ceil((hoyInicioDelDia.getTime() - proxima.getTime()) / msPorPaso);
+  proxima = new Date(proxima.getTime() + pasosFaltantes * msPorPaso);
+
+  return proxima;
 }
 
 /**
