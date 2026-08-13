@@ -13,16 +13,22 @@ const etiquetaFrecuencia: Record<string, string> = {
   semanal: 'Cada semana',
 };
 
+// La fecha viene del servidor como medianoche UTC representando un día de
+// calendario (ver calculos.ts). Por eso se lee con getUTC* en vez de local:
+// así no se recorre un día al convertir a la hora del navegador.
 function formatearFecha(fechaISO: string): string {
   const fecha = new Date(fechaISO);
   const hoy = new Date();
   const mañana = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + 1);
-  const esHoy = fecha.toDateString() === hoy.toDateString();
-  const esMañana = fecha.toDateString() === mañana.toDateString();
 
-  if (esHoy) return 'Hoy';
-  if (esMañana) return 'Mañana';
-  return fecha.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
+  const mismoDiaUTC = (fechaUTC: Date, fechaLocal: Date) =>
+    fechaUTC.getUTCFullYear() === fechaLocal.getFullYear() &&
+    fechaUTC.getUTCMonth() === fechaLocal.getMonth() &&
+    fechaUTC.getUTCDate() === fechaLocal.getDate();
+
+  if (mismoDiaUTC(fecha, hoy)) return 'Hoy';
+  if (mismoDiaUTC(fecha, mañana)) return 'Mañana';
+  return fecha.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 }
 
 export function ProximosMovimientos({ movimientos }: ProximosMovimientosProps) {

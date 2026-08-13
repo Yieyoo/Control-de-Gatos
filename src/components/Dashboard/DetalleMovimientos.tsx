@@ -8,8 +8,16 @@ interface DetalleMovimientosProps {
   movimientos: IMovimientoPeriodo[];
 }
 
+// timeZone: 'UTC' es a propósito -- la fecha ya viene como medianoche UTC
+// representando el día de calendario (ver calculos.ts), así que se lee tal
+// cual en vez de convertirla a la hora local del navegador.
 function formatearFecha(fechaISO: string): string {
-  return new Date(fechaISO).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', weekday: 'short' });
+  return new Date(fechaISO).toLocaleDateString('es-MX', {
+    day: 'numeric',
+    month: 'short',
+    weekday: 'short',
+    timeZone: 'UTC',
+  });
 }
 
 export function DetalleMovimientos({ etiqueta, movimientos }: DetalleMovimientosProps) {

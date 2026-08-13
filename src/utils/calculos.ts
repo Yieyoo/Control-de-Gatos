@@ -1,4 +1,32 @@
 // src/utils/calculos.ts
+//
+// IMPORTANTE: todas las fechas "de calendario" (día de cobro, día de la semana,
+// rangos de quincena, etc.) se construyen y se leen en UTC (Date.UTC / getUTC*),
+// nunca con el reloj local del proceso. Si usáramos new Date(año, mes, dia) normal,
+// el resultado dependería de en qué zona horaria corre el servidor -- en Vercel es
+// UTC, en una máquina local puede ser otra -- y esa media noche UTC se ve como el
+// día anterior en la tarde/noche para alguien en México (UTC-6). Trabajar siempre
+// en UTC evita ese corrimiento de "un día antes".
+
+const OFFSET_MEXICO_HORAS = 6; // México (CST), sin horario de verano desde 2022
+
+/** "Hoy" según el calendario de México, sin importar la hora del servidor. */
+export function hoyMexico(): Date {
+  const ahora = new Date();
+  const ajustado = new Date(ahora.getTime() - OFFSET_MEXICO_HORAS * 60 * 60 * 1000);
+  return fechaUTC(ajustado.getUTCFullYear(), ajustado.getUTCMonth(), ajustado.getUTCDate());
+}
+
+/** Construye una fecha en UTC a partir de año/mes/día (mes es 0-indexado, como Date normal). */
+export function fechaUTC(año: number, mes: number, dia: number): Date {
+  return new Date(Date.UTC(año, mes, dia));
+}
+
+/** Día del mes (1-31) que marcaba el calendario en México en el momento de esa fecha/hora. */
+export function diaMexico(fecha: Date): number {
+  const ajustado = new Date(fecha.getTime() - OFFSET_MEXICO_HORAS * 60 * 60 * 1000);
+  return ajustado.getUTCDate();
+}
 
 /**
  * Calcula el dinero disponible
@@ -18,17 +46,17 @@ export function calcularDineroDisponible(
  * Si ese día ya pasó este mes, regresa la del mes siguiente. Si el mes no tiene
  * ese día (ej. 31 en febrero), usa el último día del mes.
  */
-export function calcularProximaFechaMensual(diaDelMes: number, hoy: Date = new Date()): Date {
+export function calcularProximaFechaMensual(diaDelMes: number, hoy: Date = hoyMexico()): Date {
   const intentar = (año: number, mes: number) => {
-    const ultimoDiaDelMes = new Date(año, mes + 1, 0).getDate();
-    return new Date(año, mes, Math.min(diaDelMes, ultimoDiaDelMes));
+    const ultimoDiaDelMes = fechaUTC(año, mes + 1, 0).getUTCDate();
+    return fechaUTC(año, mes, Math.min(diaDelMes, ultimoDiaDelMes));
   };
 
-  const esteMes = intentar(hoy.getFullYear(), hoy.getMonth());
-  if (esteMes >= new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate())) {
+  const esteMes = intentar(hoy.getUTCFullYear(), hoy.getUTCMonth());
+  if (esteMes >= fechaUTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), hoy.getUTCDate())) {
     return esteMes;
   }
-  return intentar(hoy.getFullYear(), hoy.getMonth() + 1);
+  return intentar(hoy.getUTCFullYear(), hoy.getUTCMonth() + 1);
 }
 
 /**
@@ -39,7 +67,7 @@ export function calcularProximaFechaMensual(diaDelMes: number, hoy: Date = new D
 export function calcularProximaFechaDesdeInicio(
   fechaInicio: Date,
   frecuencia: string,
-  hoy: Date = new Date()
+  hoy: Date = hoyMexico()
 ): Date {
   const diasPorFrecuencia: Record<string, number> = {
     semanal: 7,
@@ -48,8 +76,8 @@ export function calcularProximaFechaDesdeInicio(
   };
   const pasoDias = diasPorFrecuencia[frecuencia] ?? 30;
 
-  let proxima = new Date(fechaInicio);
-  const hoyInicioDelDia = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+  let proxima = fechaUTC(fechaInicio.getUTCFullYear(), fechaInicio.getUTCMonth(), fechaInicio.getUTCDate());
+  const hoyInicioDelDia = fechaUTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), hoy.getUTCDate());
 
   if (proxima >= hoyInicioDelDia) return proxima;
 
@@ -75,12 +103,12 @@ export function parseDiasSemana(diasSemana: string | null | undefined): number[]
 /**
  * Próxima fecha (hoy o después) cuyo día de la semana esté en diasSemana.
  */
-export function calcularProximaFechaSemanal(diasSemana: number[], hoy: Date = new Date()): Date {
-  const cursor = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+export function calcularProximaFechaSemanal(diasSemana: number[], hoy: Date = hoyMexico()): Date {
+  const cursor = fechaUTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), hoy.getUTCDate());
   if (diasSemana.length === 0) return cursor;
   for (let i = 0; i < 14; i++) {
-    if (diasSemana.includes(cursor.getDay())) return new Date(cursor);
-    cursor.setDate(cursor.getDate() + 1);
+    if (diasSemana.includes(cursor.getUTCDay())) return new Date(cursor);
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
   return cursor;
 }
@@ -98,14 +126,14 @@ export interface RangoFechas {
  * quincena1 ∪ quincena2 = mes completo, sin traslapes.
  */
 export function obtenerPeriodosDelMes(
-  hoy: Date = new Date(),
+  hoy: Date = hoyMexico(),
   corte1: number = 10,
   corte2: number = 25
 ): { mes: RangoFechas[]; quincena1: RangoFechas[]; quincena2: RangoFechas[] } {
-  const año = hoy.getFullYear();
-  const mes = hoy.getMonth();
-  const ultimoDia = new Date(año, mes + 1, 0).getDate();
-  const enDia = (dia: number) => new Date(año, mes, dia);
+  const año = hoy.getUTCFullYear();
+  const mes = hoy.getUTCMonth();
+  const ultimoDia = fechaUTC(año, mes + 1, 0).getUTCDate();
+  const enDia = (dia: number) => fechaUTC(año, mes, dia);
 
   const quincena2: RangoFechas[] = [];
   if (corte1 > 1) quincena2.push({ inicio: enDia(1), fin: enDia(corte1 - 1) });
@@ -118,9 +146,9 @@ export function obtenerPeriodosDelMes(
   };
 }
 
-/** Fin del día (23:59:59.999) de una fecha, para incluir todo el último día de un rango. */
+/** Fin del día (23:59:59.999 UTC) de una fecha, para incluir todo el último día de un rango. */
 export function finDelDia(fecha: Date): Date {
-  return new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate(), 23, 59, 59, 999);
+  return new Date(Date.UTC(fecha.getUTCFullYear(), fecha.getUTCMonth(), fecha.getUTCDate(), 23, 59, 59, 999));
 }
 
 /** Si una fecha cae dentro de alguno de una lista de rangos (inclusive). */
@@ -141,8 +169,8 @@ export function ocurrenciasDelMes(
   mes: number,
   corte: number = 10
 ): { cantidad: number; fecha: Date }[] {
-  const ultimoDia = new Date(año, mes + 1, 0).getDate();
-  const fechaEnDia = (dia: number) => new Date(año, mes, Math.min(Math.max(dia, 1), ultimoDia));
+  const ultimoDia = fechaUTC(año, mes + 1, 0).getUTCDate();
+  const fechaEnDia = (dia: number) => fechaUTC(año, mes, Math.min(Math.max(dia, 1), ultimoDia));
 
   if (frecuencia === 'quincenal') {
     const diaOtraQuincena = diaBase <= corte ? diaBase + 15 : diaBase - 15;
@@ -168,13 +196,13 @@ export function ocurrenciasSemanales(
   const ocurrencias: { cantidad: number; fecha: Date }[] = [];
 
   for (const rango of rangos) {
-    const cursor = new Date(rango.inicio.getFullYear(), rango.inicio.getMonth(), rango.inicio.getDate());
+    const cursor = fechaUTC(rango.inicio.getUTCFullYear(), rango.inicio.getUTCMonth(), rango.inicio.getUTCDate());
     const fin = finDelDia(rango.fin);
     while (cursor <= fin) {
-      if (diasSemana.includes(cursor.getDay())) {
+      if (diasSemana.includes(cursor.getUTCDay())) {
         ocurrencias.push({ cantidad, fecha: new Date(cursor) });
       }
-      cursor.setDate(cursor.getDate() + 1);
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
     }
   }
 

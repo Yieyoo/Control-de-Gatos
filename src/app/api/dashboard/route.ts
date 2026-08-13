@@ -10,6 +10,9 @@ import {
   parseDiasSemana,
   finDelDia,
   fechaEnRangos,
+  fechaUTC,
+  hoyMexico,
+  diaMexico,
   type RangoFechas,
 } from '@/utils/calculos';
 import type {
@@ -45,8 +48,8 @@ function construirOcurrenciasDelMes(
   ahorrosDomiciliados: AhorroDomiciliado[],
   rangoMes: RangoFechas[]
 ): OcurrenciaTag[] {
-  const año = hoy.getFullYear();
-  const mes = hoy.getMonth();
+  const año = hoy.getUTCFullYear();
+  const mes = hoy.getUTCMonth();
   const resultado: OcurrenciaTag[] = [];
 
   gastosFijos
@@ -79,7 +82,7 @@ function construirOcurrenciasDelMes(
           resultado.push({ nombre: a.nombre, cantidad: oc.cantidad, fecha: oc.fecha, tipo: 'ahorro' })
         );
       } else {
-        ocurrenciasDelMes(new Date(a.fechaInicio).getDate(), a.frecuencia, a.cantidad, año, mes, CORTE_1).forEach((oc) =>
+        ocurrenciasDelMes(diaMexico(new Date(a.fechaInicio)), a.frecuencia, a.cantidad, año, mes, CORTE_1).forEach((oc) =>
           resultado.push({ nombre: a.nombre, cantidad: oc.cantidad, fecha: oc.fecha, tipo: 'ahorro' })
         );
       }
@@ -197,9 +200,9 @@ export async function GET() {
 
     const ahorroTotal = ahorrosLugares.reduce((sum: number, ahorro) => sum + ahorro.saldoActual, 0);
 
-    const hoy = new Date();
+    const hoy = hoyMexico();
     const rangos = obtenerPeriodosDelMes(hoy, CORTE_1, CORTE_2);
-    const ultimoDia = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate();
+    const ultimoDia = fechaUTC(hoy.getUTCFullYear(), hoy.getUTCMonth() + 1, 0).getUTCDate();
 
     const ocurrenciasMes = construirOcurrenciasDelMes(
       hoy,
