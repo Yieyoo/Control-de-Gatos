@@ -27,6 +27,10 @@ export async function GET() {
 
     // Calcular totales
     const ingresosTotales = calcularIngresosMes(ingresos);
+    const ingresosPorQuincena = ingresos.reduce(
+      (sum, ing) => (ing.frecuencia === 'quincenal' ? sum + ing.cantidad : sum),
+      0
+    );
     const gastosDomiciliadosMes = calcularGastosDomiciliadosMes(gastosDomiciliados);
     const ahorrosDomiciliadosMes = calcularAhorrosDomiciliadosMes(ahorrosDomiciliados);
     const gastosFijosMes = calcularGastosFijosMes(gastosFijos);
@@ -105,6 +109,7 @@ export async function GET() {
 
     const resumen: IDashboardResumen = {
       ingresosTotales,
+      ingresosPorQuincena,
       gastosFijos: gastosFijosMes + gastosDomiciliadosMes,
       gastosVariables: gastosVariablesMes,
       ahorroTotal,

@@ -10,8 +10,12 @@ interface ResumenFinancieroProps {
 export function ResumenFinanciero({ resumen }: ResumenFinancieroProps) {
   const tarjetas = [
     {
-      titulo: 'Ingresos',
+      titulo: 'Ingresos al mes',
       cantidad: resumen.ingresosTotales,
+      subtitulo:
+        resumen.ingresosPorQuincena > 0
+          ? `${formatearMoneda(resumen.ingresosPorQuincena)} por quincena`
+          : undefined,
       badge: 'bg-blue-100',
       textColor: 'text-gray-900',
       icono: '📈',
@@ -54,6 +58,9 @@ export function ResumenFinanciero({ resumen }: ResumenFinancieroProps) {
               <p className={`text-sm sm:text-lg font-bold ${tarjeta.textColor} leading-tight`}>
                 {formatearMoneda(tarjeta.cantidad)}
               </p>
+              {tarjeta.subtitulo && (
+                <p className="text-xs text-gray-400 leading-tight">{tarjeta.subtitulo}</p>
+              )}
             </div>
           </div>
         ))}
