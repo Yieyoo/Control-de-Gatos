@@ -60,13 +60,18 @@ export default function Home() {
     );
   }
 
+  const fechaHoyTexto = new Date().toLocaleDateString('es-MX', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  });
+  const fechaHoy = fechaHoyTexto.charAt(0).toUpperCase() + fechaHoyTexto.slice(1);
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">📊 Dashboard</h1>
-        <p className="text-gray-600">
-          Bienvenido a tu aplicación de control de gastos
-        </p>
+        <p className="text-gray-600">{fechaHoy}</p>
       </div>
 
       <ResumenFinanciero resumen={resumen} vista={vista} onCambiarVista={setVista} />
