@@ -72,7 +72,7 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
                 vista === opcion ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
               }`}
             >
-              {opcion === 'mes' ? 'Mes' : opcion === 'quincena1' ? 'Q1' : 'Q2'}
+              {opcion === 'mes' ? 'Mes' : opcion === 'quincena1' ? 'Actual' : 'Próxima'}
             </button>
           ))}
         </div>

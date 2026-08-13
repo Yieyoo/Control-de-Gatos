@@ -72,7 +72,7 @@ export default function Home() {
       <ResumenFinanciero resumen={resumen} vista={vista} onCambiarVista={setVista} />
       {vista !== 'mes' && (
         <DetalleMovimientos
-          etiqueta={vista === 'quincena1' ? 'Quincena 1' : 'Quincena 2'}
+          etiqueta={resumen.periodos[vista].etiqueta}
           movimientos={resumen.periodos[vista].movimientos}
         />
       )}

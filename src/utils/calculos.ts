@@ -118,32 +118,72 @@ export interface RangoFechas {
   fin: Date;
 }
 
-/**
- * Rangos de fechas de cada período del mes actual, según los días de pago del
- * usuario (por defecto 10 y 25): quincena 1 = del corte1 al corte2 (ej. 10-25);
- * quincena 2 = el resto del mes, que queda en dos pedazos (1 al corte1-1, y
- * corte2+1 al último día) porque en un mes de calendario no es continua.
- * quincena1 ∪ quincena2 = mes completo, sin traslapes.
- */
-export function obtenerPeriodosDelMes(
-  hoy: Date = hoyMexico(),
-  corte1: number = 10,
-  corte2: number = 25
-): { mes: RangoFechas[]; quincena1: RangoFechas[]; quincena2: RangoFechas[] } {
+/** Rango del mes de calendario que contiene `hoy` (día 1 al último día). */
+export function rangoMesActual(hoy: Date = hoyMexico()): RangoFechas {
   const año = hoy.getUTCFullYear();
   const mes = hoy.getUTCMonth();
   const ultimoDia = fechaUTC(año, mes + 1, 0).getUTCDate();
-  const enDia = (dia: number) => fechaUTC(año, mes, dia);
+  return { inicio: fechaUTC(año, mes, 1), fin: fechaUTC(año, mes, ultimoDia) };
+}
 
-  const quincena2: RangoFechas[] = [];
-  if (corte1 > 1) quincena2.push({ inicio: enDia(1), fin: enDia(corte1 - 1) });
-  if (corte2 < ultimoDia) quincena2.push({ inicio: enDia(corte2 + 1), fin: enDia(ultimoDia) });
+/**
+ * La quincena (según los días de pago del usuario, ej. 10 y 25) que contiene la
+ * fecha dada: puede ser corte1-corte2 (ej. 10-25) o corte2+1 al corte1 del mes
+ * siguiente (ej. 26 ago - 10 sep) -- esta última cruza de un mes a otro.
+ */
+export function periodoQuincenaActual(
+  hoy: Date = hoyMexico(),
+  corte1: number = 10,
+  corte2: number = 25
+): RangoFechas {
+  const dia = hoy.getUTCDate();
+  const año = hoy.getUTCFullYear();
+  const mes = hoy.getUTCMonth();
 
-  return {
-    mes: [{ inicio: enDia(1), fin: enDia(ultimoDia) }],
-    quincena1: [{ inicio: enDia(corte1), fin: enDia(corte2) }],
-    quincena2,
-  };
+  if (dia >= corte1 && dia <= corte2) {
+    return { inicio: fechaUTC(año, mes, corte1), fin: fechaUTC(año, mes, corte2) };
+  }
+  if (dia > corte2) {
+    const mesSig = mes === 11 ? 0 : mes + 1;
+    const añoSig = mes === 11 ? año + 1 : año;
+    return { inicio: fechaUTC(año, mes, corte2 + 1), fin: fechaUTC(añoSig, mesSig, corte1) };
+  }
+  const mesAnt = mes === 0 ? 11 : mes - 1;
+  const añoAnt = mes === 0 ? año - 1 : año;
+  return { inicio: fechaUTC(añoAnt, mesAnt, corte2 + 1), fin: fechaUTC(año, mes, corte1) };
+}
+
+/** La quincena inmediatamente después de la que se le pasa. */
+export function periodoQuincenaSiguiente(
+  actual: RangoFechas,
+  corte1: number = 10,
+  corte2: number = 25
+): RangoFechas {
+  const diaSiguiente = new Date(actual.fin.getTime() + 24 * 60 * 60 * 1000);
+  return periodoQuincenaActual(diaSiguiente, corte1, corte2);
+}
+
+/** Los pares {año, mes} de calendario que toca una lista de rangos (nunca son más de 2 por rango). */
+export function mesesTocados(rangos: RangoFechas[]): { año: number; mes: number }[] {
+  const vistos = new Set<string>();
+  const resultado: { año: number; mes: number }[] = [];
+  for (const r of rangos) {
+    for (const d of [r.inicio, r.fin]) {
+      const clave = `${d.getUTCFullYear()}-${d.getUTCMonth()}`;
+      if (!vistos.has(clave)) {
+        vistos.add(clave);
+        resultado.push({ año: d.getUTCFullYear(), mes: d.getUTCMonth() });
+      }
+    }
+  }
+  return resultado;
+}
+
+const MESES_ABREV = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+/** Formatea una fecha como "10 ago", en UTC (no depende de la hora del servidor/navegador). */
+export function formatearDiaMes(fecha: Date): string {
+  return `${fecha.getUTCDate()} ${MESES_ABREV[fecha.getUTCMonth()]}`;
 }
 
 /** Fin del día (23:59:59.999 UTC) de una fecha, para incluir todo el último día de un rango. */
