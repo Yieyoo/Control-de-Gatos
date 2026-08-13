@@ -80,6 +80,18 @@ function IngresosContenido() {
   if (cargando) return <div>Cargando...</div>;
 
   const total = ingresos.reduce((sum, ing) => sum + ing.cantidad, 0);
+  const totalMensualEstimado = ingresos.reduce((sum, ing) => {
+    if (!ing.activo) return sum;
+    if (ing.frecuencia === 'quincenal') return sum + ing.cantidad * 2;
+    if (ing.frecuencia === 'mensual') return sum + ing.cantidad;
+    if (ing.frecuencia === 'unico') {
+      const hoy = new Date();
+      const inicio = new Date(ing.fechaInicio);
+      const esEsteMes = hoy.getMonth() === inicio.getMonth() && hoy.getFullYear() === inicio.getFullYear();
+      return esEsteMes ? sum + ing.cantidad : sum;
+    }
+    return sum;
+  }, 0);
 
   return (
     <div className="space-y-6">
@@ -95,9 +107,15 @@ function IngresosContenido() {
       )}
 
       {/* Resumen */}
-      <div className="bg-white border border-gray-200 rounded-lg p-6">
-        <p className="text-gray-600">Total de ingresos registrados</p>
-        <p className="text-3xl font-bold text-green-600">{formatearMoneda(total)}</p>
+      <div className="bg-white border border-gray-200 rounded-lg p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <p className="text-gray-600">Suma de lo registrado</p>
+          <p className="text-2xl sm:text-3xl font-bold text-green-600">{formatearMoneda(total)}</p>
+        </div>
+        <div>
+          <p className="text-gray-600">Estimado al mes (según frecuencia)</p>
+          <p className="text-2xl sm:text-3xl font-bold text-green-600">{formatearMoneda(totalMensualEstimado)}</p>
+        </div>
       </div>
 
       {/* Botón agregar */}
@@ -183,7 +201,14 @@ function IngresosContenido() {
               </p>
             </div>
             <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
-              <p className="text-lg font-bold text-green-600 whitespace-nowrap">{formatearMoneda(ingreso.cantidad)}</p>
+              <div className="text-right">
+                <p className="text-lg font-bold text-green-600 whitespace-nowrap">{formatearMoneda(ingreso.cantidad)}</p>
+                {ingreso.frecuencia === 'quincenal' && (
+                  <p className="text-xs text-gray-500 whitespace-nowrap">
+                    {formatearMoneda(ingreso.cantidad * 2)} al mes
+                  </p>
+                )}
+              </div>
               <button
                 onClick={() => handleEliminar(ingreso.id)}
                 className="text-red-600 hover:text-red-800"
