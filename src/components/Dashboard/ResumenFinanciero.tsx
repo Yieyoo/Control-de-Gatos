@@ -4,14 +4,17 @@ import { useState, useEffect } from 'react';
 import { formatearMoneda } from '@/utils/calculos';
 import type { IDashboardResumen, IResumenPeriodo } from '@/types';
 
+type Vista = 'mes' | 'quincena1' | 'quincena2';
+
 interface ResumenFinancieroProps {
   resumen: IDashboardResumen;
+  vista: Vista;
+  onCambiarVista: (vista: Vista) => void;
 }
 
 const CLAVE_OCULTAR_AHORRO = 'ocultarAhorroTotal';
 
-export function ResumenFinanciero({ resumen }: ResumenFinancieroProps) {
-  const [vista, setVista] = useState<'mes' | 'quincena1' | 'quincena2'>('mes');
+export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFinancieroProps) {
   const [ocultarAhorro, setOcultarAhorro] = useState(false);
   const p: IResumenPeriodo = resumen.periodos[vista];
 
@@ -64,7 +67,7 @@ export function ResumenFinanciero({ resumen }: ResumenFinancieroProps) {
           {(['mes', 'quincena1', 'quincena2'] as const).map((opcion) => (
             <button
               key={opcion}
-              onClick={() => setVista(opcion)}
+              onClick={() => onCambiarVista(opcion)}
               className={`px-2.5 py-1.5 rounded-md transition-colors ${
                 vista === opcion ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
               }`}

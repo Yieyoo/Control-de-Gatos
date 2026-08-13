@@ -103,6 +103,15 @@ export interface IProximoMovimiento {
   categoriaColor?: string;
 }
 
+export interface IMovimientoPeriodo {
+  nombre: string;
+  cantidad: number;
+  fecha: string;
+  tipo: 'gasto' | 'ahorro';
+  pagado: boolean;
+  categoriaColor?: string;
+}
+
 export interface IResumenPeriodo {
   id: 'mes' | 'quincena1' | 'quincena2';
   etiqueta: string;
@@ -116,6 +125,7 @@ export interface IResumenPeriodo {
   ahorroDelMes: number;
   ahorroDelMesPendiente: number;
   dineroDisponible: number;
+  movimientos: IMovimientoPeriodo[];
 }
 
 export interface IDashboardResumen {

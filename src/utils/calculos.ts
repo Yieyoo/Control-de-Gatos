@@ -182,62 +182,6 @@ export function ocurrenciasSemanales(
 }
 
 /**
- * Suma las ocurrencias de gastos/ahorros fijos (mensuales o quincenales, con día
- * del mes) que caen dentro de una lista de rangos de fechas, separando lo que
- * ya pasó (pagado) de lo que todavía no llega (pendiente). "Ya pasó" incluye hoy.
- */
-export function calcularPagadoPendiente(
-  items: { dia: number; frecuencia?: string; cantidad: number }[],
-  rangos: RangoFechas[],
-  hoy: Date = new Date(),
-  corte: number = 10
-): { pagado: number; pendiente: number } {
-  if (rangos.length === 0) return { pagado: 0, pendiente: 0 };
-  const año = rangos[0].inicio.getFullYear();
-  const mes = rangos[0].inicio.getMonth();
-  const hoyFinDelDia = finDelDia(hoy);
-
-  let pagado = 0;
-  let pendiente = 0;
-
-  for (const item of items) {
-    const ocurrencias = ocurrenciasDelMes(item.dia, item.frecuencia ?? 'mensual', item.cantidad, año, mes, corte);
-    for (const oc of ocurrencias) {
-      if (fechaEnRangos(oc.fecha, rangos)) {
-        if (oc.fecha <= hoyFinDelDia) pagado += oc.cantidad;
-        else pendiente += oc.cantidad;
-      }
-    }
-  }
-
-  return { pagado, pendiente };
-}
-
-/**
- * Igual que calcularPagadoPendiente, pero para gastos/ahorros semanales
- * (definidos por una lista de días de la semana en vez de un día del mes).
- */
-export function calcularPagadoPendienteSemanal(
-  items: { diasSemana: number[]; cantidad: number }[],
-  rangos: RangoFechas[],
-  hoy: Date = new Date()
-): { pagado: number; pendiente: number } {
-  const hoyFinDelDia = finDelDia(hoy);
-  let pagado = 0;
-  let pendiente = 0;
-
-  for (const item of items) {
-    const ocurrencias = ocurrenciasSemanales(item.diasSemana, item.cantidad, rangos);
-    for (const oc of ocurrencias) {
-      if (oc.fecha <= hoyFinDelDia) pagado += oc.cantidad;
-      else pendiente += oc.cantidad;
-    }
-  }
-
-  return { pagado, pendiente };
-}
-
-/**
  * Formatea un número como moneda
  */
 export function formatearMoneda(cantidad: number, moneda: string = 'MXN'): string {

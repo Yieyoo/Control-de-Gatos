@@ -5,8 +5,7 @@ import {
   calcularProximaFechaDesdeInicio,
   calcularProximaFechaSemanal,
   obtenerPeriodosDelMes,
-  calcularPagadoPendiente,
-  calcularPagadoPendienteSemanal,
+  ocurrenciasDelMes,
   ocurrenciasSemanales,
   parseDiasSemana,
   finDelDia,
@@ -17,13 +16,77 @@ import type {
   IDashboardResumen,
   IGastoPorCategoria,
   IProximoMovimiento,
+  IMovimientoPeriodo,
   IResumenPeriodo,
 } from '@/types';
-import type { Ingreso, GastoFijo, GastoDomiciliado, AhorroDomiciliado, GastoVariable } from '@prisma/client';
+import type { Ingreso, Prisma } from '@prisma/client';
+
+type GastoFijoConCategoria = Prisma.GastoFijoGetPayload<{ include: { categoria: true } }>;
+type GastoDomiciliadoConCategoria = Prisma.GastoDomiciliadoGetPayload<{ include: { categoria: true } }>;
+type GastoVariableConCategoria = Prisma.GastoVariableGetPayload<{ include: { categoria: true } }>;
+type AhorroDomiciliado = Prisma.AhorroDomiciliadoGetPayload<Record<string, never>>;
 
 // Días de pago del usuario: quincena 1 = del 10 al 25; quincena 2 = el resto del mes
 const CORTE_1 = 10;
 const CORTE_2 = 25;
+
+interface OcurrenciaTag {
+  nombre: string;
+  cantidad: number;
+  fecha: Date;
+  tipo: 'gasto' | 'ahorro';
+  categoriaColor?: string;
+}
+
+function construirOcurrenciasDelMes(
+  hoy: Date,
+  gastosFijos: GastoFijoConCategoria[],
+  gastosDomiciliados: GastoDomiciliadoConCategoria[],
+  ahorrosDomiciliados: AhorroDomiciliado[],
+  rangoMes: RangoFechas[]
+): OcurrenciaTag[] {
+  const año = hoy.getFullYear();
+  const mes = hoy.getMonth();
+  const resultado: OcurrenciaTag[] = [];
+
+  gastosFijos
+    .filter((g) => g.activo)
+    .forEach((g) => {
+      ocurrenciasDelMes(g.fechaPago, 'mensual', g.cantidad, año, mes, CORTE_1).forEach((oc) =>
+        resultado.push({ nombre: g.nombre, cantidad: oc.cantidad, fecha: oc.fecha, tipo: 'gasto', categoriaColor: g.categoria.color })
+      );
+    });
+
+  gastosDomiciliados
+    .filter((g) => g.activo)
+    .forEach((g) => {
+      if (g.frecuencia === 'semanal') {
+        ocurrenciasSemanales(parseDiasSemana(g.diasSemana), g.cantidad, rangoMes).forEach((oc) =>
+          resultado.push({ nombre: g.nombre, cantidad: oc.cantidad, fecha: oc.fecha, tipo: 'gasto', categoriaColor: g.categoria.color })
+        );
+      } else if (g.fechaCobro != null) {
+        ocurrenciasDelMes(g.fechaCobro, g.frecuencia, g.cantidad, año, mes, CORTE_1).forEach((oc) =>
+          resultado.push({ nombre: g.nombre, cantidad: oc.cantidad, fecha: oc.fecha, tipo: 'gasto', categoriaColor: g.categoria.color })
+        );
+      }
+    });
+
+  ahorrosDomiciliados
+    .filter((a) => a.activo)
+    .forEach((a) => {
+      if (a.frecuencia === 'semanal') {
+        ocurrenciasSemanales(parseDiasSemana(a.diasSemana), a.cantidad, rangoMes).forEach((oc) =>
+          resultado.push({ nombre: a.nombre, cantidad: oc.cantidad, fecha: oc.fecha, tipo: 'ahorro' })
+        );
+      } else {
+        ocurrenciasDelMes(new Date(a.fechaInicio).getDate(), a.frecuencia, a.cantidad, año, mes, CORTE_1).forEach((oc) =>
+          resultado.push({ nombre: a.nombre, cantidad: oc.cantidad, fecha: oc.fecha, tipo: 'ahorro' })
+        );
+      }
+    });
+
+  return resultado;
+}
 
 function construirPeriodo(
   id: 'quincena1' | 'quincena2',
@@ -32,11 +95,11 @@ function construirPeriodo(
   rangos: RangoFechas[],
   hoy: Date,
   ingresos: Ingreso[],
-  gastosFijos: GastoFijo[],
-  gastosDomiciliados: GastoDomiciliado[],
-  ahorrosDomiciliados: AhorroDomiciliado[],
-  gastosVariables: GastoVariable[]
+  ocurrenciasMes: OcurrenciaTag[],
+  gastosVariables: GastoVariableConCategoria[]
 ): IResumenPeriodo {
+  const hoyFinDelDia = finDelDia(hoy);
+
   const ingresosPeriodo = ingresos.reduce((sum, ing) => {
     if (!ing.activo) return sum;
     if (ing.frecuencia === 'quincenal') return sum + ing.cantidad;
@@ -47,59 +110,41 @@ function construirPeriodo(
     return sum;
   }, 0);
 
-  const fijosManuales = calcularPagadoPendiente(
-    gastosFijos.filter((g) => g.activo).map((g) => ({ dia: g.fechaPago, cantidad: g.cantidad })),
-    rangos,
-    hoy,
-    CORTE_1
-  );
-  const domiciliadosActivos = gastosDomiciliados.filter((g) => g.activo);
-  const fijosDomiciliados = calcularPagadoPendiente(
-    domiciliadosActivos
-      .filter((g) => g.frecuencia !== 'semanal' && g.fechaCobro != null)
-      .map((g) => ({ dia: g.fechaCobro as number, frecuencia: g.frecuencia, cantidad: g.cantidad })),
-    rangos,
-    hoy,
-    CORTE_1
-  );
-  const fijosDomiciliadosSemanales = calcularPagadoPendienteSemanal(
-    domiciliadosActivos
-      .filter((g) => g.frecuencia === 'semanal')
-      .map((g) => ({ diasSemana: parseDiasSemana(g.diasSemana), cantidad: g.cantidad })),
-    rangos,
-    hoy
-  );
+  const ocurrenciasEnPeriodo = ocurrenciasMes.filter((oc) => fechaEnRangos(oc.fecha, rangos));
+  const gastosVariablesEnPeriodo = gastosVariables.filter((g) => fechaEnRangos(new Date(g.fecha), rangos));
 
-  const gastosVariablesPeriodo = gastosVariables.reduce(
-    (sum, g) => (fechaEnRangos(new Date(g.fecha), rangos) ? sum + g.cantidad : sum),
-    0
-  );
+  const sumar = (ocs: OcurrenciaTag[], pagado: boolean) =>
+    ocs.filter((oc) => (oc.fecha <= hoyFinDelDia) === pagado).reduce((s, oc) => s + oc.cantidad, 0);
 
-  const ahorrosActivos = ahorrosDomiciliados.filter((a) => a.activo);
-  const ahorrosNoSemanal = calcularPagadoPendiente(
-    ahorrosActivos
-      .filter((a) => a.frecuencia !== 'semanal')
-      .map((a) => ({ dia: new Date(a.fechaInicio).getDate(), frecuencia: a.frecuencia, cantidad: a.cantidad })),
-    rangos,
-    hoy,
-    CORTE_1
-  );
-  const ahorrosSemanales = calcularPagadoPendienteSemanal(
-    ahorrosActivos
-      .filter((a) => a.frecuencia === 'semanal')
-      .map((a) => ({ diasSemana: parseDiasSemana(a.diasSemana), cantidad: a.cantidad })),
-    rangos,
-    hoy
-  );
+  const gastoOcurrencias = ocurrenciasEnPeriodo.filter((oc) => oc.tipo === 'gasto');
+  const ahorroOcurrencias = ocurrenciasEnPeriodo.filter((oc) => oc.tipo === 'ahorro');
 
-  const gastosFijosPagado = fijosManuales.pagado + fijosDomiciliados.pagado + fijosDomiciliadosSemanales.pagado;
-  const gastosFijosPendiente =
-    fijosManuales.pendiente + fijosDomiciliados.pendiente + fijosDomiciliadosSemanales.pendiente;
-  const ahorroDelMesPagado = ahorrosNoSemanal.pagado + ahorrosSemanales.pagado;
-  const ahorroDelMesPendiente = ahorrosNoSemanal.pendiente + ahorrosSemanales.pendiente;
+  const gastosFijosPagado = sumar(gastoOcurrencias, true);
+  const gastosFijosPendiente = sumar(gastoOcurrencias, false);
+  const ahorroDelMesPagado = sumar(ahorroOcurrencias, true);
+  const ahorroDelMesPendiente = sumar(ahorroOcurrencias, false);
+  const gastosVariablesPeriodo = gastosVariablesEnPeriodo.reduce((s, g) => s + g.cantidad, 0);
 
-  const dineroDisponible =
-    ingresosPeriodo - gastosFijosPagado - gastosVariablesPeriodo - ahorroDelMesPagado;
+  const dineroDisponible = ingresosPeriodo - gastosFijosPagado - gastosVariablesPeriodo - ahorroDelMesPagado;
+
+  const movimientos: IMovimientoPeriodo[] = [
+    ...ocurrenciasEnPeriodo.map((oc) => ({
+      nombre: oc.nombre,
+      cantidad: oc.cantidad,
+      fecha: oc.fecha.toISOString(),
+      tipo: oc.tipo,
+      pagado: oc.fecha <= hoyFinDelDia,
+      categoriaColor: oc.categoriaColor,
+    })),
+    ...gastosVariablesEnPeriodo.map((g) => ({
+      nombre: g.nombre,
+      cantidad: g.cantidad,
+      fecha: new Date(g.fecha).toISOString(),
+      tipo: 'gasto' as const,
+      pagado: true,
+      categoriaColor: g.categoria.color,
+    })),
+  ].sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
 
   return {
     id,
@@ -114,6 +159,7 @@ function construirPeriodo(
     ahorroDelMes: ahorroDelMesPagado,
     ahorroDelMesPendiente,
     dineroDisponible,
+    movimientos,
   };
 }
 
@@ -131,6 +177,9 @@ function sumarPeriodos(a: IResumenPeriodo, b: IResumenPeriodo, rangoTexto: strin
     ahorroDelMes: a.ahorroDelMes + b.ahorroDelMes,
     ahorroDelMesPendiente: a.ahorroDelMesPendiente + b.ahorroDelMesPendiente,
     dineroDisponible: a.dineroDisponible + b.dineroDisponible,
+    movimientos: [...a.movimientos, ...b.movimientos].sort(
+      (x, y) => new Date(x.fecha).getTime() - new Date(y.fecha).getTime()
+    ),
   };
 }
 
@@ -152,6 +201,14 @@ export async function GET() {
     const rangos = obtenerPeriodosDelMes(hoy, CORTE_1, CORTE_2);
     const ultimoDia = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate();
 
+    const ocurrenciasMes = construirOcurrenciasDelMes(
+      hoy,
+      gastosFijos,
+      gastosDomiciliados,
+      ahorrosDomiciliados,
+      rangos.mes
+    );
+
     const quincena1 = construirPeriodo(
       'quincena1',
       `Quincena 1 (${CORTE_1}-${CORTE_2})`,
@@ -159,9 +216,7 @@ export async function GET() {
       rangos.quincena1,
       hoy,
       ingresos,
-      gastosFijos,
-      gastosDomiciliados,
-      ahorrosDomiciliados,
+      ocurrenciasMes,
       gastosVariables
     );
     const quincena2 = construirPeriodo(
@@ -171,9 +226,7 @@ export async function GET() {
       rangos.quincena2,
       hoy,
       ingresos,
-      gastosFijos,
-      gastosDomiciliados,
-      ahorrosDomiciliados,
+      ocurrenciasMes,
       gastosVariables
     );
     const mes = sumarPeriodos(quincena1, quincena2, `1 - ${ultimoDia}`);

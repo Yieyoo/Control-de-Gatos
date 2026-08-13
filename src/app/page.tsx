@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ResumenFinanciero } from '@/components/Dashboard/ResumenFinanciero';
+import { DetalleMovimientos } from '@/components/Dashboard/DetalleMovimientos';
 import { GastosPorCategoria } from '@/components/Dashboard/GastosPorCategoria';
 import { ProximosMovimientos } from '@/components/Dashboard/ProximosMovimientos';
 import type { IDashboardResumen } from '@/types';
@@ -11,6 +12,7 @@ export default function Home() {
   const [resumen, setResumen] = useState<IDashboardResumen | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [vista, setVista] = useState<'mes' | 'quincena1' | 'quincena2'>('mes');
 
   useEffect(() => {
     const cargarResumen = async () => {
@@ -67,7 +69,13 @@ export default function Home() {
         </p>
       </div>
 
-      <ResumenFinanciero resumen={resumen} />
+      <ResumenFinanciero resumen={resumen} vista={vista} onCambiarVista={setVista} />
+      {vista !== 'mes' && (
+        <DetalleMovimientos
+          etiqueta={vista === 'quincena1' ? 'Quincena 1' : 'Quincena 2'}
+          movimientos={resumen.periodos[vista].movimientos}
+        />
+      )}
       <GastosPorCategoria categorias={resumen.gastosPorCategoria} />
       <ProximosMovimientos movimientos={resumen.proximosMovimientos} />
 
