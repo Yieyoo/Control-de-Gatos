@@ -101,6 +101,17 @@ export interface IProximoMovimiento {
   categoriaColor?: string;
 }
 
+export interface IResumenQuincena {
+  numero: 1 | 2;
+  inicio: string;
+  fin: string;
+  ingresos: number;
+  gastosFijos: number;
+  gastosVariables: number;
+  ahorroDelMes: number;
+  dineroDisponible: number;
+}
+
 export interface IDashboardResumen {
   ingresosTotales: number;
   ingresosPorQuincena: number;
@@ -111,4 +122,5 @@ export interface IDashboardResumen {
   dineroDisponible: number;
   gastosPorCategoria: IGastoPorCategoria[];
   proximosMovimientos: IProximoMovimiento[];
+  quincenaActual: IResumenQuincena;
 }

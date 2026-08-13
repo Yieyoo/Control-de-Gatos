@@ -9,8 +9,14 @@ import {
   calcularDineroDisponible,
   calcularProximaFechaMensual,
   calcularProximaFechaDesdeInicio,
+  obtenerRangoQuincenaActual,
+  diaEnQuincena,
 } from '@/utils/calculos';
 import type { IDashboardResumen, IGastoPorCategoria, IProximoMovimiento } from '@/types';
+
+// Días de corte de quincena del usuario (se paga los días 10 y 25)
+const CORTE_QUINCENA_1 = 10;
+const CORTE_QUINCENA_2 = 25;
 
 export async function GET() {
   try {
@@ -46,6 +52,52 @@ export async function GET() {
       gastosFijosMes,
       gastosVariablesMes,
       ahorrosDomiciliadosMes
+    );
+
+    // Quincena actual (según los días de corte del usuario)
+    const hoy = new Date();
+    const rangoQuincena = obtenerRangoQuincenaActual(hoy, CORTE_QUINCENA_1, CORTE_QUINCENA_2);
+    const enRangoQuincena = (fecha: Date) => fecha >= rangoQuincena.inicio && fecha <= rangoQuincena.fin;
+    const enDiaQuincena = (dia: number) =>
+      diaEnQuincena(dia, rangoQuincena.quincena, CORTE_QUINCENA_1, CORTE_QUINCENA_2);
+
+    const ingresosQuincena = ingresos.reduce((sum, ing) => {
+      if (!ing.activo) return sum;
+      if (ing.frecuencia === 'quincenal') return sum + ing.cantidad;
+      if (ing.frecuencia === 'mensual') return sum + ing.cantidad / 2;
+      if (ing.frecuencia === 'unico' && enRangoQuincena(new Date(ing.fechaInicio))) return sum + ing.cantidad;
+      return sum;
+    }, 0);
+
+    const gastosFijosQuincena = gastosFijos.reduce((sum, g) => {
+      if (!g.activo) return sum;
+      return enDiaQuincena(g.fechaPago) ? sum + g.cantidad : sum;
+    }, 0);
+
+    const gastosDomiciliadosQuincena = gastosDomiciliados.reduce((sum, g) => {
+      if (!g.activo) return sum;
+      if (g.frecuencia === 'quincenal') return sum + g.cantidad;
+      return enDiaQuincena(g.fechaCobro) ? sum + g.cantidad : sum;
+    }, 0);
+
+    const gastosVariablesQuincena = gastosVariables.reduce(
+      (sum, g) => (enRangoQuincena(new Date(g.fecha)) ? sum + g.cantidad : sum),
+      0
+    );
+
+    const ahorrosDomiciliadosQuincena = ahorrosDomiciliados.reduce((sum, a) => {
+      if (!a.activo) return sum;
+      if (a.frecuencia === 'semanal') return sum + a.cantidad * 2;
+      if (a.frecuencia === 'quincenal') return sum + a.cantidad;
+      return enDiaQuincena(new Date(a.fechaInicio).getDate()) ? sum + a.cantidad : sum;
+    }, 0);
+
+    const dineroDisponibleQuincena = calcularDineroDisponible(
+      ingresosQuincena,
+      gastosDomiciliadosQuincena,
+      gastosFijosQuincena,
+      gastosVariablesQuincena,
+      ahorrosDomiciliadosQuincena
     );
 
     // Gastos por categoría (fijos + domiciliados en su equivalente mensual + variables de este mes)
@@ -85,7 +137,6 @@ export async function GET() {
       .sort((a, b) => b.monto - a.monto);
 
     // Próximos movimientos (más cercanos primero)
-    const hoy = new Date();
     const proximosGastos: IProximoMovimiento[] = gastosDomiciliados.map((g) => ({
       id: `gasto-${g.id}`,
       tipo: 'gasto_domiciliado' as const,
@@ -117,6 +168,16 @@ export async function GET() {
       dineroDisponible,
       gastosPorCategoria,
       proximosMovimientos,
+      quincenaActual: {
+        numero: rangoQuincena.quincena,
+        inicio: rangoQuincena.inicio.toISOString(),
+        fin: rangoQuincena.fin.toISOString(),
+        ingresos: ingresosQuincena,
+        gastosFijos: gastosFijosQuincena + gastosDomiciliadosQuincena,
+        gastosVariables: gastosVariablesQuincena,
+        ahorroDelMes: ahorrosDomiciliadosQuincena,
+        dineroDisponible: dineroDisponibleQuincena,
+      },
     };
 
     return Response.json(resumen);

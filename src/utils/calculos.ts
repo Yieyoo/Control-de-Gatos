@@ -152,6 +152,60 @@ export function calcularProximaFechaDesdeInicio(
 }
 
 /**
+ * Calcula el rango de fechas de la quincena actual, dados los días de corte
+ * (por defecto 10 y 25: quincena 1 = del 26 del mes anterior al 10, quincena 2 = del 11 al 25).
+ */
+export function obtenerRangoQuincenaActual(
+  hoy: Date = new Date(),
+  corte1: number = 10,
+  corte2: number = 25
+): { inicio: Date; fin: Date; quincena: 1 | 2 } {
+  const dia = hoy.getDate();
+  const año = hoy.getFullYear();
+  const mes = hoy.getMonth();
+
+  if (dia <= corte1) {
+    const mesAnterior = mes === 0 ? 11 : mes - 1;
+    const añoAnterior = mes === 0 ? año - 1 : año;
+    return {
+      inicio: new Date(añoAnterior, mesAnterior, corte2 + 1),
+      fin: new Date(año, mes, corte1),
+      quincena: 1,
+    };
+  }
+
+  if (dia <= corte2) {
+    return {
+      inicio: new Date(año, mes, corte1 + 1),
+      fin: new Date(año, mes, corte2),
+      quincena: 2,
+    };
+  }
+
+  const mesSiguiente = mes === 11 ? 0 : mes + 1;
+  const añoSiguiente = mes === 11 ? año + 1 : año;
+  return {
+    inicio: new Date(año, mes, corte2 + 1),
+    fin: new Date(añoSiguiente, mesSiguiente, corte1),
+    quincena: 1,
+  };
+}
+
+/**
+ * Indica si un día del mes (ej. el día de cobro de un gasto domiciliado) cae
+ * dentro de la quincena indicada (1 o 2), según los días de corte.
+ */
+export function diaEnQuincena(
+  dia: number,
+  quincena: 1 | 2,
+  corte1: number = 10,
+  corte2: number = 25
+): boolean {
+  const enPrimeraQuincena = dia <= corte1 || dia > corte2;
+  return quincena === 1 ? enPrimeraQuincena : !enPrimeraQuincena;
+}
+
+/**
  * Formatea un número como moneda
  */
 export function formatearMoneda(cantidad: number, moneda: string = 'MXN'): string {
