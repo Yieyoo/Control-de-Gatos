@@ -2,13 +2,13 @@
 
 import { useState } from 'react';
 import { formatearMoneda } from '@/utils/calculos';
-import type { IDashboardResumen } from '@/types';
+import type { IDashboardResumen, IResumenPeriodo } from '@/types';
 
 interface ResumenFinancieroProps {
   resumen: IDashboardResumen;
 }
 
-function formatearRangoQuincena(inicioISO: string, finISO: string): string {
+function formatearRango(inicioISO: string, finISO: string): string {
   const inicio = new Date(inicioISO);
   const fin = new Date(finISO);
   const opciones: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
@@ -16,41 +16,34 @@ function formatearRangoQuincena(inicioISO: string, finISO: string): string {
 }
 
 export function ResumenFinanciero({ resumen }: ResumenFinancieroProps) {
-  const [vista, setVista] = useState<'mes' | 'quincena'>('mes');
-  const q = resumen.quincenaActual;
-  const esMes = vista === 'mes';
+  const [vista, setVista] = useState<'mes' | 'quincena1' | 'quincena2'>('mes');
+  const p: IResumenPeriodo = resumen.periodos[vista];
 
   const tarjetas = [
     {
-      titulo: esMes ? 'Ingresos al mes' : 'Ingresos de la quincena',
-      cantidad: esMes ? resumen.ingresosTotales : q.ingresos,
-      subtitulo:
-        esMes && resumen.ingresosPorQuincena > 0
-          ? `${formatearMoneda(resumen.ingresosPorQuincena)} por quincena`
-          : undefined,
+      titulo: 'Ingresos',
+      cantidad: p.ingresos,
       badge: 'bg-blue-100',
-      textColor: 'text-gray-900',
       icono: '📈',
     },
     {
-      titulo: esMes ? 'Ahorro del mes' : 'Ahorro de la quincena',
-      cantidad: esMes ? resumen.ahorroDelMes : q.ahorroDelMes,
+      titulo: 'Ahorro',
+      cantidad: p.ahorroDelMes,
+      subtitulo: p.ahorroDelMesPendiente > 0 ? `+${formatearMoneda(p.ahorroDelMesPendiente)} pendiente` : undefined,
       badge: 'bg-violet-100',
-      textColor: 'text-gray-900',
       icono: '🐷',
     },
     {
       titulo: 'Gastos fijos',
-      cantidad: esMes ? resumen.gastosFijos : q.gastosFijos,
+      cantidad: p.gastosFijos,
+      subtitulo: p.gastosFijosPendiente > 0 ? `+${formatearMoneda(p.gastosFijosPendiente)} pendiente` : undefined,
       badge: 'bg-orange-100',
-      textColor: 'text-gray-900',
       icono: '📄',
     },
     {
       titulo: 'Gastos variables',
-      cantidad: esMes ? resumen.gastosVariables : q.gastosVariables,
+      cantidad: p.gastosVariables,
       badge: 'bg-pink-100',
-      textColor: 'text-gray-900',
       icono: '🛒',
     },
   ];
@@ -60,29 +53,21 @@ export function ResumenFinanciero({ resumen }: ResumenFinancieroProps) {
       <div className="flex items-center justify-between gap-3 mb-1">
         <h2 className="text-lg font-bold text-gray-900">Resumen</h2>
         <div className="flex bg-gray-100 rounded-lg p-0.5 text-xs font-medium flex-shrink-0">
-          <button
-            onClick={() => setVista('mes')}
-            className={`px-3 py-1.5 rounded-md transition-colors ${
-              esMes ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
-            }`}
-          >
-            Mes
-          </button>
-          <button
-            onClick={() => setVista('quincena')}
-            className={`px-3 py-1.5 rounded-md transition-colors ${
-              !esMes ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
-            }`}
-          >
-            Quincena
-          </button>
+          {(['mes', 'quincena1', 'quincena2'] as const).map((opcion) => (
+            <button
+              key={opcion}
+              onClick={() => setVista(opcion)}
+              className={`px-2.5 py-1.5 rounded-md transition-colors ${
+                vista === opcion ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+              }`}
+            >
+              {opcion === 'mes' ? 'Mes' : opcion === 'quincena1' ? 'Q1' : 'Q2'}
+            </button>
+          ))}
         </div>
       </div>
 
-      {!esMes && (
-        <p className="text-xs text-gray-500 mb-4">{formatearRangoQuincena(q.inicio, q.fin)}</p>
-      )}
-      {esMes && <div className="mb-4" />}
+      <p className="text-xs text-gray-500 mb-4">{formatearRango(p.inicio, p.fin)}</p>
 
       <div className="grid grid-cols-2 gap-4 mb-4">
         {tarjetas.map((tarjeta) => (
@@ -92,11 +77,11 @@ export function ResumenFinanciero({ resumen }: ResumenFinancieroProps) {
             </div>
             <div className="min-w-0">
               <p className="text-xs text-gray-500 leading-tight">{tarjeta.titulo}</p>
-              <p className={`text-sm sm:text-lg font-bold ${tarjeta.textColor} leading-tight`}>
+              <p className="text-sm sm:text-lg font-bold text-gray-900 leading-tight">
                 {formatearMoneda(tarjeta.cantidad)}
               </p>
               {tarjeta.subtitulo && (
-                <p className="text-xs text-gray-400 leading-tight">{tarjeta.subtitulo}</p>
+                <p className="text-xs text-amber-600 leading-tight">{tarjeta.subtitulo}</p>
               )}
             </div>
           </div>
@@ -110,7 +95,7 @@ export function ResumenFinanciero({ resumen }: ResumenFinancieroProps) {
             <p className="text-xs font-medium text-green-800">Dinero disponible</p>
           </div>
           <p className="text-base sm:text-xl font-bold text-green-700 leading-tight">
-            {formatearMoneda(esMes ? resumen.dineroDisponible : q.dineroDisponible)}
+            {formatearMoneda(p.dineroDisponible)}
           </p>
         </div>
         <div className="rounded-xl bg-blue-50 p-4">

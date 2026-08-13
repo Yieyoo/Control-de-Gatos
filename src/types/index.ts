@@ -101,26 +101,27 @@ export interface IProximoMovimiento {
   categoriaColor?: string;
 }
 
-export interface IResumenQuincena {
-  numero: 1 | 2;
+export interface IResumenPeriodo {
+  id: 'mes' | 'quincena1' | 'quincena2';
+  etiqueta: string;
   inicio: string;
   fin: string;
   ingresos: number;
   gastosFijos: number;
+  gastosFijosPendiente: number;
   gastosVariables: number;
   ahorroDelMes: number;
+  ahorroDelMesPendiente: number;
   dineroDisponible: number;
 }
 
 export interface IDashboardResumen {
-  ingresosTotales: number;
-  ingresosPorQuincena: number;
-  gastosFijos: number;
-  gastosVariables: number;
   ahorroTotal: number;
-  ahorroDelMes: number;
-  dineroDisponible: number;
   gastosPorCategoria: IGastoPorCategoria[];
   proximosMovimientos: IProximoMovimiento[];
-  quincenaActual: IResumenQuincena;
+  periodos: {
+    mes: IResumenPeriodo;
+    quincena1: IResumenPeriodo;
+    quincena2: IResumenPeriodo;
+  };
 }

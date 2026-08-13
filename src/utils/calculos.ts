@@ -152,57 +152,86 @@ export function calcularProximaFechaDesdeInicio(
 }
 
 /**
- * Calcula el rango de fechas de la quincena actual, dados los días de corte
- * (por defecto 10 y 25: quincena 1 = del 26 del mes anterior al 10, quincena 2 = del 11 al 25).
+ * Rango de fechas de cada período del mes actual: quincena 1 (día 1 al corte),
+ * quincena 2 (corte+1 al último día) y el mes completo. quincena1 + quincena2 = mes.
  */
-export function obtenerRangoQuincenaActual(
+export function obtenerPeriodosDelMes(
   hoy: Date = new Date(),
-  corte1: number = 10,
-  corte2: number = 25
-): { inicio: Date; fin: Date; quincena: 1 | 2 } {
-  const dia = hoy.getDate();
+  corte: number = 10
+): { mes: { inicio: Date; fin: Date }; quincena1: { inicio: Date; fin: Date }; quincena2: { inicio: Date; fin: Date } } {
   const año = hoy.getFullYear();
   const mes = hoy.getMonth();
+  const ultimoDia = new Date(año, mes + 1, 0).getDate();
 
-  if (dia <= corte1) {
-    const mesAnterior = mes === 0 ? 11 : mes - 1;
-    const añoAnterior = mes === 0 ? año - 1 : año;
-    return {
-      inicio: new Date(añoAnterior, mesAnterior, corte2 + 1),
-      fin: new Date(año, mes, corte1),
-      quincena: 1,
-    };
-  }
-
-  if (dia <= corte2) {
-    return {
-      inicio: new Date(año, mes, corte1 + 1),
-      fin: new Date(año, mes, corte2),
-      quincena: 2,
-    };
-  }
-
-  const mesSiguiente = mes === 11 ? 0 : mes + 1;
-  const añoSiguiente = mes === 11 ? año + 1 : año;
   return {
-    inicio: new Date(año, mes, corte2 + 1),
-    fin: new Date(añoSiguiente, mesSiguiente, corte1),
-    quincena: 1,
+    mes: { inicio: new Date(año, mes, 1), fin: new Date(año, mes, ultimoDia) },
+    quincena1: { inicio: new Date(año, mes, 1), fin: new Date(año, mes, corte) },
+    quincena2: { inicio: new Date(año, mes, corte + 1), fin: new Date(año, mes, ultimoDia) },
   };
 }
 
+/** Fin del día (23:59:59.999) de una fecha, para incluir todo el último día de un rango. */
+export function finDelDia(fecha: Date): Date {
+  return new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate(), 23, 59, 59, 999);
+}
+
 /**
- * Indica si un día del mes (ej. el día de cobro de un gasto domiciliado) cae
- * dentro de la quincena indicada (1 o 2), según los días de corte.
+ * Todas las ocurrencias, dentro del mes indicado, de un gasto/ahorro fijo que cae
+ * en un día del mes (ej. "se cobra el día 15"). Un gasto quincenal ocurre dos veces:
+ * una vez cerca de diaBase y otra ~15 días después (o antes), una por cada quincena.
  */
-export function diaEnQuincena(
-  dia: number,
-  quincena: 1 | 2,
-  corte1: number = 10,
-  corte2: number = 25
-): boolean {
-  const enPrimeraQuincena = dia <= corte1 || dia > corte2;
-  return quincena === 1 ? enPrimeraQuincena : !enPrimeraQuincena;
+export function ocurrenciasDelMes(
+  diaBase: number,
+  frecuencia: string,
+  cantidad: number,
+  año: number,
+  mes: number,
+  corte: number = 10
+): { cantidad: number; fecha: Date }[] {
+  const ultimoDia = new Date(año, mes + 1, 0).getDate();
+  const fechaEnDia = (dia: number) => new Date(año, mes, Math.min(Math.max(dia, 1), ultimoDia));
+
+  if (frecuencia === 'quincenal') {
+    const diaOtraQuincena = diaBase <= corte ? diaBase + 15 : diaBase - 15;
+    return [
+      { cantidad, fecha: fechaEnDia(diaBase) },
+      { cantidad, fecha: fechaEnDia(diaOtraQuincena) },
+    ];
+  }
+
+  return [{ cantidad, fecha: fechaEnDia(diaBase) }];
+}
+
+/**
+ * Suma las ocurrencias de gastos/ahorros fijos que caen dentro de un rango de fechas,
+ * separando lo que ya pasó (pagado) de lo que todavía no llega (pendiente). "Ya pasó"
+ * incluye el día de hoy.
+ */
+export function calcularPagadoPendiente(
+  items: { dia: number; frecuencia?: string; cantidad: number }[],
+  rango: { inicio: Date; fin: Date },
+  hoy: Date = new Date(),
+  corte: number = 10
+): { pagado: number; pendiente: number } {
+  const año = rango.inicio.getFullYear();
+  const mes = rango.inicio.getMonth();
+  const finRango = finDelDia(rango.fin);
+  const hoyFinDelDia = finDelDia(hoy);
+
+  let pagado = 0;
+  let pendiente = 0;
+
+  for (const item of items) {
+    const ocurrencias = ocurrenciasDelMes(item.dia, item.frecuencia ?? 'mensual', item.cantidad, año, mes, corte);
+    for (const oc of ocurrencias) {
+      if (oc.fecha >= rango.inicio && oc.fecha <= finRango) {
+        if (oc.fecha <= hoyFinDelDia) pagado += oc.cantidad;
+        else pendiente += oc.cantidad;
+      }
+    }
+  }
+
+  return { pagado, pendiente };
 }
 
 /**
