@@ -12,7 +12,7 @@ export default function Home() {
   const [resumen, setResumen] = useState<IDashboardResumen | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [vista, setVista] = useState<'mes' | 'quincena1' | 'quincena2'>('mes');
+  const [vista, setVista] = useState<'mes' | 'quincena1' | 'quincena2'>('quincena1');
 
   useEffect(() => {
     const cargarResumen = async () => {

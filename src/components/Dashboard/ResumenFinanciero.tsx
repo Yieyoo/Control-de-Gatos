@@ -64,7 +64,7 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
       <div className="flex items-center justify-between gap-3 mb-1">
         <h2 className="text-lg font-bold text-gray-900">Resumen</h2>
         <div className="flex bg-gray-100 rounded-lg p-0.5 text-xs font-medium flex-shrink-0">
-          {(['mes', 'quincena1', 'quincena2'] as const).map((opcion) => (
+          {(['quincena1', 'quincena2', 'mes'] as const).map((opcion) => (
             <button
               key={opcion}
               onClick={() => onCambiarVista(opcion)}
