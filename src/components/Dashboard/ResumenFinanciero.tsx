@@ -10,7 +10,6 @@ interface ResumenFinancieroProps {
   resumen: IDashboardResumen;
   vista: Vista;
   onCambiarVista: (vista: Vista) => void;
-  onAhorroActualizado: () => void;
 }
 
 const CLAVE_OCULTAR_AHORRO = 'ocultarAhorroTotal';
@@ -22,11 +21,8 @@ const ICONOS_AHORRO: Record<string, string> = {
   otra: '💼',
 };
 
-export function ResumenFinanciero({ resumen, vista, onCambiarVista, onAhorroActualizado }: ResumenFinancieroProps) {
+export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFinancieroProps) {
   const [ocultarAhorro, setOcultarAhorro] = useState(false);
-  const [editandoId, setEditandoId] = useState<number | null>(null);
-  const [valorEdicion, setValorEdicion] = useState('');
-  const [guardando, setGuardando] = useState(false);
   const p: IResumenPeriodo = resumen.periodos[vista];
 
   useEffect(() => {
@@ -39,37 +35,6 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista, onAhorroActu
       localStorage.setItem(CLAVE_OCULTAR_AHORRO, nuevo ? '1' : '0');
       return nuevo;
     });
-  };
-
-  const iniciarEdicion = (id: number, saldoActual: number) => {
-    setEditandoId(id);
-    setValorEdicion(String(saldoActual));
-  };
-
-  const cancelarEdicion = () => {
-    setEditandoId(null);
-    setValorEdicion('');
-  };
-
-  const guardarSaldo = async (id: number) => {
-    const saldoActual = parseFloat(valorEdicion);
-    if (Number.isNaN(saldoActual)) return;
-    setGuardando(true);
-    try {
-      const resp = await fetch(`/api/ahorros/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ saldoActual }),
-      });
-      if (!resp.ok) throw new Error('Error al actualizar el saldo');
-      setEditandoId(null);
-      setValorEdicion('');
-      onAhorroActualizado();
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setGuardando(false);
-    }
   };
 
   const tarjetas = [
@@ -191,48 +156,9 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista, onAhorroActu
                 <span>{ICONOS_AHORRO[ahorro.tipo] || '💼'}</span>
                 <span className="truncate">{ahorro.nombre}</span>
               </p>
-              {editandoId === ahorro.id ? (
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <input
-                    type="number"
-                    step="0.01"
-                    autoFocus
-                    value={valorEdicion}
-                    onChange={(e) => setValorEdicion(e.target.value)}
-                    className="w-24 border border-gray-300 rounded px-2 py-1 text-sm text-right"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => guardarSaldo(ahorro.id)}
-                    disabled={guardando}
-                    className="text-green-600 hover:text-green-800 text-sm font-medium disabled:opacity-50"
-                  >
-                    ✓
-                  </button>
-                  <button
-                    type="button"
-                    onClick={cancelarEdicion}
-                    disabled={guardando}
-                    className="text-gray-400 hover:text-gray-600 text-sm font-medium"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <p className="text-sm font-semibold text-gray-900">
-                    {ocultarAhorro ? '•••••' : formatearMoneda(ahorro.saldoActual)}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => iniciarEdicion(ahorro.id, ahorro.saldoActual)}
-                    aria-label={`Editar saldo de ${ahorro.nombre}`}
-                    className="text-gray-400 hover:text-gray-600"
-                  >
-                    ✏️
-                  </button>
-                </div>
-              )}
+              <p className="text-sm font-semibold text-gray-900 flex-shrink-0">
+                {ocultarAhorro ? '•••••' : formatearMoneda(ahorro.saldoActual)}
+              </p>
             </div>
           ))}
         </div>

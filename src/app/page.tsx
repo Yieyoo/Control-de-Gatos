@@ -75,12 +75,7 @@ export default function Home() {
         <p className="text-gray-600">{fechaHoy}</p>
       </div>
 
-      <ResumenFinanciero
-        resumen={resumen}
-        vista={vista}
-        onCambiarVista={setVista}
-        onAhorroActualizado={cargarResumen}
-      />
+      <ResumenFinanciero resumen={resumen} vista={vista} onCambiarVista={setVista} />
       {vista !== 'mes' && (
         <DetalleMovimientos
           etiqueta={resumen.periodos[vista].etiqueta}

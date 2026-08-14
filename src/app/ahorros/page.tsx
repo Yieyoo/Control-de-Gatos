@@ -28,6 +28,14 @@ function AhorrosContenido() {
     notas: '',
   });
 
+  const [editandoId, setEditandoId] = useState<number | null>(null);
+  const [formEdicion, setFormEdicion] = useState({
+    nombre: '',
+    tipo: 'cuenta_ahorro',
+    saldoActual: '',
+    notas: '',
+  });
+
   useEffect(() => {
     cargarAhorros();
   }, []);
@@ -71,6 +79,39 @@ function AhorrosContenido() {
     try {
       const resp = await fetch(`/api/ahorros/${id}`, { method: 'DELETE' });
       if (!resp.ok) throw new Error('Error al eliminar');
+      cargarAhorros();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error desconocido');
+    }
+  };
+
+  const iniciarEdicion = (ahorro: IAhorroLugar) => {
+    setEditandoId(ahorro.id);
+    setFormEdicion({
+      nombre: ahorro.nombre,
+      tipo: ahorro.tipo,
+      saldoActual: String(ahorro.saldoActual),
+      notas: ahorro.notas || '',
+    });
+  };
+
+  const cancelarEdicion = () => {
+    setEditandoId(null);
+  };
+
+  const handleGuardarEdicion = async (e: React.FormEvent, id: number) => {
+    e.preventDefault();
+    try {
+      const resp = await fetch(`/api/ahorros/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...formEdicion,
+          saldoActual: parseFloat(formEdicion.saldoActual || '0'),
+        }),
+      });
+      if (!resp.ok) throw new Error('Error al actualizar ahorro');
+      setEditandoId(null);
       cargarAhorros();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
@@ -176,42 +217,108 @@ function AhorrosContenido() {
 
       {/* Lista */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {ahorros.map((ahorro) => (
-          <div
-            key={ahorro.id}
-            className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow"
-          >
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-3xl">{tipoIconos[ahorro.tipo] || '💼'}</span>
-                  <p className="font-semibold text-lg">{ahorro.nombre}</p>
-                </div>
-                <p className="text-sm text-gray-600 mt-1">{ahorro.tipo}</p>
-              </div>
-              <button
-                onClick={() => handleEliminar(ahorro.id)}
-                className="text-red-600 hover:text-red-800"
+        {ahorros.map((ahorro) =>
+          editandoId === ahorro.id ? (
+            <form
+              key={ahorro.id}
+              onSubmit={(e) => handleGuardarEdicion(e, ahorro.id)}
+              className="bg-white border border-blue-300 rounded-lg p-6 space-y-3"
+            >
+              <input
+                type="text"
+                placeholder="Nombre"
+                value={formEdicion.nombre}
+                onChange={(e) => setFormEdicion({ ...formEdicion, nombre: e.target.value })}
+                required
+                className="w-full border border-gray-300 rounded px-3 py-2"
+              />
+              <select
+                value={formEdicion.tipo}
+                onChange={(e) => setFormEdicion({ ...formEdicion, tipo: e.target.value })}
+                className="w-full border border-gray-300 rounded px-3 py-2"
               >
-                🗑️
-              </button>
-            </div>
-            
-            <p className="text-3xl font-bold text-blue-600 mb-3">
-              {formatearMoneda(ahorro.saldoActual)}
-            </p>
-            
-            {ahorro.notas && (
-              <p className="text-sm text-gray-600 italic">{ahorro.notas}</p>
-            )}
+                <option value="cuenta_ahorro">Cuenta de Ahorro</option>
+                <option value="inversion">Inversión</option>
+                <option value="efectivo">Efectivo</option>
+                <option value="otra">Otra</option>
+              </select>
+              <input
+                type="number"
+                placeholder="Saldo Actual"
+                value={formEdicion.saldoActual}
+                onChange={(e) => setFormEdicion({ ...formEdicion, saldoActual: e.target.value })}
+                step="0.01"
+                className="w-full border border-gray-300 rounded px-3 py-2"
+              />
+              <textarea
+                placeholder="Notas (opcional)"
+                value={formEdicion.notas}
+                onChange={(e) => setFormEdicion({ ...formEdicion, notas: e.target.value })}
+                className="w-full border border-gray-300 rounded px-3 py-2"
+                rows={2}
+              />
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+                >
+                  Guardar
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelarEdicion}
+                  className="bg-gray-400 text-white px-4 py-2 rounded hover:bg-gray-500"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div
+              key={ahorro.id}
+              className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow"
+            >
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-3xl">{tipoIconos[ahorro.tipo] || '💼'}</span>
+                    <p className="font-semibold text-lg">{ahorro.nombre}</p>
+                  </div>
+                  <p className="text-sm text-gray-600 mt-1">{ahorro.tipo}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => iniciarEdicion(ahorro)}
+                    className="text-blue-600 hover:text-blue-800"
+                    aria-label={`Editar ${ahorro.nombre}`}
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    onClick={() => handleEliminar(ahorro.id)}
+                    className="text-red-600 hover:text-red-800"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              </div>
 
-            <div className="mt-4 pt-4 border-t border-gray-200">
-              <button className="text-blue-600 hover:text-blue-800 text-sm font-medium">
-                ➕ Registrar movimiento
-              </button>
+              <p className="text-3xl font-bold text-blue-600 mb-3">
+                {formatearMoneda(ahorro.saldoActual)}
+              </p>
+
+              {ahorro.notas && (
+                <p className="text-sm text-gray-600 italic">{ahorro.notas}</p>
+              )}
+
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <button className="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                  ➕ Registrar movimiento
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        )}
       </div>
 
       {ahorros.length === 0 && !mostrarFormulario && (
