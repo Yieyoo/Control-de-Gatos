@@ -9,7 +9,9 @@ import { cerrarSesion } from '@/lib/cerrarSesion';
 const masItems = [
   { href: '/ingresos', label: 'Ingresos', icono: '📈' },
   { href: '/gastos', label: 'Gastos', icono: '💸' },
+  { href: '/ahorros', label: 'Ahorros', icono: '🏦' },
   { href: '/movimientos', label: 'Movimientos Programados', icono: '⏰' },
+  { href: '/historial', label: 'Historial', icono: '📜' },
   { href: '/categorias', label: 'Categorías', icono: '🏷️' },
 ];
 
@@ -59,10 +61,9 @@ export function BottomNav() {
 
   return (
     <>
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-20 bg-white border-t border-gray-200 pb-[env(safe-area-inset-bottom)]">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-20 bg-white border-t border-gray-200 pb-[max(env(safe-area-inset-bottom),0.75rem)]">
         <div className="flex items-center">
           <TabLink href="/" label="Inicio" icono="🏠" activo={pathname === '/'} />
-          <TabLink href="/historial" label="Movimientos" icono="📜" activo={pathname === '/historial'} />
 
           <div className="flex-1 flex justify-center">
             <button
@@ -75,7 +76,6 @@ export function BottomNav() {
             </button>
           </div>
 
-          <TabLink href="/ahorros" label="Ahorros" icono="🏦" activo={pathname === '/ahorros'} />
           <button
             type="button"
             onClick={() => setMasAbierto(true)}
