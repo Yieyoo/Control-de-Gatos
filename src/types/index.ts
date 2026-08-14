@@ -206,6 +206,15 @@ export interface IResumenPeriodo {
   movimientos: IMovimientoPeriodo[];
 }
 
+export interface IMesResumen {
+  año: number;
+  mes: number;
+  etiqueta: string;
+  ingresos: number;
+  gastos: number;
+  ahorro: number;
+}
+
 export interface IDashboardResumen {
   ahorroTotal: number;
   ahorrosLugares: IAhorroLugar[];

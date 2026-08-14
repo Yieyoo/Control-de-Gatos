@@ -155,20 +155,28 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
 
           {pidiendoPin ? (
             <form onSubmit={handleSubmitPin} className="mt-1">
-              <input
-                type="password"
-                inputMode="numeric"
-                autoFocus
-                placeholder="PIN"
-                value={pin}
-                onChange={(e) => {
-                  setPin(e.target.value);
-                  setPinIncorrecto(false);
-                }}
-                className={`w-full border rounded px-2 py-1 text-sm ${
-                  pinIncorrecto ? 'border-red-400' : 'border-blue-300'
-                }`}
-              />
+              <div className="flex gap-1.5">
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  autoFocus
+                  placeholder="PIN"
+                  value={pin}
+                  onChange={(e) => {
+                    setPin(e.target.value);
+                    setPinIncorrecto(false);
+                  }}
+                  className={`min-w-0 flex-1 border rounded px-2 py-1 text-sm ${
+                    pinIncorrecto ? 'border-red-400' : 'border-blue-300'
+                  }`}
+                />
+                <button
+                  type="submit"
+                  className="flex-shrink-0 bg-blue-600 text-white text-sm font-medium px-2.5 rounded hover:bg-blue-700"
+                >
+                  ✓
+                </button>
+              </div>
               {pinIncorrecto && <p className="text-[11px] text-red-600 mt-1">PIN incorrecto</p>}
             </form>
           ) : (

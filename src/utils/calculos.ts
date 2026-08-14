@@ -118,12 +118,15 @@ export interface RangoFechas {
   fin: Date;
 }
 
-/** Rango del mes de calendario que contiene `hoy` (día 1 al último día). */
-export function rangoMesActual(hoy: Date = hoyMexico()): RangoFechas {
-  const año = hoy.getUTCFullYear();
-  const mes = hoy.getUTCMonth();
+/** Rango completo (día 1 al último día) de un mes de calendario cualquiera. */
+export function rangoMes(año: number, mes: number): RangoFechas {
   const ultimoDia = fechaUTC(año, mes + 1, 0).getUTCDate();
   return { inicio: fechaUTC(año, mes, 1), fin: fechaUTC(año, mes, ultimoDia) };
+}
+
+/** Rango del mes de calendario que contiene `hoy` (día 1 al último día). */
+export function rangoMesActual(hoy: Date = hoyMexico()): RangoFechas {
+  return rangoMes(hoy.getUTCFullYear(), hoy.getUTCMonth());
 }
 
 /**

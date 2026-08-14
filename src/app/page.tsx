@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { ResumenFinanciero } from '@/components/Dashboard/ResumenFinanciero';
 import { PorcentajeDestino } from '@/components/Dashboard/PorcentajeDestino';
 import { DetalleMovimientos } from '@/components/Dashboard/DetalleMovimientos';
@@ -62,18 +61,11 @@ export default function Home() {
     );
   }
 
-  const fechaHoyTexto = new Date().toLocaleDateString('es-MX', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  });
-  const fechaHoy = fechaHoyTexto.charAt(0).toUpperCase() + fechaHoyTexto.slice(1);
-
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">📊 Dashboard</h1>
-        <p className="text-gray-600">{fechaHoy}</p>
+        <p className="text-gray-600">Resumen general de tus finanzas</p>
       </div>
 
       <ResumenFinanciero resumen={resumen} vista={vista} onCambiarVista={setVista} />
@@ -87,31 +79,6 @@ export default function Home() {
       <DeudaTarjetas tarjetas={resumen.deudaTarjetas} />
       <GastosPorCategoria categorias={resumen.gastosPorCategoria} />
       <ProximosMovimientos movimientos={resumen.proximosMovimientos} />
-
-      {/* Accesos rápidos */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <Link
-          href="/gastos"
-          className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow"
-        >
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">📝 Registrar Gasto</h3>
-          <p className="text-gray-600 text-sm">Agrega un nuevo gasto a tu registro</p>
-        </Link>
-        <Link
-          href="/ingresos"
-          className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow"
-        >
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">💰 Registrar Ingreso</h3>
-          <p className="text-gray-600 text-sm">Registra un nuevo ingreso o pago recibido</p>
-        </Link>
-        <Link
-          href="/ahorros"
-          className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow"
-        >
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">🏦 Ahorros</h3>
-          <p className="text-gray-600 text-sm">Administra tus cuentas de ahorro</p>
-        </Link>
-      </div>
     </div>
   );
 }
