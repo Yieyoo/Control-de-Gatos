@@ -87,7 +87,7 @@ export interface IDeudaTarjeta {
   nombre: string;
   debe: number;
   pagoQuincenal?: number;
-  rangoTexto: string;
+  diaCorte: number;
 }
 
 export interface ICompraTarjeta {
@@ -160,6 +160,7 @@ export interface IResumenPeriodo {
 
 export interface IDashboardResumen {
   ahorroTotal: number;
+  ahorrosLugares: IAhorroLugar[];
   deudaTarjetas: IDeudaTarjeta[];
   deudaTarjetasTotal: number;
   gastosPorCategoria: IGastoPorCategoria[];

@@ -21,7 +21,7 @@ export function DeudaTarjetas({ tarjetas }: DeudaTarjetasProps) {
             <div className="min-w-0 flex-1">
               <p className="font-medium text-gray-900 truncate">{t.nombre}</p>
               <p className="text-xs text-gray-500 truncate">
-                Corte {t.rangoTexto}
+                Corta el día {t.diaCorte}
                 {t.pagoQuincenal ? ` • Planeas pagar ${formatearMoneda(t.pagoQuincenal)}/quincena` : ''}
               </p>
             </div>

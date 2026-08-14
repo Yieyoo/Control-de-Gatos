@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ResumenFinanciero } from '@/components/Dashboard/ResumenFinanciero';
 import { DetalleMovimientos } from '@/components/Dashboard/DetalleMovimientos';
@@ -15,24 +15,24 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [vista, setVista] = useState<'mes' | 'quincena1' | 'quincena2'>('quincena1');
 
-  useEffect(() => {
-    const cargarResumen = async () => {
-      try {
-        const respuesta = await fetch('/api/dashboard');
-        if (!respuesta.ok) {
-          throw new Error('Error al cargar el resumen');
-        }
-        const datos = await respuesta.json();
-        setResumen(datos);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Error desconocido');
-      } finally {
-        setCargando(false);
+  const cargarResumen = useCallback(async () => {
+    try {
+      const respuesta = await fetch('/api/dashboard');
+      if (!respuesta.ok) {
+        throw new Error('Error al cargar el resumen');
       }
-    };
-
-    cargarResumen();
+      const datos = await respuesta.json();
+      setResumen(datos);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setCargando(false);
+    }
   }, []);
+
+  useEffect(() => {
+    cargarResumen();
+  }, [cargarResumen]);
 
   if (cargando) {
     return (
@@ -75,7 +75,12 @@ export default function Home() {
         <p className="text-gray-600">{fechaHoy}</p>
       </div>
 
-      <ResumenFinanciero resumen={resumen} vista={vista} onCambiarVista={setVista} />
+      <ResumenFinanciero
+        resumen={resumen}
+        vista={vista}
+        onCambiarVista={setVista}
+        onAhorroActualizado={cargarResumen}
+      />
       {vista !== 'mes' && (
         <DetalleMovimientos
           etiqueta={resumen.periodos[vista].etiqueta}

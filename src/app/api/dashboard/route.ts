@@ -7,8 +7,6 @@ import {
   rangoMesActual,
   periodoQuincenaActual,
   periodoQuincenaSiguiente,
-  cicloTarjetaActual,
-  cicloTarjetaAnterior,
   mesesTocados,
   ocurrenciasDelMes,
   ocurrenciasSemanales,
@@ -27,6 +25,7 @@ import type {
   IMovimientoPeriodo,
   IResumenPeriodo,
   IDeudaTarjeta,
+  IAhorroLugar,
 } from '@/types';
 import type { Ingreso, Prisma } from '@prisma/client';
 
@@ -210,19 +209,17 @@ export async function GET() {
     const periodoActual = periodoQuincenaActual(hoy, CORTE_1, CORTE_2);
     const periodoProximo = periodoQuincenaSiguiente(periodoActual, CORTE_1, CORTE_2);
 
-    // Deuda de tarjetas: lo que ya cerró en el corte más reciente de cada una (lo pendiente aún no cuenta).
+    // Deuda de tarjetas: todo lo que llevas comprado, haya cortado o no.
     const deudaTarjetas: IDeudaTarjeta[] = tarjetas.map((t) => {
-      const abierto = cicloTarjetaActual(hoy, t.diaCorte);
-      const cerrado = cicloTarjetaAnterior(abierto, t.diaCorte);
       const debe = comprasTarjeta
-        .filter((c) => c.tarjetaId === t.id && c.fecha >= cerrado.inicio && c.fecha <= finDelDia(cerrado.fin))
+        .filter((c) => c.tarjetaId === t.id)
         .reduce((sum, c) => sum + c.cantidad, 0);
       return {
         id: t.id,
         nombre: t.nombre,
         debe,
         pagoQuincenal: t.pagoQuincenal ?? undefined,
-        rangoTexto: formatearRango(cerrado),
+        diaCorte: t.diaCorte,
       };
     });
     const deudaTarjetasTotal = deudaTarjetas.reduce((sum, t) => sum + t.debe, 0);
@@ -325,6 +322,14 @@ export async function GET() {
 
     const resumen: IDashboardResumen = {
       ahorroTotal,
+      ahorrosLugares: ahorrosLugares.map((a) => ({
+        id: a.id,
+        nombre: a.nombre,
+        tipo: a.tipo as IAhorroLugar['tipo'],
+        saldoActual: a.saldoActual,
+        notas: a.notas ?? undefined,
+        fechaCreacion: a.fechaCreacion,
+      })),
       deudaTarjetas,
       deudaTarjetasTotal,
       gastosPorCategoria,
