@@ -16,7 +16,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { nombre, diaCorte, notas } = body;
+    const { nombre, diaCorte, pagoQuincenal, notas } = body;
 
     if (!nombre || !diaCorte) {
       return Response.json({ error: 'Faltan campos requeridos' }, { status: 400 });
@@ -26,6 +26,7 @@ export async function POST(request: Request) {
       data: {
         nombre,
         diaCorte: parseInt(diaCorte),
+        pagoQuincenal: pagoQuincenal ? parseFloat(pagoQuincenal) : null,
         notas,
       },
     });

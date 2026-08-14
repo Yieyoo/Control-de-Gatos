@@ -13,7 +13,7 @@ export default function TarjetasPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [mostrarFormTarjeta, setMostrarFormTarjeta] = useState(false);
-  const [formTarjeta, setFormTarjeta] = useState({ nombre: '', diaCorte: '' });
+  const [formTarjeta, setFormTarjeta] = useState({ nombre: '', diaCorte: '', pagoQuincenal: '' });
 
   const [formCompraAbierto, setFormCompraAbierto] = useState<number | null>(null);
   const [formCompra, setFormCompra] = useState({ nombre: '', cantidad: '', categoriaId: '' });
@@ -63,7 +63,7 @@ export default function TarjetasPage() {
         body: JSON.stringify(formTarjeta),
       });
       if (!resp.ok) throw new Error('Error al crear tarjeta');
-      setFormTarjeta({ nombre: '', diaCorte: '' });
+      setFormTarjeta({ nombre: '', diaCorte: '', pagoQuincenal: '' });
       setMostrarFormTarjeta(false);
       cargarTarjetas();
     } catch (err) {
@@ -159,6 +159,11 @@ export default function TarjetasPage() {
                 </p>
                 <p className="text-xl font-bold text-orange-700 mt-1">{formatearMoneda(totalAnterior)}</p>
                 <p className="text-xs text-orange-700/70 mt-0.5">Ya cerró — esto es lo que debes pagar</p>
+                {tarjeta.pagoQuincenal != null && (
+                  <p className="text-xs text-orange-700/70">
+                    Planeas pagar {formatearMoneda(tarjeta.pagoQuincenal)}/quincena
+                  </p>
+                )}
               </div>
               <div className="rounded-lg bg-blue-50 p-4">
                 <p className="text-xs font-medium text-blue-800">
@@ -282,6 +287,14 @@ export default function TarjetasPage() {
             required
             min={1}
             max={31}
+            className="w-full border border-gray-300 rounded px-3 py-2"
+          />
+          <input
+            type="number"
+            placeholder="Pago que planeas hacer cada quincena (opcional)"
+            value={formTarjeta.pagoQuincenal}
+            onChange={(e) => setFormTarjeta({ ...formTarjeta, pagoQuincenal: e.target.value })}
+            step="0.01"
             className="w-full border border-gray-300 rounded px-3 py-2"
           />
           <div className="flex gap-2">

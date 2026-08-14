@@ -77,8 +77,17 @@ export interface ITarjetaCredito {
   id: number;
   nombre: string;
   diaCorte: number;
+  pagoQuincenal?: number;
   activa: boolean;
   notas?: string;
+}
+
+export interface IDeudaTarjeta {
+  id: number;
+  nombre: string;
+  debe: number;
+  pagoQuincenal?: number;
+  rangoTexto: string;
 }
 
 export interface ICompraTarjeta {
@@ -145,11 +154,14 @@ export interface IResumenPeriodo {
   ahorroDelMes: number;
   ahorroDelMesPendiente: number;
   dineroDisponible: number;
+  dineroReal: number;
   movimientos: IMovimientoPeriodo[];
 }
 
 export interface IDashboardResumen {
   ahorroTotal: number;
+  deudaTarjetas: IDeudaTarjeta[];
+  deudaTarjetasTotal: number;
   gastosPorCategoria: IGastoPorCategoria[];
   proximosMovimientos: IProximoMovimiento[];
   periodos: {

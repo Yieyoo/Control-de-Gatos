@@ -158,6 +158,7 @@ model TarjetaCredito {
   id                  Int      @id @default(autoincrement())
   nombre              String
   diaCorte            Int      // Día del mes en que corta el estado de cuenta (1-31)
+  pagoQuincenal       Float?   // Cuánto planeas pagar cada quincena a esta tarjeta
   activa              Boolean  @default(true)
   notas               String?
   fechaCreacion       DateTime @default(now())

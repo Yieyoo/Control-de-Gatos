@@ -8,13 +8,14 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { nombre, diaCorte, activa, notas } = body;
+    const { nombre, diaCorte, pagoQuincenal, activa, notas } = body;
 
     const tarjeta = await prisma.tarjetaCredito.update({
       where: { id: parseInt(id) },
       data: {
         ...(nombre && { nombre }),
         ...(diaCorte !== undefined && { diaCorte: parseInt(diaCorte) }),
+        ...(pagoQuincenal !== undefined && { pagoQuincenal: pagoQuincenal ? parseFloat(pagoQuincenal) : null }),
         ...(activa !== undefined && { activa }),
         ...(notas !== undefined && { notas }),
       },

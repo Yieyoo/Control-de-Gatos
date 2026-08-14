@@ -7,6 +7,8 @@ import {
   rangoMesActual,
   periodoQuincenaActual,
   periodoQuincenaSiguiente,
+  cicloTarjetaActual,
+  cicloTarjetaAnterior,
   mesesTocados,
   ocurrenciasDelMes,
   ocurrenciasSemanales,
@@ -24,6 +26,7 @@ import type {
   IProximoMovimiento,
   IMovimientoPeriodo,
   IResumenPeriodo,
+  IDeudaTarjeta,
 } from '@/types';
 import type { Ingreso, Prisma } from '@prisma/client';
 
@@ -50,6 +53,7 @@ function construirPeriodo(
   rangoTexto: string,
   rangos: RangoFechas[],
   esQuincena: boolean,
+  deudaTarjetasTotal: number,
   hoy: Date,
   ingresos: Ingreso[],
   gastosFijos: GastoFijoConCategoria[],
@@ -143,6 +147,10 @@ function construirPeriodo(
   const gastosVariablesPeriodo = gastosVariablesEnPeriodo.reduce((s, g) => s + g.cantidad, 0);
 
   const dineroDisponible = ingresosPeriodo - gastosFijosPagado - gastosVariablesPeriodo - ahorroDelMesPagado;
+  // "Dinero real": el disponible de hoy, pero imaginando que también se liquidan
+  // los pendientes de este periodo (gastos fijos y ahorros que aún no llegan) y
+  // se paga la deuda actual de las tarjetas de crédito.
+  const dineroReal = dineroDisponible - gastosFijosPendiente - ahorroDelMesPendiente - deudaTarjetasTotal;
 
   const movimientos: IMovimientoPeriodo[] = [
     ...ocurrencias.map((oc) => ({
@@ -176,13 +184,14 @@ function construirPeriodo(
     ahorroDelMes: ahorroDelMesPagado,
     ahorroDelMesPendiente,
     dineroDisponible,
+    dineroReal,
     movimientos,
   };
 }
 
 export async function GET() {
   try {
-    const [ingresos, ahorrosLugares, gastosDomiciliados, ahorrosDomiciliados, gastosFijos, gastosVariables] =
+    const [ingresos, ahorrosLugares, gastosDomiciliados, ahorrosDomiciliados, gastosFijos, gastosVariables, tarjetas, comprasTarjeta] =
       await Promise.all([
         prisma.ingreso.findMany({ where: { activo: true } }),
         prisma.ahorroLugar.findMany(),
@@ -190,6 +199,8 @@ export async function GET() {
         prisma.ahorroDomiciliado.findMany({ where: { activo: true } }),
         prisma.gastoFijo.findMany({ where: { activo: true }, include: { categoria: true } }),
         prisma.gastoVariable.findMany({ include: { categoria: true } }),
+        prisma.tarjetaCredito.findMany({ where: { activa: true } }),
+        prisma.compraTarjeta.findMany(),
       ]);
 
     const ahorroTotal = ahorrosLugares.reduce((sum: number, ahorro) => sum + ahorro.saldoActual, 0);
@@ -199,15 +210,33 @@ export async function GET() {
     const periodoActual = periodoQuincenaActual(hoy, CORTE_1, CORTE_2);
     const periodoProximo = periodoQuincenaSiguiente(periodoActual, CORTE_1, CORTE_2);
 
+    // Deuda de tarjetas: lo que ya cerró en el corte más reciente de cada una (lo pendiente aún no cuenta).
+    const deudaTarjetas: IDeudaTarjeta[] = tarjetas.map((t) => {
+      const abierto = cicloTarjetaActual(hoy, t.diaCorte);
+      const cerrado = cicloTarjetaAnterior(abierto, t.diaCorte);
+      const debe = comprasTarjeta
+        .filter((c) => c.tarjetaId === t.id && c.fecha >= cerrado.inicio && c.fecha <= finDelDia(cerrado.fin))
+        .reduce((sum, c) => sum + c.cantidad, 0);
+      return {
+        id: t.id,
+        nombre: t.nombre,
+        debe,
+        pagoQuincenal: t.pagoQuincenal ?? undefined,
+        rangoTexto: formatearRango(cerrado),
+      };
+    });
+    const deudaTarjetasTotal = deudaTarjetas.reduce((sum, t) => sum + t.debe, 0);
+
     const args = [ingresos, gastosFijos, gastosDomiciliados, ahorrosDomiciliados, gastosVariables] as const;
 
-    const mes = construirPeriodo('mes', 'Este mes', formatearRango(rangoMes), [rangoMes], false, hoy, ...args);
+    const mes = construirPeriodo('mes', 'Este mes', formatearRango(rangoMes), [rangoMes], false, deudaTarjetasTotal, hoy, ...args);
     const quincena1 = construirPeriodo(
       'quincena1',
       'la quincena actual',
       formatearRango(periodoActual),
       [periodoActual],
       true,
+      deudaTarjetasTotal,
       hoy,
       ...args
     );
@@ -217,6 +246,7 @@ export async function GET() {
       formatearRango(periodoProximo),
       [periodoProximo],
       true,
+      deudaTarjetasTotal,
       hoy,
       ...args
     );
@@ -295,6 +325,8 @@ export async function GET() {
 
     const resumen: IDashboardResumen = {
       ahorroTotal,
+      deudaTarjetas,
+      deudaTarjetasTotal,
       gastosPorCategoria,
       proximosMovimientos,
       periodos: { mes, quincena1, quincena2 },
