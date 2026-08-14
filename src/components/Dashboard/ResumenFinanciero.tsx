@@ -14,13 +14,6 @@ interface ResumenFinancieroProps {
 
 const CLAVE_OCULTAR_AHORRO = 'ocultarAhorroTotal';
 
-const ICONOS_AHORRO: Record<string, string> = {
-  cuenta_ahorro: '🏦',
-  inversion: '📈',
-  efectivo: '💵',
-  otra: '💼',
-};
-
 export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFinancieroProps) {
   const [ocultarAhorro, setOcultarAhorro] = useState(false);
   const p: IResumenPeriodo = resumen.periodos[vista];
@@ -145,24 +138,20 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
           <p className="text-base sm:text-xl font-bold text-blue-700 leading-tight">
             {ocultarAhorro ? '•••••••' : formatearMoneda(resumen.ahorroTotal)}
           </p>
+          {resumen.ahorrosLugares.length > 0 && (
+            <div className="mt-2 pt-2 border-t border-blue-200 space-y-0.5">
+              {resumen.ahorrosLugares.map((ahorro) => (
+                <div key={ahorro.id} className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] text-blue-800/70 truncate">{ahorro.nombre}</span>
+                  <span className="text-[11px] font-semibold text-blue-800 flex-shrink-0">
+                    {ocultarAhorro ? '•••' : formatearMoneda(ahorro.saldoActual)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
-
-      {resumen.ahorrosLugares.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-gray-100 space-y-2.5">
-          {resumen.ahorrosLugares.map((ahorro) => (
-            <div key={ahorro.id} className="flex items-center justify-between gap-2">
-              <p className="text-sm text-gray-700 flex items-center gap-1.5 min-w-0">
-                <span>{ICONOS_AHORRO[ahorro.tipo] || '💼'}</span>
-                <span className="truncate">{ahorro.nombre}</span>
-              </p>
-              <p className="text-sm font-semibold text-gray-900 flex-shrink-0">
-                {ocultarAhorro ? '•••••' : formatearMoneda(ahorro.saldoActual)}
-              </p>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
