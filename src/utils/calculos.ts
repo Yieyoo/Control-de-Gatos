@@ -163,6 +163,32 @@ export function periodoQuincenaSiguiente(
   return periodoQuincenaActual(diaSiguiente, corte1, corte2);
 }
 
+/**
+ * Ciclo de tarjeta de crédito (entre dos cortes) que contiene la fecha dada.
+ * Ej. si el corte es el día 11 y hoy es 14 de agosto, el ciclo es del 12 de
+ * agosto al 11 de septiembre (el que se está acumulando, todavía no cierra).
+ */
+export function cicloTarjetaActual(hoy: Date = hoyMexico(), diaCorte: number): RangoFechas {
+  const dia = hoy.getUTCDate();
+  const año = hoy.getUTCFullYear();
+  const mes = hoy.getUTCMonth();
+
+  if (dia <= diaCorte) {
+    const mesAnt = mes === 0 ? 11 : mes - 1;
+    const añoAnt = mes === 0 ? año - 1 : año;
+    return { inicio: fechaUTC(añoAnt, mesAnt, diaCorte + 1), fin: fechaUTC(año, mes, diaCorte) };
+  }
+  const mesSig = mes === 11 ? 0 : mes + 1;
+  const añoSig = mes === 11 ? año + 1 : año;
+  return { inicio: fechaUTC(año, mes, diaCorte + 1), fin: fechaUTC(añoSig, mesSig, diaCorte) };
+}
+
+/** El ciclo justo antes del que se le pasa (mismo día de corte, un mes atrás) -- el estado de cuenta ya cerrado. */
+export function cicloTarjetaAnterior(actual: RangoFechas, diaCorte: number): RangoFechas {
+  const diaAntesDeInicio = new Date(actual.inicio.getTime() - 24 * 60 * 60 * 1000);
+  return cicloTarjetaActual(diaAntesDeInicio, diaCorte);
+}
+
 /** Los pares {año, mes} de calendario que toca una lista de rangos (nunca son más de 2 por rango). */
 export function mesesTocados(rangos: RangoFechas[]): { año: number; mes: number }[] {
   const vistos = new Set<string>();

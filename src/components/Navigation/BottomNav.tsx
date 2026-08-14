@@ -10,6 +10,7 @@ const masItems = [
   { href: '/ingresos', label: 'Ingresos', icono: '📈' },
   { href: '/gastos', label: 'Gastos', icono: '💸' },
   { href: '/ahorros', label: 'Ahorros', icono: '🏦' },
+  { href: '/tarjetas', label: 'Tarjeta de Crédito', icono: '💳' },
   { href: '/movimientos', label: 'Movimientos Programados', icono: '⏰' },
   { href: '/historial', label: 'Historial', icono: '📜' },
   { href: '/categorias', label: 'Categorías', icono: '🏷️' },
@@ -19,6 +20,7 @@ const quickAddItems = [
   { href: '/ingresos?nuevo=1', label: 'Ingreso', icono: '💰' },
   { href: '/gastos?nuevo=1', label: 'Gasto', icono: '💸' },
   { href: '/ahorros?nuevo=1', label: 'Ahorro', icono: '🏦' },
+  { href: '/tarjetas', label: 'Compra con tarjeta', icono: '💳' },
 ];
 
 function TabLink({ href, label, icono, activo }: { href: string; label: string; icono: string; activo: boolean }) {

@@ -10,6 +10,7 @@ const menuItems = [
   { href: '/ingresos', label: 'Ingresos', icono: '📈' },
   { href: '/ahorros', label: 'Ahorros', icono: '🏦' },
   { href: '/gastos', label: 'Gastos', icono: '💸' },
+  { href: '/tarjetas', label: 'Tarjeta de Crédito', icono: '💳' },
   { href: '/movimientos', label: 'Movimientos Programados', icono: '⏰' },
   { href: '/historial', label: 'Historial', icono: '📜' },
   { href: '/categorias', label: 'Categorías', icono: '🏷️' },

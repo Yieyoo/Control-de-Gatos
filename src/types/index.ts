@@ -73,6 +73,26 @@ export interface IGastoVariable {
   notas?: string;
 }
 
+export interface ITarjetaCredito {
+  id: number;
+  nombre: string;
+  diaCorte: number;
+  activa: boolean;
+  notas?: string;
+}
+
+export interface ICompraTarjeta {
+  id: number;
+  nombre: string;
+  cantidad: number;
+  fecha: string;
+  tarjetaId: number;
+  tarjeta?: ITarjetaCredito;
+  categoriaId?: number;
+  categoria?: ICategoria;
+  notas?: string;
+}
+
 export interface ITransaccion {
   id: number;
   tipo: 'ingreso' | 'gasto_fijo' | 'gasto_variable' | 'ahorro' | 'transferencia';

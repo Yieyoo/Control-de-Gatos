@@ -21,6 +21,7 @@ model Categoria {
   gastosFijos         GastoFijo[]
   gastosVariables     GastoVariable[]
   gatosDomiciliados   GastoDomiciliado[]
+  comprasTarjeta      CompraTarjeta[]
 
   @@map("categorias")
 }
@@ -150,6 +151,38 @@ model GastoVariable {
   transacciones       Transaccion[]
 
   @@map("gastos_variables")
+}
+
+// Tarjetas de Crédito
+model TarjetaCredito {
+  id                  Int      @id @default(autoincrement())
+  nombre              String
+  diaCorte            Int      // Día del mes en que corta el estado de cuenta (1-31)
+  activa              Boolean  @default(true)
+  notas               String?
+  fechaCreacion       DateTime @default(now())
+  fechaActualizacion  DateTime @updatedAt
+
+  // Relaciones
+  compras             CompraTarjeta[]
+
+  @@map("tarjetas_credito")
+}
+
+// Compras hechas con tarjeta de crédito
+model CompraTarjeta {
+  id                  Int      @id @default(autoincrement())
+  nombre              String
+  cantidad            Float
+  fecha               DateTime @default(now())
+  tarjetaId           Int
+  tarjeta             TarjetaCredito @relation(fields: [tarjetaId], references: [id], onDelete: Cascade)
+  categoriaId         Int?
+  categoria           Categoria? @relation(fields: [categoriaId], references: [id])
+  notas               String?
+  fechaCreacion       DateTime @default(now())
+
+  @@map("compras_tarjeta")
 }
 
 // Historial unificado de transacciones
