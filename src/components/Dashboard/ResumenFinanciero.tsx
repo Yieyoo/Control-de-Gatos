@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { formatearMoneda } from '@/utils/calculos';
 import type { IDashboardResumen, IResumenPeriodo } from '@/types';
 
@@ -12,22 +12,39 @@ interface ResumenFinancieroProps {
   onCambiarVista: (vista: Vista) => void;
 }
 
-const CLAVE_OCULTAR_AHORRO = 'ocultarAhorroTotal';
+const PIN_AHORRO = '1296';
 
 export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFinancieroProps) {
-  const [ocultarAhorro, setOcultarAhorro] = useState(false);
+  // Ahorro total empieza oculto siempre que se abre la app; solo se destapa con el PIN.
+  const [ocultarAhorro, setOcultarAhorro] = useState(true);
+  const [pidiendoPin, setPidiendoPin] = useState(false);
+  const [pin, setPin] = useState('');
+  const [pinIncorrecto, setPinIncorrecto] = useState(false);
   const p: IResumenPeriodo = resumen.periodos[vista];
 
-  useEffect(() => {
-    setOcultarAhorro(localStorage.getItem(CLAVE_OCULTAR_AHORRO) === '1');
-  }, []);
+  const abrirPromptPin = () => {
+    setPin('');
+    setPinIncorrecto(false);
+    setPidiendoPin(true);
+  };
 
-  const alternarOcultarAhorro = () => {
-    setOcultarAhorro((previo) => {
-      const nuevo = !previo;
-      localStorage.setItem(CLAVE_OCULTAR_AHORRO, nuevo ? '1' : '0');
-      return nuevo;
-    });
+  const ocultarDeNuevo = () => {
+    setOcultarAhorro(true);
+    setPidiendoPin(false);
+    setPin('');
+  };
+
+  const handleSubmitPin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pin === PIN_AHORRO) {
+      setOcultarAhorro(false);
+      setPidiendoPin(false);
+      setPin('');
+      setPinIncorrecto(false);
+    } else {
+      setPinIncorrecto(true);
+      setPin('');
+    }
   };
 
   const tarjetas = [
@@ -128,27 +145,50 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
             </div>
             <button
               type="button"
-              onClick={alternarOcultarAhorro}
+              onClick={ocultarAhorro ? abrirPromptPin : ocultarDeNuevo}
               aria-label={ocultarAhorro ? 'Mostrar ahorro total' : 'Ocultar ahorro total'}
               className="text-blue-700/60 hover:text-blue-700"
             >
               {ocultarAhorro ? '🙈' : '👁️'}
             </button>
           </div>
-          <p className="text-base sm:text-xl font-bold text-blue-700 leading-tight">
-            {ocultarAhorro ? '•••••••' : formatearMoneda(resumen.ahorroTotal)}
-          </p>
-          {resumen.ahorrosLugares.length > 0 && (
-            <div className="mt-2 pt-2 border-t border-blue-200 space-y-0.5">
-              {resumen.ahorrosLugares.map((ahorro) => (
-                <div key={ahorro.id} className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] text-blue-800/70 truncate">{ahorro.nombre}</span>
-                  <span className="text-[11px] font-semibold text-blue-800 flex-shrink-0">
-                    {ocultarAhorro ? '•••' : formatearMoneda(ahorro.saldoActual)}
-                  </span>
+
+          {pidiendoPin ? (
+            <form onSubmit={handleSubmitPin} className="mt-1">
+              <input
+                type="password"
+                inputMode="numeric"
+                autoFocus
+                placeholder="PIN"
+                value={pin}
+                onChange={(e) => {
+                  setPin(e.target.value);
+                  setPinIncorrecto(false);
+                }}
+                className={`w-full border rounded px-2 py-1 text-sm ${
+                  pinIncorrecto ? 'border-red-400' : 'border-blue-300'
+                }`}
+              />
+              {pinIncorrecto && <p className="text-[11px] text-red-600 mt-1">PIN incorrecto</p>}
+            </form>
+          ) : (
+            <>
+              <p className="text-base sm:text-xl font-bold text-blue-700 leading-tight">
+                {ocultarAhorro ? '•••••••' : formatearMoneda(resumen.ahorroTotal)}
+              </p>
+              {resumen.ahorrosLugares.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-blue-200 space-y-0.5">
+                  {resumen.ahorrosLugares.map((ahorro) => (
+                    <div key={ahorro.id} className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] text-blue-800/70 truncate">{ahorro.nombre}</span>
+                      <span className="text-[11px] font-semibold text-blue-800 flex-shrink-0">
+                        {ocultarAhorro ? '•••' : formatearMoneda(ahorro.saldoActual)}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
         </div>
       </div>

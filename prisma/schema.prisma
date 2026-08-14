@@ -189,6 +189,7 @@ model CompraTarjeta {
   categoriaId         Int?
   categoria           Categoria? @relation(fields: [categoriaId], references: [id])
   notas               String?
+  tipoPresupuesto     String?  // "necesidad" o "gusto"; si es null, hereda el de la categoría
   fechaCreacion       DateTime @default(now())
 
   @@map("compras_tarjeta")

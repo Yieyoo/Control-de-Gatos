@@ -30,6 +30,15 @@ function GastosContenido() {
     tipoPresupuesto: 'gusto' as 'necesidad' | 'gusto',
   });
 
+  const [editandoId, setEditandoId] = useState<number | null>(null);
+  const [formEdicion, setFormEdicion] = useState({
+    nombre: '',
+    cantidad: '',
+    categoriaId: '',
+    notas: '',
+    tipoPresupuesto: 'gusto' as 'necesidad' | 'gusto',
+  });
+
   useEffect(() => {
     Promise.all([cargarGastos(), cargarCategorias()]);
   }, []);
@@ -90,6 +99,42 @@ function GastosContenido() {
     try {
       const resp = await fetch(`/api/gastos/variables/${id}`, { method: 'DELETE' });
       if (!resp.ok) throw new Error('Error al eliminar');
+      cargarGastos();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error desconocido');
+    }
+  };
+
+  const iniciarEdicion = (gasto: IGastoVariable) => {
+    setEditandoId(gasto.id);
+    setFormEdicion({
+      nombre: gasto.nombre,
+      cantidad: String(gasto.cantidad),
+      categoriaId: String(gasto.categoriaId),
+      notas: gasto.notas || '',
+      tipoPresupuesto: gasto.tipoPresupuesto ?? gasto.categoria?.tipoPresupuesto ?? 'gusto',
+    });
+  };
+
+  const handleCategoriaEdicionChange = (categoriaId: string) => {
+    const categoria = categorias.find((c) => String(c.id) === categoriaId);
+    setFormEdicion({ ...formEdicion, categoriaId, tipoPresupuesto: categoria?.tipoPresupuesto ?? 'gusto' });
+  };
+
+  const handleGuardarEdicion = async (e: React.FormEvent, id: number) => {
+    e.preventDefault();
+    try {
+      const resp = await fetch(`/api/gastos/variables/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...formEdicion,
+          cantidad: parseFloat(formEdicion.cantidad),
+          categoriaId: parseInt(formEdicion.categoriaId),
+        }),
+      });
+      if (!resp.ok) throw new Error('Error al actualizar gasto');
+      setEditandoId(null);
       cargarGastos();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
@@ -211,29 +256,108 @@ function GastosContenido() {
 
       {/* Lista */}
       <div className="space-y-2">
-        {gastos.map((gasto) => (
-          <div
-            key={gasto.id}
-            className="bg-white border border-gray-200 rounded-lg p-4 flex justify-between items-center gap-3"
-          >
-            <div className="min-w-0 flex-1">
-              <p className="font-semibold truncate">{gasto.nombre}</p>
-              <p className="text-sm text-gray-600 truncate">
-                {gasto.categoria?.nombre}
-                {gasto.notas && ` • ${gasto.notas}`}
-              </p>
-            </div>
-            <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
-              <p className="text-lg font-bold text-red-600 whitespace-nowrap">{formatearMoneda(gasto.cantidad)}</p>
-              <button
-                onClick={() => handleEliminar(gasto.id)}
-                className="text-red-600 hover:text-red-800"
+        {gastos.map((gasto) =>
+          editandoId === gasto.id ? (
+            <form
+              key={gasto.id}
+              onSubmit={(e) => handleGuardarEdicion(e, gasto.id)}
+              className="bg-white border border-blue-300 rounded-lg p-4 space-y-3"
+            >
+              <input
+                type="text"
+                placeholder="Concepto del gasto"
+                value={formEdicion.nombre}
+                onChange={(e) => setFormEdicion({ ...formEdicion, nombre: e.target.value })}
+                required
+                className="w-full border border-gray-300 rounded px-3 py-2"
+              />
+              <input
+                type="number"
+                placeholder="Cantidad"
+                value={formEdicion.cantidad}
+                onChange={(e) => setFormEdicion({ ...formEdicion, cantidad: e.target.value })}
+                required
+                step="0.01"
+                className="w-full border border-gray-300 rounded px-3 py-2"
+              />
+              <select
+                value={formEdicion.categoriaId}
+                onChange={(e) => handleCategoriaEdicionChange(e.target.value)}
+                required
+                className="w-full border border-gray-300 rounded px-3 py-2"
               >
-                🗑️
-              </button>
+                <option value="">Selecciona una categoría</option>
+                {categorias.map((cat) => (
+                  <option key={cat.id} value={cat.id}>{cat.nombre}</option>
+                ))}
+              </select>
+              <div>
+                <p className="text-sm text-gray-600 mb-1">¿A qué se destina?</p>
+                <div className="flex bg-gray-100 rounded-lg p-1 text-sm font-medium w-fit">
+                  {(['necesidad', 'gusto'] as const).map((tipo) => (
+                    <button
+                      key={tipo}
+                      type="button"
+                      onClick={() => setFormEdicion({ ...formEdicion, tipoPresupuesto: tipo })}
+                      className={`px-3 py-1.5 rounded-md transition-colors ${
+                        formEdicion.tipoPresupuesto === tipo ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                      }`}
+                    >
+                      {tipo === 'necesidad' ? 'Necesidad' : 'Gusto'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <textarea
+                placeholder="Notas (opcional)"
+                value={formEdicion.notas}
+                onChange={(e) => setFormEdicion({ ...formEdicion, notas: e.target.value })}
+                className="w-full border border-gray-300 rounded px-3 py-2"
+                rows={2}
+              />
+              <div className="flex gap-2">
+                <button type="submit" className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+                  Guardar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditandoId(null)}
+                  className="bg-gray-400 text-white px-4 py-2 rounded hover:bg-gray-500"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div
+              key={gasto.id}
+              className="bg-white border border-gray-200 rounded-lg p-4 flex justify-between items-center gap-3"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold truncate">{gasto.nombre}</p>
+                <p className="text-sm text-gray-600 truncate">
+                  {gasto.categoria?.nombre}
+                  {gasto.notas && ` • ${gasto.notas}`}
+                </p>
+              </div>
+              <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
+                <p className="text-lg font-bold text-red-600 whitespace-nowrap">{formatearMoneda(gasto.cantidad)}</p>
+                <button
+                  onClick={() => iniciarEdicion(gasto)}
+                  className="text-blue-600 hover:text-blue-800"
+                >
+                  ✏️
+                </button>
+                <button
+                  onClick={() => handleEliminar(gasto.id)}
+                  className="text-red-600 hover:text-red-800"
+                >
+                  🗑️
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        )}
       </div>
     </div>
   );

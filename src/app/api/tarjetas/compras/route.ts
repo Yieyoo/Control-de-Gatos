@@ -17,7 +17,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { nombre, cantidad, fecha, tarjetaId, categoriaId, notas } = body;
+    const { nombre, cantidad, fecha, tarjetaId, categoriaId, notas, tipoPresupuesto } = body;
 
     if (!nombre || !cantidad || !tarjetaId) {
       return Response.json({ error: 'Faltan campos requeridos' }, { status: 400 });
@@ -31,6 +31,7 @@ export async function POST(request: Request) {
         tarjetaId: parseInt(tarjetaId),
         categoriaId: categoriaId ? parseInt(categoriaId) : null,
         notas,
+        tipoPresupuesto: tipoPresupuesto || null,
       },
       include: { categoria: true, tarjeta: true },
     });

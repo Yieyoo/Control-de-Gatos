@@ -106,6 +106,7 @@ export interface ICompraTarjeta {
   categoriaId?: number;
   categoria?: ICategoria;
   notas?: string;
+  tipoPresupuesto?: 'necesidad' | 'gusto';
 }
 
 export interface IPagoTarjeta {

@@ -37,6 +37,7 @@ import type { Ingreso, Prisma } from '@prisma/client';
 type GastoFijoConCategoria = Prisma.GastoFijoGetPayload<{ include: { categoria: true } }>;
 type GastoDomiciliadoConCategoria = Prisma.GastoDomiciliadoGetPayload<{ include: { categoria: true } }>;
 type GastoVariableConCategoria = Prisma.GastoVariableGetPayload<{ include: { categoria: true } }>;
+type CompraTarjetaConCategoria = Prisma.CompraTarjetaGetPayload<{ include: { categoria: true } }>;
 type AhorroDomiciliado = Prisma.AhorroDomiciliadoGetPayload<Record<string, never>>;
 
 // Días de pago del usuario: quincenas de 10 a 25 y de 26 al 10 del mes siguiente
@@ -74,7 +75,8 @@ function construirPeriodo(
   gastosFijos: GastoFijoConCategoria[],
   gastosDomiciliados: GastoDomiciliadoConCategoria[],
   ahorrosDomiciliados: AhorroDomiciliado[],
-  gastosVariables: GastoVariableConCategoria[]
+  gastosVariables: GastoVariableConCategoria[],
+  comprasTarjeta: CompraTarjetaConCategoria[]
 ): IResumenPeriodo {
   const hoyFinDelDia = finDelDia(hoy);
 
@@ -172,6 +174,7 @@ function construirPeriodo(
     });
 
   const gastosVariablesEnPeriodo = gastosVariables.filter((g) => fechaEnRangos(new Date(g.fecha), rangos));
+  const comprasTarjetaEnPeriodo = comprasTarjeta.filter((c) => fechaEnRangos(new Date(c.fecha), rangos));
 
   const sumar = (ocs: OcurrenciaTag[], pagado: boolean) =>
     ocs.filter((oc) => (oc.fecha <= hoyFinDelDia) === pagado).reduce((s, oc) => s + oc.cantidad, 0);
@@ -202,6 +205,9 @@ function construirPeriodo(
     ...gastosVariablesEnPeriodo
       .filter((g) => clasificarPresupuesto(g.tipoPresupuesto ?? g.categoria.tipoPresupuesto) === tipo)
       .map((g) => ({ nombre: g.nombre, cantidad: g.cantidad, categoriaNombre: g.categoria.nombre, categoriaColor: g.categoria.color })),
+    ...comprasTarjetaEnPeriodo
+      .filter((c) => clasificarPresupuesto(c.tipoPresupuesto ?? c.categoria?.tipoPresupuesto) === tipo)
+      .map((c) => ({ nombre: c.nombre, cantidad: c.cantidad, categoriaNombre: c.categoria?.nombre, categoriaColor: c.categoria?.color })),
   ];
 
   const itemsNecesidades = itemsPorTipo('necesidad');
@@ -291,7 +297,7 @@ export async function GET() {
         prisma.gastoFijo.findMany({ where: { activo: true }, include: { categoria: true } }),
         prisma.gastoVariable.findMany({ include: { categoria: true } }),
         prisma.tarjetaCredito.findMany({ where: { activa: true } }),
-        prisma.compraTarjeta.findMany(),
+        prisma.compraTarjeta.findMany({ include: { categoria: true } }),
         prisma.pagoTarjeta.findMany(),
       ]);
 
@@ -335,7 +341,7 @@ export async function GET() {
     });
     const deudaTarjetasTotal = deudaTarjetas.reduce((sum, t) => sum + t.debe, 0);
 
-    const args = [ingresos, gastosFijos, gastosDomiciliados, ahorrosDomiciliados, gastosVariables] as const;
+    const args = [ingresos, gastosFijos, gastosDomiciliados, ahorrosDomiciliados, gastosVariables, comprasTarjeta] as const;
 
     const mes = construirPeriodo('mes', 'Este mes', formatearRango(rangoMes), [rangoMes], false, hoy, ...args);
     const quincena1 = construirPeriodo(

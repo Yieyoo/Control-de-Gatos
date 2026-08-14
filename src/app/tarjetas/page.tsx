@@ -27,7 +27,20 @@ export default function TarjetasPage() {
   const [formTarjeta, setFormTarjeta] = useState({ nombre: '', diaCorte: '', pagoQuincenal: '' });
 
   const [formCompraAbierto, setFormCompraAbierto] = useState<number | null>(null);
-  const [formCompra, setFormCompra] = useState({ nombre: '', cantidad: '', categoriaId: '' });
+  const [formCompra, setFormCompra] = useState({
+    nombre: '',
+    cantidad: '',
+    categoriaId: '',
+    tipoPresupuesto: 'gusto' as 'necesidad' | 'gusto',
+  });
+
+  const [editandoCompraId, setEditandoCompraId] = useState<number | null>(null);
+  const [formEdicionCompra, setFormEdicionCompra] = useState({
+    nombre: '',
+    cantidad: '',
+    categoriaId: '',
+    tipoPresupuesto: 'gusto' as 'necesidad' | 'gusto',
+  });
 
   const [formPagoAbierto, setFormPagoAbierto] = useState<number | null>(null);
   const [formPago, setFormPago] = useState({ cantidad: '', concepto: '' });
@@ -160,6 +173,11 @@ export default function TarjetasPage() {
     }
   };
 
+  const handleCategoriaCompraChange = (categoriaId: string) => {
+    const categoria = categorias.find((c) => String(c.id) === categoriaId);
+    setFormCompra({ ...formCompra, categoriaId, tipoPresupuesto: categoria?.tipoPresupuesto ?? 'gusto' });
+  };
+
   const handleSubmitCompra = async (e: React.FormEvent, tarjetaId: number) => {
     e.preventDefault();
     try {
@@ -169,7 +187,7 @@ export default function TarjetasPage() {
         body: JSON.stringify({ ...formCompra, tarjetaId }),
       });
       if (!resp.ok) throw new Error('Error al registrar compra');
-      setFormCompra({ nombre: '', cantidad: '', categoriaId: '' });
+      setFormCompra({ nombre: '', cantidad: '', categoriaId: '', tipoPresupuesto: 'gusto' });
       setFormCompraAbierto(null);
       cargarCompras();
     } catch (err) {
@@ -182,6 +200,41 @@ export default function TarjetasPage() {
     try {
       const resp = await fetch(`/api/tarjetas/compras/${id}`, { method: 'DELETE' });
       if (!resp.ok) throw new Error('Error al eliminar');
+      cargarCompras();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error desconocido');
+    }
+  };
+
+  const iniciarEdicionCompra = (compra: ICompraTarjeta) => {
+    setEditandoCompraId(compra.id);
+    setFormEdicionCompra({
+      nombre: compra.nombre,
+      cantidad: String(compra.cantidad),
+      categoriaId: compra.categoriaId ? String(compra.categoriaId) : '',
+      tipoPresupuesto: compra.tipoPresupuesto ?? compra.categoria?.tipoPresupuesto ?? 'gusto',
+    });
+  };
+
+  const handleCategoriaEdicionCompraChange = (categoriaId: string) => {
+    const categoria = categorias.find((c) => String(c.id) === categoriaId);
+    setFormEdicionCompra({
+      ...formEdicionCompra,
+      categoriaId,
+      tipoPresupuesto: categoria?.tipoPresupuesto ?? 'gusto',
+    });
+  };
+
+  const handleGuardarEdicionCompra = async (e: React.FormEvent, id: number) => {
+    e.preventDefault();
+    try {
+      const resp = await fetch(`/api/tarjetas/compras/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formEdicionCompra),
+      });
+      if (!resp.ok) throw new Error('Error al actualizar compra');
+      setEditandoCompraId(null);
       cargarCompras();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
@@ -356,7 +409,7 @@ export default function TarjetasPage() {
                 />
                 <select
                   value={formCompra.categoriaId}
-                  onChange={(e) => setFormCompra({ ...formCompra, categoriaId: e.target.value })}
+                  onChange={(e) => handleCategoriaCompraChange(e.target.value)}
                   className="w-full border border-gray-300 rounded px-3 py-2"
                 >
                   <option value="">Categoría (opcional)</option>
@@ -364,6 +417,23 @@ export default function TarjetasPage() {
                     <option key={cat.id} value={cat.id}>{cat.nombre}</option>
                   ))}
                 </select>
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">¿A qué se destina?</p>
+                  <div className="flex bg-white rounded-lg p-1 text-sm font-medium w-fit border border-gray-200">
+                    {(['necesidad', 'gusto'] as const).map((tipo) => (
+                      <button
+                        key={tipo}
+                        type="button"
+                        onClick={() => setFormCompra({ ...formCompra, tipoPresupuesto: tipo })}
+                        className={`px-3 py-1.5 rounded-md transition-colors ${
+                          formCompra.tipoPresupuesto === tipo ? 'bg-gray-900 text-white' : 'text-gray-500'
+                        }`}
+                      >
+                        {tipo === 'necesidad' ? 'Necesidad' : 'Gusto'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div className="flex gap-2">
                   <button type="submit" className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
                     Guardar
@@ -385,25 +455,93 @@ export default function TarjetasPage() {
                 <p className="text-sm text-gray-500">Todavía no tienes compras en este periodo.</p>
               ) : (
                 <div className="space-y-2">
-                  {comprasActual.map((c) => (
-                    <div
-                      key={c.id}
-                      className="flex items-center justify-between gap-3 border border-gray-200 rounded-lg p-3"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="font-semibold truncate">{c.nombre}</p>
-                        <p className="text-xs text-gray-500 truncate">
-                          {c.categoria?.nombre ?? 'Sin categoría'} • {formatearDiaMes(new Date(c.fecha))}
-                        </p>
+                  {comprasActual.map((c) =>
+                    editandoCompraId === c.id ? (
+                      <form
+                        key={c.id}
+                        onSubmit={(e) => handleGuardarEdicionCompra(e, c.id)}
+                        className="space-y-3 bg-gray-50 rounded-lg p-4 border border-blue-300"
+                      >
+                        <input
+                          type="text"
+                          placeholder="Concepto de la compra"
+                          value={formEdicionCompra.nombre}
+                          onChange={(e) => setFormEdicionCompra({ ...formEdicionCompra, nombre: e.target.value })}
+                          required
+                          className="w-full border border-gray-300 rounded px-3 py-2"
+                        />
+                        <input
+                          type="number"
+                          placeholder="Cantidad"
+                          value={formEdicionCompra.cantidad}
+                          onChange={(e) => setFormEdicionCompra({ ...formEdicionCompra, cantidad: e.target.value })}
+                          required
+                          step="0.01"
+                          className="w-full border border-gray-300 rounded px-3 py-2"
+                        />
+                        <select
+                          value={formEdicionCompra.categoriaId}
+                          onChange={(e) => handleCategoriaEdicionCompraChange(e.target.value)}
+                          className="w-full border border-gray-300 rounded px-3 py-2"
+                        >
+                          <option value="">Categoría (opcional)</option>
+                          {categorias.map((cat) => (
+                            <option key={cat.id} value={cat.id}>{cat.nombre}</option>
+                          ))}
+                        </select>
+                        <div>
+                          <p className="text-sm text-gray-600 mb-1">¿A qué se destina?</p>
+                          <div className="flex bg-white rounded-lg p-1 text-sm font-medium w-fit border border-gray-200">
+                            {(['necesidad', 'gusto'] as const).map((tipo) => (
+                              <button
+                                key={tipo}
+                                type="button"
+                                onClick={() => setFormEdicionCompra({ ...formEdicionCompra, tipoPresupuesto: tipo })}
+                                className={`px-3 py-1.5 rounded-md transition-colors ${
+                                  formEdicionCompra.tipoPresupuesto === tipo ? 'bg-gray-900 text-white' : 'text-gray-500'
+                                }`}
+                              >
+                                {tipo === 'necesidad' ? 'Necesidad' : 'Gusto'}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button type="submit" className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+                            Guardar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditandoCompraId(null)}
+                            className="bg-gray-400 text-white px-4 py-2 rounded hover:bg-gray-500"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div
+                        key={c.id}
+                        className="flex items-center justify-between gap-3 border border-gray-200 rounded-lg p-3"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold truncate">{c.nombre}</p>
+                          <p className="text-xs text-gray-500 truncate">
+                            {c.categoria?.nombre ?? 'Sin categoría'} • {formatearDiaMes(new Date(c.fecha))}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3 flex-shrink-0">
+                          <p className="font-bold text-red-600 whitespace-nowrap">{formatearMoneda(c.cantidad)}</p>
+                          <button onClick={() => iniciarEdicionCompra(c)} className="text-blue-600 hover:text-blue-800">
+                            ✏️
+                          </button>
+                          <button onClick={() => handleEliminarCompra(c.id)} className="text-red-600 hover:text-red-800">
+                            🗑️
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-3 flex-shrink-0">
-                        <p className="font-bold text-red-600 whitespace-nowrap">{formatearMoneda(c.cantidad)}</p>
-                        <button onClick={() => handleEliminarCompra(c.id)} className="text-red-600 hover:text-red-800">
-                          🗑️
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  )}
                 </div>
               )}
             </div>

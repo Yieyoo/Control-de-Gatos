@@ -30,6 +30,11 @@ function formatearDiasSemana(diasSemana?: string): string {
     .join(', ');
 }
 
+function parseDiasSemanaStr(diasSemana?: string): number[] {
+  if (!diasSemana) return [];
+  return diasSemana.split(',').map((d) => parseInt(d, 10)).filter((d) => !isNaN(d));
+}
+
 function SelectorDiasSemana({
   seleccionados,
   onChange,
@@ -75,6 +80,19 @@ export default function MovimientosPage() {
   const [mostrarFormGasto, setMostrarFormGasto] = useState(false);
   const [diasSemanaGasto, setDiasSemanaGasto] = useState<number[]>([]);
   const [formGasto, setFormGasto] = useState({
+    nombre: '',
+    cantidad: '',
+    categoriaId: '',
+    fechaCobro: '',
+    frecuencia: 'mensual' as 'mensual' | 'quincenal' | 'semanal',
+    cuentaPago: '',
+    tarjetaId: '',
+    tipoPresupuesto: 'gusto' as 'necesidad' | 'gusto',
+  });
+
+  const [editandoGastoId, setEditandoGastoId] = useState<number | null>(null);
+  const [diasSemanaEdicionGasto, setDiasSemanaEdicionGasto] = useState<number[]>([]);
+  const [formEdicionGasto, setFormEdicionGasto] = useState({
     nombre: '',
     cantidad: '',
     categoriaId: '',
@@ -201,6 +219,50 @@ export default function MovimientosPage() {
     try {
       const resp = await fetch(`/api/gastos/domiciliados/${id}`, { method: 'DELETE' });
       if (!resp.ok) throw new Error('Error al eliminar');
+      cargarGastos();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error desconocido');
+    }
+  };
+
+  const iniciarEdicionGasto = (gasto: IGastoDomiciliado) => {
+    setEditandoGastoId(gasto.id);
+    setFormEdicionGasto({
+      nombre: gasto.nombre,
+      cantidad: String(gasto.cantidad),
+      categoriaId: String(gasto.categoriaId),
+      fechaCobro: gasto.fechaCobro != null ? String(gasto.fechaCobro) : '',
+      frecuencia: gasto.frecuencia,
+      cuentaPago: gasto.cuentaPago,
+      tarjetaId: gasto.tarjetaId != null ? String(gasto.tarjetaId) : '',
+      tipoPresupuesto: gasto.tipoPresupuesto ?? gasto.categoria?.tipoPresupuesto ?? 'gusto',
+    });
+    setDiasSemanaEdicionGasto(gasto.frecuencia === 'semanal' ? parseDiasSemanaStr(gasto.diasSemana) : []);
+  };
+
+  const handleCategoriaEdicionGastoChange = (categoriaId: string) => {
+    const categoria = categorias.find((c) => String(c.id) === categoriaId);
+    setFormEdicionGasto({ ...formEdicionGasto, categoriaId, tipoPresupuesto: categoria?.tipoPresupuesto ?? 'gusto' });
+  };
+
+  const handleGuardarEdicionGasto = async (e: React.FormEvent, id: number) => {
+    e.preventDefault();
+    if (formEdicionGasto.frecuencia === 'semanal' && diasSemanaEdicionGasto.length === 0) {
+      setError('Selecciona al menos un día de la semana');
+      return;
+    }
+    try {
+      const resp = await fetch(`/api/gastos/domiciliados/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...formEdicionGasto,
+          tarjetaId: formEdicionGasto.tarjetaId || null,
+          diasSemana: formEdicionGasto.frecuencia === 'semanal' ? diasSemanaEdicionGasto.join(',') : null,
+        }),
+      });
+      if (!resp.ok) throw new Error('Error al actualizar gasto domiciliado');
+      setEditandoGastoId(null);
       cargarGastos();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
@@ -382,26 +444,140 @@ export default function MovimientosPage() {
             <p className="text-gray-500 text-sm">No tienes gastos domiciliados.</p>
           ) : (
             <div className="space-y-2">
-              {gastos.map((g) => (
-                <div key={g.id} className="flex items-center justify-between gap-3 border border-gray-200 rounded-lg p-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold truncate">{g.nombre}</p>
-                    <p className="text-xs text-gray-500 truncate">
-                      {g.categoria?.nombre} •{' '}
-                      {g.frecuencia === 'semanal'
-                        ? formatearDiasSemana(g.diasSemana)
-                        : `Día ${g.fechaCobro} • ${etiquetaFrecuencia[g.frecuencia]}`}
-                      {g.tarjeta && ` • 💳 ${g.tarjeta.nombre}`}
-                    </p>
+              {gastos.map((g) =>
+                editandoGastoId === g.id ? (
+                  <form
+                    key={g.id}
+                    onSubmit={(e) => handleGuardarEdicionGasto(e, g.id)}
+                    className="space-y-3 bg-white border border-blue-300 rounded-lg p-4"
+                  >
+                    <input
+                      type="text"
+                      placeholder="Nombre (ej: Netflix, Estacionamiento)"
+                      value={formEdicionGasto.nombre}
+                      onChange={(e) => setFormEdicionGasto({ ...formEdicionGasto, nombre: e.target.value })}
+                      required
+                      className="w-full border border-gray-300 rounded px-3 py-2"
+                    />
+                    <input
+                      type="number"
+                      placeholder="Cantidad"
+                      value={formEdicionGasto.cantidad}
+                      onChange={(e) => setFormEdicionGasto({ ...formEdicionGasto, cantidad: e.target.value })}
+                      required
+                      step="0.01"
+                      className="w-full border border-gray-300 rounded px-3 py-2"
+                    />
+                    <select
+                      value={formEdicionGasto.categoriaId}
+                      onChange={(e) => handleCategoriaEdicionGastoChange(e.target.value)}
+                      required
+                      className="w-full border border-gray-300 rounded px-3 py-2"
+                    >
+                      <option value="">Selecciona una categoría</option>
+                      {categorias.map((cat) => (
+                        <option key={cat.id} value={cat.id}>{cat.nombre}</option>
+                      ))}
+                    </select>
+                    <div>
+                      <p className="text-sm text-gray-600 mb-1">¿A qué se destina?</p>
+                      <div className="flex bg-gray-100 rounded-lg p-1 text-sm font-medium w-fit">
+                        {(['necesidad', 'gusto'] as const).map((tipo) => (
+                          <button
+                            key={tipo}
+                            type="button"
+                            onClick={() => setFormEdicionGasto({ ...formEdicionGasto, tipoPresupuesto: tipo })}
+                            className={`px-3 py-1.5 rounded-md transition-colors ${
+                              formEdicionGasto.tipoPresupuesto === tipo ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                            }`}
+                          >
+                            {tipo === 'necesidad' ? 'Necesidad' : 'Gusto'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <select
+                      value={formEdicionGasto.frecuencia}
+                      onChange={(e) =>
+                        setFormEdicionGasto({ ...formEdicionGasto, frecuencia: e.target.value as typeof formEdicionGasto.frecuencia })
+                      }
+                      className="w-full border border-gray-300 rounded px-3 py-2"
+                    >
+                      <option value="mensual">Mensual</option>
+                      <option value="quincenal">Quincenal</option>
+                      <option value="semanal">Semanal (elige los días)</option>
+                    </select>
+                    {formEdicionGasto.frecuencia === 'semanal' ? (
+                      <SelectorDiasSemana seleccionados={diasSemanaEdicionGasto} onChange={setDiasSemanaEdicionGasto} />
+                    ) : (
+                      <input
+                        type="number"
+                        placeholder="Día de cobro (1-31)"
+                        value={formEdicionGasto.fechaCobro}
+                        onChange={(e) => setFormEdicionGasto({ ...formEdicionGasto, fechaCobro: e.target.value })}
+                        required
+                        min={1}
+                        max={31}
+                        className="w-full border border-gray-300 rounded px-3 py-2"
+                      />
+                    )}
+                    <input
+                      type="text"
+                      placeholder="Cuenta de pago (ej: Tarjeta BBVA, Efectivo)"
+                      value={formEdicionGasto.cuentaPago}
+                      onChange={(e) => setFormEdicionGasto({ ...formEdicionGasto, cuentaPago: e.target.value })}
+                      required
+                      className="w-full border border-gray-300 rounded px-3 py-2"
+                    />
+                    {tarjetas.length > 0 && (
+                      <select
+                        value={formEdicionGasto.tarjetaId}
+                        onChange={(e) => setFormEdicionGasto({ ...formEdicionGasto, tarjetaId: e.target.value })}
+                        className="w-full border border-gray-300 rounded px-3 py-2"
+                      >
+                        <option value="">¿Se carga a una tarjeta de crédito? (opcional)</option>
+                        {tarjetas.map((t) => (
+                          <option key={t.id} value={t.id}>{t.nombre}</option>
+                        ))}
+                      </select>
+                    )}
+                    <div className="flex gap-2">
+                      <button type="submit" className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+                        Guardar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditandoGastoId(null)}
+                        className="bg-gray-400 text-white px-4 py-2 rounded hover:bg-gray-500"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div key={g.id} className="flex items-center justify-between gap-3 border border-gray-200 rounded-lg p-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold truncate">{g.nombre}</p>
+                      <p className="text-xs text-gray-500 truncate">
+                        {g.categoria?.nombre} •{' '}
+                        {g.frecuencia === 'semanal'
+                          ? formatearDiasSemana(g.diasSemana)
+                          : `Día ${g.fechaCobro} • ${etiquetaFrecuencia[g.frecuencia]}`}
+                        {g.tarjeta && ` • 💳 ${g.tarjeta.nombre}`}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <p className="font-bold text-red-600 whitespace-nowrap">{formatearMoneda(g.cantidad)}</p>
+                      <button onClick={() => iniciarEdicionGasto(g)} className="text-blue-600 hover:text-blue-800">
+                        ✏️
+                      </button>
+                      <button onClick={() => handleEliminarGasto(g.id)} className="text-red-600 hover:text-red-800">
+                        🗑️
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <p className="font-bold text-red-600 whitespace-nowrap">{formatearMoneda(g.cantidad)}</p>
-                    <button onClick={() => handleEliminarGasto(g.id)} className="text-red-600 hover:text-red-800">
-                      🗑️
-                    </button>
-                  </div>
-                </div>
-              ))}
+                )
+              )}
             </div>
           )}
         </div>
