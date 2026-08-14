@@ -3,8 +3,8 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import type { IAhorroLugar } from '@/types';
-import { formatearMoneda } from '@/utils/calculos';
+import type { IAhorroLugar, IMovimientoAhorro } from '@/types';
+import { formatearMoneda, formatearDiaMes } from '@/utils/calculos';
 
 export default function AhorrosPage() {
   return (
@@ -36,8 +36,13 @@ function AhorrosContenido() {
     notas: '',
   });
 
+  const [movimientos, setMovimientos] = useState<IMovimientoAhorro[]>([]);
+  const [formMovAbierto, setFormMovAbierto] = useState<number | null>(null);
+  const [formMov, setFormMov] = useState({ tipo: 'deposito', cantidad: '', concepto: '' });
+
   useEffect(() => {
     cargarAhorros();
+    cargarMovimientos();
   }, []);
 
   const cargarAhorros = async () => {
@@ -50,6 +55,15 @@ function AhorrosContenido() {
       setError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
       setCargando(false);
+    }
+  };
+
+  const cargarMovimientos = async () => {
+    try {
+      const resp = await fetch('/api/ahorros/movimientos');
+      if (resp.ok) setMovimientos(await resp.json());
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -113,6 +127,36 @@ function AhorrosContenido() {
       if (!resp.ok) throw new Error('Error al actualizar ahorro');
       setEditandoId(null);
       cargarAhorros();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error desconocido');
+    }
+  };
+
+  const handleSubmitMovimiento = async (e: React.FormEvent, ahorroId: number) => {
+    e.preventDefault();
+    try {
+      const resp = await fetch('/api/ahorros/movimientos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...formMov, ahorroId }),
+      });
+      if (!resp.ok) throw new Error('Error al registrar movimiento');
+      setFormMov({ tipo: 'deposito', cantidad: '', concepto: '' });
+      setFormMovAbierto(null);
+      cargarAhorros();
+      cargarMovimientos();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error desconocido');
+    }
+  };
+
+  const handleEliminarMovimiento = async (id: number) => {
+    if (!confirm('¿Eliminar este movimiento? El saldo se ajustará de nuevo.')) return;
+    try {
+      const resp = await fetch(`/api/ahorros/movimientos/${id}`, { method: 'DELETE' });
+      if (!resp.ok) throw new Error('Error al eliminar movimiento');
+      cargarAhorros();
+      cargarMovimientos();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
     }
@@ -312,9 +356,92 @@ function AhorrosContenido() {
               )}
 
               <div className="mt-4 pt-4 border-t border-gray-200">
-                <button className="text-blue-600 hover:text-blue-800 text-sm font-medium">
-                  ➕ Registrar movimiento
-                </button>
+                {formMovAbierto !== ahorro.id ? (
+                  <button
+                    onClick={() => setFormMovAbierto(ahorro.id)}
+                    className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                  >
+                    ➕ Registrar movimiento
+                  </button>
+                ) : (
+                  <form
+                    onSubmit={(e) => handleSubmitMovimiento(e, ahorro.id)}
+                    className="space-y-2 bg-gray-50 rounded-lg p-3"
+                  >
+                    <select
+                      value={formMov.tipo}
+                      onChange={(e) => setFormMov({ ...formMov, tipo: e.target.value })}
+                      className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                    >
+                      <option value="deposito">Depósito (suma al saldo)</option>
+                      <option value="retiro">Retiro (resta del saldo)</option>
+                    </select>
+                    <input
+                      type="text"
+                      placeholder="Concepto (ej: Aportación extra)"
+                      value={formMov.concepto}
+                      onChange={(e) => setFormMov({ ...formMov, concepto: e.target.value })}
+                      required
+                      className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                    />
+                    <input
+                      type="number"
+                      placeholder="Cantidad"
+                      value={formMov.cantidad}
+                      onChange={(e) => setFormMov({ ...formMov, cantidad: e.target.value })}
+                      required
+                      step="0.01"
+                      className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="submit"
+                        className="bg-green-600 text-white px-3 py-1.5 rounded text-sm hover:bg-green-700"
+                      >
+                        Guardar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFormMovAbierto(null)}
+                        className="bg-gray-400 text-white px-3 py-1.5 rounded text-sm hover:bg-gray-500"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {movimientos.filter((m) => m.ahorroId === ahorro.id).length > 0 && (
+                  <div className="mt-3 space-y-1.5">
+                    {movimientos
+                      .filter((m) => m.ahorroId === ahorro.id)
+                      .map((m) => (
+                        <div key={m.id} className="flex items-center justify-between gap-2 text-sm">
+                          <span className="min-w-0 flex-1 truncate text-gray-700">
+                            {m.tipo === 'deposito' ? '➕' : '➖'} {m.concepto}
+                          </span>
+                          <span className="text-xs text-gray-400 flex-shrink-0">
+                            {formatearDiaMes(new Date(m.fecha))}
+                          </span>
+                          <span
+                            className={`font-semibold flex-shrink-0 ${
+                              m.tipo === 'deposito' ? 'text-green-600' : 'text-red-600'
+                            }`}
+                          >
+                            {m.tipo === 'deposito' ? '+' : '-'}
+                            {formatearMoneda(m.cantidad)}
+                          </span>
+                          <button
+                            onClick={() => handleEliminarMovimiento(m.id)}
+                            className="text-gray-400 hover:text-red-600 flex-shrink-0"
+                            aria-label="Eliminar movimiento"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+                )}
               </div>
             </div>
           )

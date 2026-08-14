@@ -102,6 +102,25 @@ export interface ICompraTarjeta {
   notas?: string;
 }
 
+export interface IPagoTarjeta {
+  id: number;
+  cantidad: number;
+  fecha: string;
+  concepto?: string;
+  tarjetaId: number;
+  tarjeta?: ITarjetaCredito;
+}
+
+export interface IMovimientoAhorro {
+  id: number;
+  ahorroId: number;
+  ahorro?: IAhorroLugar;
+  tipo: 'deposito' | 'retiro';
+  cantidad: number;
+  fecha: string;
+  concepto: string;
+}
+
 export interface ITransaccion {
   id: number;
   tipo: 'ingreso' | 'gasto_fijo' | 'gasto_variable' | 'ahorro' | 'transferencia';

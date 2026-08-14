@@ -2,12 +2,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import type { ITarjetaCredito, ICompraTarjeta, ICategoria } from '@/types';
+import type { ITarjetaCredito, ICompraTarjeta, ICategoria, IPagoTarjeta } from '@/types';
 import { formatearMoneda, formatearDiaMes, hoyMexico, cicloTarjetaActual, cicloTarjetaAnterior } from '@/utils/calculos';
 
 export default function TarjetasPage() {
   const [tarjetas, setTarjetas] = useState<ITarjetaCredito[]>([]);
   const [compras, setCompras] = useState<ICompraTarjeta[]>([]);
+  const [pagos, setPagos] = useState<IPagoTarjeta[]>([]);
   const [categorias, setCategorias] = useState<ICategoria[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -18,9 +19,13 @@ export default function TarjetasPage() {
   const [formCompraAbierto, setFormCompraAbierto] = useState<number | null>(null);
   const [formCompra, setFormCompra] = useState({ nombre: '', cantidad: '', categoriaId: '' });
 
+  const [formPagoAbierto, setFormPagoAbierto] = useState<number | null>(null);
+  const [formPago, setFormPago] = useState({ cantidad: '', concepto: '' });
+
   useEffect(() => {
     cargarTarjetas();
     cargarCompras();
+    cargarPagos();
     cargarCategorias();
   }, []);
 
@@ -40,6 +45,15 @@ export default function TarjetasPage() {
     try {
       const resp = await fetch('/api/tarjetas/compras');
       if (resp.ok) setCompras(await resp.json());
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const cargarPagos = async () => {
+    try {
+      const resp = await fetch('/api/tarjetas/pagos');
+      if (resp.ok) setPagos(await resp.json());
     } catch (err) {
       console.error(err);
     }
@@ -78,6 +92,35 @@ export default function TarjetasPage() {
       if (!resp.ok) throw new Error('Error al eliminar');
       cargarTarjetas();
       cargarCompras();
+      cargarPagos();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error desconocido');
+    }
+  };
+
+  const handleSubmitPago = async (e: React.FormEvent, tarjetaId: number) => {
+    e.preventDefault();
+    try {
+      const resp = await fetch('/api/tarjetas/pagos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...formPago, tarjetaId }),
+      });
+      if (!resp.ok) throw new Error('Error al registrar pago');
+      setFormPago({ cantidad: '', concepto: '' });
+      setFormPagoAbierto(null);
+      cargarPagos();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error desconocido');
+    }
+  };
+
+  const handleEliminarPago = async (id: number) => {
+    if (!confirm('¿Eliminar este pago?')) return;
+    try {
+      const resp = await fetch(`/api/tarjetas/pagos/${id}`, { method: 'DELETE' });
+      if (!resp.ok) throw new Error('Error al eliminar');
+      cargarPagos();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
     }
@@ -140,6 +183,13 @@ export default function TarjetasPage() {
         const totalActual = comprasActual.reduce((s, c) => s + c.cantidad, 0);
         const totalAnterior = comprasAnterior.reduce((s, c) => s + c.cantidad, 0);
 
+        const pagosTarjeta = pagos.filter((p) => p.tarjetaId === tarjeta.id);
+        const totalCompradoSiempre = compras
+          .filter((c) => c.tarjetaId === tarjeta.id)
+          .reduce((s, c) => s + c.cantidad, 0);
+        const totalPagado = pagosTarjeta.reduce((s, p) => s + p.cantidad, 0);
+        const debeTotal = totalCompradoSiempre - totalPagado;
+
         return (
           <div key={tarjeta.id} className="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
             <div className="flex items-center justify-between">
@@ -172,6 +222,11 @@ export default function TarjetasPage() {
                 <p className="text-xl font-bold text-blue-700 mt-1">{formatearMoneda(totalActual)}</p>
                 <p className="text-xs text-blue-700/70 mt-0.5">Se sigue acumulando</p>
               </div>
+            </div>
+
+            <div className="rounded-lg bg-red-50 p-4">
+              <p className="text-xs font-medium text-red-800">Debes en total (compras menos pagos)</p>
+              <p className="text-2xl font-bold text-red-700 mt-1">{formatearMoneda(debeTotal)}</p>
             </div>
 
             {formCompraAbierto !== tarjeta.id ? (
@@ -253,6 +308,76 @@ export default function TarjetasPage() {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2 border-t border-gray-200">
+              {formPagoAbierto !== tarjeta.id ? (
+                <button
+                  onClick={() => setFormPagoAbierto(tarjeta.id)}
+                  className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+                >
+                  + Registrar pago
+                </button>
+              ) : (
+                <form
+                  onSubmit={(e) => handleSubmitPago(e, tarjeta.id)}
+                  className="space-y-3 bg-gray-50 rounded-lg p-4"
+                >
+                  <input
+                    type="text"
+                    placeholder="Concepto (opcional, ej: Pago quincenal)"
+                    value={formPago.concepto}
+                    onChange={(e) => setFormPago({ ...formPago, concepto: e.target.value })}
+                    className="w-full border border-gray-300 rounded px-3 py-2"
+                  />
+                  <input
+                    type="number"
+                    placeholder="Cantidad"
+                    value={formPago.cantidad}
+                    onChange={(e) => setFormPago({ ...formPago, cantidad: e.target.value })}
+                    required
+                    step="0.01"
+                    className="w-full border border-gray-300 rounded px-3 py-2"
+                  />
+                  <div className="flex gap-2">
+                    <button type="submit" className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+                      Guardar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormPagoAbierto(null)}
+                      className="bg-gray-400 text-white px-4 py-2 rounded hover:bg-gray-500"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {pagosTarjeta.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-sm font-semibold text-gray-500 mb-2">Pagos realizados</p>
+                  <div className="space-y-2">
+                    {pagosTarjeta.map((p) => (
+                      <div
+                        key={p.id}
+                        className="flex items-center justify-between gap-3 border border-gray-200 rounded-lg p-3"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold truncate">{p.concepto || 'Pago a la tarjeta'}</p>
+                          <p className="text-xs text-gray-500 truncate">{formatearDiaMes(new Date(p.fecha))}</p>
+                        </div>
+                        <div className="flex items-center gap-3 flex-shrink-0">
+                          <p className="font-bold text-green-600 whitespace-nowrap">{formatearMoneda(p.cantidad)}</p>
+                          <button onClick={() => handleEliminarPago(p.id)} className="text-red-600 hover:text-red-800">
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

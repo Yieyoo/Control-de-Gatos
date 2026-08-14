@@ -166,6 +166,7 @@ model TarjetaCredito {
 
   // Relaciones
   compras             CompraTarjeta[]
+  pagos               PagoTarjeta[]
 
   @@map("tarjetas_credito")
 }
@@ -184,6 +185,19 @@ model CompraTarjeta {
   fechaCreacion       DateTime @default(now())
 
   @@map("compras_tarjeta")
+}
+
+// Pagos hechos a la tarjeta de crédito (abonos a la deuda)
+model PagoTarjeta {
+  id                  Int      @id @default(autoincrement())
+  cantidad            Float
+  fecha               DateTime @default(now())
+  concepto            String?
+  tarjetaId           Int
+  tarjeta             TarjetaCredito @relation(fields: [tarjetaId], references: [id], onDelete: Cascade)
+  fechaCreacion       DateTime @default(now())
+
+  @@map("pagos_tarjeta")
 }
 
 // Historial unificado de transacciones

@@ -189,7 +189,7 @@ function construirPeriodo(
 
 export async function GET() {
   try {
-    const [ingresos, ahorrosLugares, gastosDomiciliados, ahorrosDomiciliados, gastosFijos, gastosVariables, tarjetas, comprasTarjeta] =
+    const [ingresos, ahorrosLugares, gastosDomiciliados, ahorrosDomiciliados, gastosFijos, gastosVariables, tarjetas, comprasTarjeta, pagosTarjeta] =
       await Promise.all([
         prisma.ingreso.findMany({ where: { activo: true } }),
         prisma.ahorroLugar.findMany(),
@@ -199,6 +199,7 @@ export async function GET() {
         prisma.gastoVariable.findMany({ include: { categoria: true } }),
         prisma.tarjetaCredito.findMany({ where: { activa: true } }),
         prisma.compraTarjeta.findMany(),
+        prisma.pagoTarjeta.findMany(),
       ]);
 
     const ahorroTotal = ahorrosLugares.reduce((sum: number, ahorro) => sum + ahorro.saldoActual, 0);
@@ -208,11 +209,15 @@ export async function GET() {
     const periodoActual = periodoQuincenaActual(hoy, CORTE_1, CORTE_2);
     const periodoProximo = periodoQuincenaSiguiente(periodoActual, CORTE_1, CORTE_2);
 
-    // Deuda de tarjetas: todo lo que llevas comprado, haya cortado o no.
+    // Deuda de tarjetas: todo lo que llevas comprado (haya cortado o no) menos lo que ya abonaste.
     const deudaTarjetas: IDeudaTarjeta[] = tarjetas.map((t) => {
-      const debe = comprasTarjeta
+      const comprado = comprasTarjeta
         .filter((c) => c.tarjetaId === t.id)
         .reduce((sum, c) => sum + c.cantidad, 0);
+      const pagado = pagosTarjeta
+        .filter((p) => p.tarjetaId === t.id)
+        .reduce((sum, p) => sum + p.cantidad, 0);
+      const debe = comprado - pagado;
       return {
         id: t.id,
         nombre: t.nombre,
