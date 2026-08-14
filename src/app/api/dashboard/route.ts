@@ -52,7 +52,6 @@ function construirPeriodo(
   rangoTexto: string,
   rangos: RangoFechas[],
   esQuincena: boolean,
-  deudaTarjetasTotal: number,
   hoy: Date,
   ingresos: Ingreso[],
   gastosFijos: GastoFijoConCategoria[],
@@ -147,9 +146,9 @@ function construirPeriodo(
 
   const dineroDisponible = ingresosPeriodo - gastosFijosPagado - gastosVariablesPeriodo - ahorroDelMesPagado;
   // "Dinero real": el disponible de hoy, pero imaginando que también se liquidan
-  // los pendientes de este periodo (gastos fijos y ahorros que aún no llegan) y
-  // se paga la deuda actual de las tarjetas de crédito.
-  const dineroReal = dineroDisponible - gastosFijosPendiente - ahorroDelMesPendiente - deudaTarjetasTotal;
+  // los pendientes de este periodo (gastos fijos y ahorros que aún no llegan). La
+  // deuda de tarjeta no se resta aquí porque no necesariamente se paga en esta quincena.
+  const dineroReal = dineroDisponible - gastosFijosPendiente - ahorroDelMesPendiente;
 
   const movimientos: IMovimientoPeriodo[] = [
     ...ocurrencias.map((oc) => ({
@@ -226,14 +225,13 @@ export async function GET() {
 
     const args = [ingresos, gastosFijos, gastosDomiciliados, ahorrosDomiciliados, gastosVariables] as const;
 
-    const mes = construirPeriodo('mes', 'Este mes', formatearRango(rangoMes), [rangoMes], false, deudaTarjetasTotal, hoy, ...args);
+    const mes = construirPeriodo('mes', 'Este mes', formatearRango(rangoMes), [rangoMes], false, hoy, ...args);
     const quincena1 = construirPeriodo(
       'quincena1',
       'la quincena actual',
       formatearRango(periodoActual),
       [periodoActual],
       true,
-      deudaTarjetasTotal,
       hoy,
       ...args
     );
@@ -243,7 +241,6 @@ export async function GET() {
       formatearRango(periodoProximo),
       [periodoProximo],
       true,
-      deudaTarjetasTotal,
       hoy,
       ...args
     );

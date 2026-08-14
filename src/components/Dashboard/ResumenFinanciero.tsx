@@ -124,7 +124,7 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
             >
               {formatearMoneda(p.dineroReal)}
             </p>
-            <p className="text-[11px] text-green-800/60 leading-tight">con deudas y pendientes</p>
+            <p className="text-[11px] text-green-800/60 leading-tight">con pendientes ya liquidados</p>
           </div>
         </div>
         <div className="rounded-xl bg-blue-50 p-4">
