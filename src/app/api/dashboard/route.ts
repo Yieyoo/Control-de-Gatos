@@ -9,6 +9,7 @@ import {
   periodoQuincenaSiguiente,
   cicloTarjetaActual,
   ocurrenciasDeGastoEnRangos,
+  calcularPorcentaje,
   mesesTocados,
   ocurrenciasDelMes,
   ocurrenciasSemanales,
@@ -28,6 +29,7 @@ import type {
   IResumenPeriodo,
   IDeudaTarjeta,
   IAhorroLugar,
+  IPorcentajeDestino,
 } from '@/types';
 import type { Ingreso, Prisma } from '@prisma/client';
 
@@ -46,6 +48,17 @@ interface OcurrenciaTag {
   fecha: Date;
   tipo: 'gasto' | 'ahorro';
   categoriaColor?: string;
+  categoriaTipoPresupuesto?: string | null;
+}
+
+// Meta de "% destinado a": 50% necesidades, 20% gustos (del ingreso del periodo),
+// y un monto fijo de ahorro por quincena (independiente del ingreso).
+const META_NECESIDADES_PCT = 50;
+const META_GUSTOS_PCT = 20;
+const META_AHORRO_QUINCENAL = 3000;
+
+function clasificarPresupuesto(tipo: string | null | undefined): 'necesidad' | 'gusto' {
+  return tipo === 'necesidad' ? 'necesidad' : 'gusto';
 }
 
 function construirPeriodo(
@@ -89,7 +102,14 @@ function construirPeriodo(
     gastosFijosActivos.forEach((g) => {
       ocurrenciasDelMes(g.fechaPago, 'mensual', g.cantidad, año, mes, CORTE_1).forEach((oc) => {
         if (fechaEnRangos(oc.fecha, rangos)) {
-          ocurrencias.push({ nombre: g.nombre, cantidad: oc.cantidad, fecha: oc.fecha, tipo: 'gasto', categoriaColor: g.categoria.color });
+          ocurrencias.push({
+            nombre: g.nombre,
+            cantidad: oc.cantidad,
+            fecha: oc.fecha,
+            tipo: 'gasto',
+            categoriaColor: g.categoria.color,
+            categoriaTipoPresupuesto: g.categoria.tipoPresupuesto,
+          });
         }
       });
     });
@@ -99,7 +119,14 @@ function construirPeriodo(
       .forEach((g) => {
         ocurrenciasDelMes(g.fechaCobro as number, g.frecuencia, g.cantidad, año, mes, CORTE_1).forEach((oc) => {
           if (fechaEnRangos(oc.fecha, rangos)) {
-            ocurrencias.push({ nombre: g.nombre, cantidad: oc.cantidad, fecha: oc.fecha, tipo: 'gasto', categoriaColor: g.categoria.color });
+            ocurrencias.push({
+              nombre: g.nombre,
+              cantidad: oc.cantidad,
+              fecha: oc.fecha,
+              tipo: 'gasto',
+              categoriaColor: g.categoria.color,
+              categoriaTipoPresupuesto: g.categoria.tipoPresupuesto,
+            });
           }
         });
       });
@@ -120,7 +147,14 @@ function construirPeriodo(
     .filter((g) => g.frecuencia === 'semanal')
     .forEach((g) => {
       ocurrenciasSemanales(parseDiasSemana(g.diasSemana), g.cantidad, rangos).forEach((oc) =>
-        ocurrencias.push({ nombre: g.nombre, cantidad: oc.cantidad, fecha: oc.fecha, tipo: 'gasto', categoriaColor: g.categoria.color })
+        ocurrencias.push({
+          nombre: g.nombre,
+          cantidad: oc.cantidad,
+          fecha: oc.fecha,
+          tipo: 'gasto',
+          categoriaColor: g.categoria.color,
+          categoriaTipoPresupuesto: g.categoria.tipoPresupuesto,
+        })
       );
     });
 
@@ -151,6 +185,46 @@ function construirPeriodo(
   // los pendientes de este periodo (gastos fijos y ahorros que aún no llegan). La
   // deuda de tarjeta no se resta aquí porque no necesariamente se paga en esta quincena.
   const dineroReal = dineroDisponible - gastosFijosPendiente - ahorroDelMesPendiente;
+
+  // "% destinado a": cuánto de lo ya gastado/ahorrado este periodo fue a necesidades,
+  // gustos o ahorro, comparado contra una meta (50% / 20% / monto fijo de ahorro).
+  const gastosFijosPagados = gastoOcurrencias.filter((oc) => oc.fecha <= hoyFinDelDia);
+  const sumarPorTipo = (tipo: 'necesidad' | 'gusto') =>
+    gastosFijosPagados
+      .filter((oc) => clasificarPresupuesto(oc.categoriaTipoPresupuesto) === tipo)
+      .reduce((s, oc) => s + oc.cantidad, 0) +
+    gastosVariablesEnPeriodo
+      .filter((g) => clasificarPresupuesto(g.categoria.tipoPresupuesto) === tipo)
+      .reduce((s, g) => s + g.cantidad, 0);
+
+  const necesidadesMonto = sumarPorTipo('necesidad');
+  const gustosMonto = sumarPorTipo('gusto');
+  const ahorroMonto = ahorroDelMesPagado;
+
+  const metaNecesidadesMonto = (ingresosPeriodo * META_NECESIDADES_PCT) / 100;
+  const metaGustosMonto = (ingresosPeriodo * META_GUSTOS_PCT) / 100;
+  const metaAhorroMonto = esQuincena ? META_AHORRO_QUINCENAL : META_AHORRO_QUINCENAL * 2;
+
+  const porcentajeDestino: IPorcentajeDestino = {
+    necesidades: {
+      monto: necesidadesMonto,
+      porcentaje: calcularPorcentaje(necesidadesMonto, ingresosPeriodo),
+      metaMonto: metaNecesidadesMonto,
+      metaPorcentaje: META_NECESIDADES_PCT,
+    },
+    gustos: {
+      monto: gustosMonto,
+      porcentaje: calcularPorcentaje(gustosMonto, ingresosPeriodo),
+      metaMonto: metaGustosMonto,
+      metaPorcentaje: META_GUSTOS_PCT,
+    },
+    ahorro: {
+      monto: ahorroMonto,
+      porcentaje: calcularPorcentaje(ahorroMonto, ingresosPeriodo),
+      metaMonto: metaAhorroMonto,
+      metaPorcentaje: calcularPorcentaje(metaAhorroMonto, ingresosPeriodo),
+    },
+  };
 
   const movimientos: IMovimientoPeriodo[] = [
     ...ocurrencias.map((oc) => ({
@@ -185,6 +259,7 @@ function construirPeriodo(
     ahorroDelMesPendiente,
     dineroDisponible,
     dineroReal,
+    porcentajeDestino,
     movimientos,
   };
 }

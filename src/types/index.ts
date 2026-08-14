@@ -6,6 +6,7 @@ export interface ICategoria {
   color: string;
   icono?: string;
   esDelSistema: boolean;
+  tipoPresupuesto?: 'necesidad' | 'gusto';
 }
 
 export interface IIngreso {
@@ -163,6 +164,19 @@ export interface IMovimientoPeriodo {
   categoriaColor?: string;
 }
 
+export interface IRubroPresupuesto {
+  monto: number;
+  porcentaje: number;
+  metaMonto: number;
+  metaPorcentaje: number;
+}
+
+export interface IPorcentajeDestino {
+  necesidades: IRubroPresupuesto;
+  gustos: IRubroPresupuesto;
+  ahorro: IRubroPresupuesto;
+}
+
 export interface IResumenPeriodo {
   id: 'mes' | 'quincena1' | 'quincena2';
   etiqueta: string;
@@ -177,6 +191,7 @@ export interface IResumenPeriodo {
   ahorroDelMesPendiente: number;
   dineroDisponible: number;
   dineroReal: number;
+  porcentajeDestino: IPorcentajeDestino;
   movimientos: IMovimientoPeriodo[];
 }
 

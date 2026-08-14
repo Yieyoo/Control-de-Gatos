@@ -9,7 +9,7 @@ interface GastosPorCategoriaProps {
 
 export function GastosPorCategoria({ categorias }: GastosPorCategoriaProps) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+    <div id="gastos-por-categoria" className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
       <h2 className="text-lg font-bold text-gray-900 mb-4">Gastos por categoría</h2>
 
       {categorias.length === 0 ? (

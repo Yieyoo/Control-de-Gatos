@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ResumenFinanciero } from '@/components/Dashboard/ResumenFinanciero';
+import { PorcentajeDestino } from '@/components/Dashboard/PorcentajeDestino';
 import { DetalleMovimientos } from '@/components/Dashboard/DetalleMovimientos';
 import { DeudaTarjetas } from '@/components/Dashboard/DeudaTarjetas';
 import { GastosPorCategoria } from '@/components/Dashboard/GastosPorCategoria';
@@ -76,6 +77,7 @@ export default function Home() {
       </div>
 
       <ResumenFinanciero resumen={resumen} vista={vista} onCambiarVista={setVista} />
+      <PorcentajeDestino datos={resumen.periodos[vista].porcentajeDestino} />
       {vista !== 'mes' && (
         <DetalleMovimientos
           etiqueta={resumen.periodos[vista].etiqueta}

@@ -4,6 +4,31 @@
 import { useState, useEffect } from 'react';
 import type { ICategoria } from '@/types';
 
+function SelectorTipoPresupuesto({
+  categoria,
+  onCambiar,
+}: {
+  categoria: ICategoria;
+  onCambiar: (id: number, tipo: 'necesidad' | 'gusto') => void;
+}) {
+  return (
+    <div className="flex bg-white/70 rounded-md p-0.5 text-xs font-medium mt-2 w-fit">
+      {(['necesidad', 'gusto'] as const).map((tipo) => (
+        <button
+          key={tipo}
+          type="button"
+          onClick={() => onCambiar(categoria.id, tipo)}
+          className={`px-2 py-1 rounded transition-colors ${
+            categoria.tipoPresupuesto === tipo ? 'bg-gray-900 text-white' : 'text-gray-600'
+          }`}
+        >
+          {tipo === 'necesidad' ? 'Necesidad' : 'Gusto'}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function CategoriasPage() {
   const [categorias, setCategorias] = useState<ICategoria[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -48,6 +73,22 @@ export default function CategoriasPage() {
       cargarCategorias();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
+    }
+  };
+
+  const handleCambiarTipoPresupuesto = async (id: number, tipoPresupuesto: 'necesidad' | 'gusto') => {
+    // Actualización optimista para que se sienta instantáneo al tocar el botón.
+    setCategorias((previas) => previas.map((c) => (c.id === id ? { ...c, tipoPresupuesto } : c)));
+    try {
+      const resp = await fetch(`/api/categorias/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tipoPresupuesto }),
+      });
+      if (!resp.ok) throw new Error('Error al actualizar categoría');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error desconocido');
+      cargarCategorias();
     }
   };
 
@@ -140,6 +181,7 @@ export default function CategoriasPage() {
                 style={{ borderColor: cat.color, backgroundColor: cat.color + '10' }}
               >
                 <p className="font-semibold">{cat.icono ? `${cat.icono} ` : ''}{cat.nombre}</p>
+                <SelectorTipoPresupuesto categoria={cat} onCambiar={handleCambiarTipoPresupuesto} />
               </div>
             ))}
           </div>
@@ -158,6 +200,7 @@ export default function CategoriasPage() {
                 style={{ borderColor: cat.color, backgroundColor: cat.color + '10' }}
               >
                 <p className="font-semibold">{cat.icono ? `${cat.icono} ` : ''}{cat.nombre}</p>
+                <SelectorTipoPresupuesto categoria={cat} onCambiar={handleCambiarTipoPresupuesto} />
               </div>
             ))}
           </div>

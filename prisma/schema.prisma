@@ -15,6 +15,7 @@ model Categoria {
   color               String   @default("#3b82f6")
   icono               String?
   esDelSistema        Boolean  @default(false)
+  tipoPresupuesto     String?  // "necesidad" o "gusto" -- para el reparto de "% destinado a"
   fechaCreacion       DateTime @default(now())
 
   // Relaciones
