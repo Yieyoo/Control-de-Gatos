@@ -7,6 +7,8 @@ import {
   rangoMesActual,
   periodoQuincenaActual,
   periodoQuincenaSiguiente,
+  cicloTarjetaActual,
+  ocurrenciasDeGastoEnRangos,
   mesesTocados,
   ocurrenciasDelMes,
   ocurrenciasSemanales,
@@ -209,7 +211,9 @@ export async function GET() {
     const periodoActual = periodoQuincenaActual(hoy, CORTE_1, CORTE_2);
     const periodoProximo = periodoQuincenaSiguiente(periodoActual, CORTE_1, CORTE_2);
 
-    // Deuda de tarjetas: todo lo que llevas comprado (haya cortado o no) menos lo que ya abonaste.
+    // Deuda de tarjetas: todo lo que llevas comprado (haya cortado o no), más los gastos
+    // domiciliados ligados a esta tarjeta que ya cayeron en el periodo actual y no se
+    // marcaron como pagados por adelantado, menos lo que ya abonaste.
     const deudaTarjetas: IDeudaTarjeta[] = tarjetas.map((t) => {
       const comprado = comprasTarjeta
         .filter((c) => c.tarjetaId === t.id)
@@ -217,7 +221,19 @@ export async function GET() {
       const pagado = pagosTarjeta
         .filter((p) => p.tarjetaId === t.id)
         .reduce((sum, p) => sum + p.cantidad, 0);
-      const debe = comprado - pagado;
+
+      const cicloActualTarjeta = cicloTarjetaActual(hoy, t.diaCorte);
+      const cargosDomiciliados = gastosDomiciliados
+        .filter((g) => g.activo && g.tarjetaId === t.id)
+        .reduce((sum, g) => {
+          const ocurrencias = ocurrenciasDeGastoEnRangos(g, [cicloActualTarjeta], CORTE_1);
+          const pendientes = ocurrencias.filter(
+            (oc) => !g.pagadoAdelantadoHasta || g.pagadoAdelantadoHasta < oc.fecha
+          );
+          return sum + pendientes.reduce((s, oc) => s + oc.cantidad, 0);
+        }, 0);
+
+      const debe = comprado - pagado + cargosDomiciliados;
       return {
         id: t.id,
         nombre: t.nombre,

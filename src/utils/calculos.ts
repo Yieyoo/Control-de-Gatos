@@ -276,6 +276,30 @@ export function ocurrenciasSemanales(
 }
 
 /**
+ * Todas las ocurrencias de un gasto/ahorro fijo (mensual, quincenal o semanal)
+ * dentro de una lista de rangos de fechas. Junta ocurrenciasDelMes/ocurrenciasSemanales
+ * para no repetir esa lógica en cada lugar que necesita "¿cuándo cae esto en este rango?".
+ */
+export function ocurrenciasDeGastoEnRangos(
+  gasto: { fechaCobro?: number | null; frecuencia: string; diasSemana?: string | null; cantidad: number },
+  rangos: RangoFechas[],
+  corte: number = 10
+): { cantidad: number; fecha: Date }[] {
+  if (gasto.frecuencia === 'semanal') {
+    return ocurrenciasSemanales(parseDiasSemana(gasto.diasSemana), gasto.cantidad, rangos);
+  }
+  if (gasto.fechaCobro == null) return [];
+
+  const resultado: { cantidad: number; fecha: Date }[] = [];
+  for (const { año, mes } of mesesTocados(rangos)) {
+    ocurrenciasDelMes(gasto.fechaCobro, gasto.frecuencia, gasto.cantidad, año, mes, corte).forEach((oc) => {
+      if (fechaEnRangos(oc.fecha, rangos)) resultado.push(oc);
+    });
+  }
+  return resultado;
+}
+
+/**
  * Formatea un número como moneda
  */
 export function formatearMoneda(cantidad: number, moneda: string = 'MXN'): string {

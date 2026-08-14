@@ -37,6 +37,9 @@ export interface IGastoDomiciliado {
   categoriaId: number;
   categoria?: ICategoria;
   cuentaPago: string;
+  tarjetaId?: number;
+  tarjeta?: ITarjetaCredito;
+  pagadoAdelantadoHasta?: string;
   activo: boolean;
   notas?: string;
 }

@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import type { IGastoDomiciliado, IAhorroDomiciliado, ICategoria, IAhorroLugar } from '@/types';
+import type { IGastoDomiciliado, IAhorroDomiciliado, ICategoria, IAhorroLugar, ITarjetaCredito } from '@/types';
 import { formatearMoneda } from '@/utils/calculos';
 
 const etiquetaFrecuencia: Record<string, string> = {
@@ -70,6 +70,7 @@ export default function MovimientosPage() {
   // Gastos domiciliados
   const [gastos, setGastos] = useState<IGastoDomiciliado[]>([]);
   const [categorias, setCategorias] = useState<ICategoria[]>([]);
+  const [tarjetas, setTarjetas] = useState<ITarjetaCredito[]>([]);
   const [cargandoGastos, setCargandoGastos] = useState(true);
   const [mostrarFormGasto, setMostrarFormGasto] = useState(false);
   const [diasSemanaGasto, setDiasSemanaGasto] = useState<number[]>([]);
@@ -80,6 +81,7 @@ export default function MovimientosPage() {
     fechaCobro: '',
     frecuencia: 'mensual' as 'mensual' | 'quincenal' | 'semanal',
     cuentaPago: '',
+    tarjetaId: '',
   });
 
   // Ahorros domiciliados
@@ -98,6 +100,7 @@ export default function MovimientosPage() {
   useEffect(() => {
     cargarGastos();
     cargarCategorias();
+    cargarTarjetas();
     cargarAhorrosDom();
     cargarAhorroLugares();
   }, []);
@@ -118,6 +121,15 @@ export default function MovimientosPage() {
     try {
       const resp = await fetch('/api/categorias');
       if (resp.ok) setCategorias(await resp.json());
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const cargarTarjetas = async () => {
+    try {
+      const resp = await fetch('/api/tarjetas');
+      if (resp.ok) setTarjetas(await resp.json());
     } catch (err) {
       console.error(err);
     }
@@ -160,7 +172,7 @@ export default function MovimientosPage() {
         }),
       });
       if (!resp.ok) throw new Error('Error al crear gasto domiciliado');
-      setFormGasto({ nombre: '', cantidad: '', categoriaId: '', fechaCobro: '', frecuencia: 'mensual', cuentaPago: '' });
+      setFormGasto({ nombre: '', cantidad: '', categoriaId: '', fechaCobro: '', frecuencia: 'mensual', cuentaPago: '', tarjetaId: '' });
       setDiasSemanaGasto([]);
       setMostrarFormGasto(false);
       cargarGastos();
@@ -302,6 +314,18 @@ export default function MovimientosPage() {
                 required
                 className="w-full border border-gray-300 rounded px-3 py-2"
               />
+              {tarjetas.length > 0 && (
+                <select
+                  value={formGasto.tarjetaId}
+                  onChange={(e) => setFormGasto({ ...formGasto, tarjetaId: e.target.value })}
+                  className="w-full border border-gray-300 rounded px-3 py-2"
+                >
+                  <option value="">¿Se carga a una tarjeta de crédito? (opcional)</option>
+                  {tarjetas.map((t) => (
+                    <option key={t.id} value={t.id}>{t.nombre}</option>
+                  ))}
+                </select>
+              )}
               <div className="flex gap-2">
                 <button type="submit" className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
                   Guardar
@@ -335,6 +359,7 @@ export default function MovimientosPage() {
                       {g.frecuencia === 'semanal'
                         ? formatearDiasSemana(g.diasSemana)
                         : `Día ${g.fechaCobro} • ${etiquetaFrecuencia[g.frecuencia]}`}
+                      {g.tarjeta && ` • 💳 ${g.tarjeta.nombre}`}
                     </p>
                   </div>
                   <div className="flex items-center gap-3 flex-shrink-0">

@@ -2,13 +2,23 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import type { ITarjetaCredito, ICompraTarjeta, ICategoria, IPagoTarjeta } from '@/types';
-import { formatearMoneda, formatearDiaMes, hoyMexico, cicloTarjetaActual, cicloTarjetaAnterior } from '@/utils/calculos';
+import type { ITarjetaCredito, ICompraTarjeta, ICategoria, IPagoTarjeta, IGastoDomiciliado } from '@/types';
+import {
+  formatearMoneda,
+  formatearDiaMes,
+  hoyMexico,
+  cicloTarjetaActual,
+  cicloTarjetaAnterior,
+  ocurrenciasDeGastoEnRangos,
+} from '@/utils/calculos';
+
+const CORTE_1 = 10;
 
 export default function TarjetasPage() {
   const [tarjetas, setTarjetas] = useState<ITarjetaCredito[]>([]);
   const [compras, setCompras] = useState<ICompraTarjeta[]>([]);
   const [pagos, setPagos] = useState<IPagoTarjeta[]>([]);
+  const [gastosDomiciliados, setGastosDomiciliados] = useState<IGastoDomiciliado[]>([]);
   const [categorias, setCategorias] = useState<ICategoria[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -26,6 +36,7 @@ export default function TarjetasPage() {
     cargarTarjetas();
     cargarCompras();
     cargarPagos();
+    cargarGastosDomiciliados();
     cargarCategorias();
   }, []);
 
@@ -56,6 +67,29 @@ export default function TarjetasPage() {
       if (resp.ok) setPagos(await resp.json());
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const cargarGastosDomiciliados = async () => {
+    try {
+      const resp = await fetch('/api/gastos/domiciliados');
+      if (resp.ok) setGastosDomiciliados(await resp.json());
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleTogglePagadoAdelantado = async (gasto: IGastoDomiciliado, marcarComo: string | null) => {
+    try {
+      const resp = await fetch(`/api/gastos/domiciliados/${gasto.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pagadoAdelantadoHasta: marcarComo }),
+      });
+      if (!resp.ok) throw new Error('Error al actualizar');
+      cargarGastosDomiciliados();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error desconocido');
     }
   };
 
@@ -188,7 +222,30 @@ export default function TarjetasPage() {
           .filter((c) => c.tarjetaId === tarjeta.id)
           .reduce((s, c) => s + c.cantidad, 0);
         const totalPagado = pagosTarjeta.reduce((s, p) => s + p.cantidad, 0);
-        const debeTotal = totalCompradoSiempre - totalPagado;
+
+        const cargosDomiciliadosTarjeta = gastosDomiciliados
+          .filter((g) => g.activo && g.tarjetaId === tarjeta.id)
+          .map((g) => {
+            const ocurrencias = ocurrenciasDeGastoEnRangos(g, [cicloActual], CORTE_1);
+            const fechaMasReciente = ocurrencias.reduce<Date | null>(
+              (max, oc) => (!max || oc.fecha > max ? oc.fecha : max),
+              null
+            );
+            const monto = ocurrencias.reduce((s, oc) => s + oc.cantidad, 0);
+            const pagadoAdelantado = !!(
+              g.pagadoAdelantadoHasta &&
+              fechaMasReciente &&
+              new Date(g.pagadoAdelantadoHasta) >= fechaMasReciente
+            );
+            return { gasto: g, fechaMasReciente, monto, pagadoAdelantado };
+          })
+          .filter((c) => c.fechaMasReciente !== null);
+
+        const totalCargosPendientes = cargosDomiciliadosTarjeta
+          .filter((c) => !c.pagadoAdelantado)
+          .reduce((s, c) => s + c.monto, 0);
+
+        const debeTotal = totalCompradoSiempre - totalPagado + totalCargosPendientes;
 
         return (
           <div key={tarjeta.id} className="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
@@ -225,9 +282,48 @@ export default function TarjetasPage() {
             </div>
 
             <div className="rounded-lg bg-red-50 p-4">
-              <p className="text-xs font-medium text-red-800">Debes en total (compras menos pagos)</p>
+              <p className="text-xs font-medium text-red-800">Debes en total (compras + domiciliados menos pagos)</p>
               <p className="text-2xl font-bold text-red-700 mt-1">{formatearMoneda(debeTotal)}</p>
             </div>
+
+            {cargosDomiciliadosTarjeta.length > 0 && (
+              <div>
+                <p className="text-sm font-semibold text-gray-500 mb-2">Cargos domiciliados de este periodo</p>
+                <div className="space-y-2">
+                  {cargosDomiciliadosTarjeta.map(({ gasto, monto, pagadoAdelantado, fechaMasReciente }) => (
+                    <label
+                      key={gasto.id}
+                      className="flex items-center justify-between gap-3 border border-gray-200 rounded-lg p-3 cursor-pointer"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className={`font-semibold truncate ${pagadoAdelantado ? 'text-gray-400 line-through' : ''}`}>
+                          {gasto.nombre}
+                        </p>
+                        <p className="text-xs text-gray-500 truncate">
+                          {pagadoAdelantado ? 'Ya lo pagaste por adelantado' : 'Pendiente de este periodo'}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        <p className={`font-bold whitespace-nowrap ${pagadoAdelantado ? 'text-gray-400' : 'text-red-600'}`}>
+                          {formatearMoneda(monto)}
+                        </p>
+                        <input
+                          type="checkbox"
+                          checked={pagadoAdelantado}
+                          onChange={() =>
+                            handleTogglePagadoAdelantado(
+                              gasto,
+                              pagadoAdelantado ? null : fechaMasReciente!.toISOString()
+                            )
+                          }
+                          className="w-5 h-5"
+                        />
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {formCompraAbierto !== tarjeta.id ? (
               <button

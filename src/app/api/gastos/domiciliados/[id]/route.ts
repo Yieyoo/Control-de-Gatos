@@ -8,7 +8,19 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { nombre, cantidad, categoriaId, fechaCobro, frecuencia, diasSemana, cuentaPago, activo, notas } = body;
+    const {
+      nombre,
+      cantidad,
+      categoriaId,
+      fechaCobro,
+      frecuencia,
+      diasSemana,
+      cuentaPago,
+      tarjetaId,
+      pagadoAdelantadoHasta,
+      activo,
+      notas,
+    } = body;
 
     const gasto = await prisma.gastoDomiciliado.update({
       where: { id: parseInt(id) },
@@ -20,10 +32,14 @@ export async function PUT(
         ...(frecuencia && { frecuencia }),
         ...(diasSemana !== undefined && { diasSemana }),
         ...(cuentaPago && { cuentaPago }),
+        ...(tarjetaId !== undefined && { tarjetaId: tarjetaId ? parseInt(tarjetaId) : null }),
+        ...(pagadoAdelantadoHasta !== undefined && {
+          pagadoAdelantadoHasta: pagadoAdelantadoHasta ? new Date(pagadoAdelantadoHasta) : null,
+        }),
         ...(activo !== undefined && { activo }),
         ...(notas !== undefined && { notas }),
       },
-      include: { categoria: true },
+      include: { categoria: true, tarjeta: true },
     });
 
     return Response.json(gasto);

@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 export async function GET() {
   try {
     const gastos = await prisma.gastoDomiciliado.findMany({
-      include: { categoria: true },
+      include: { categoria: true, tarjeta: true },
       orderBy: { nombre: 'asc' },
     });
     return Response.json(gastos);
@@ -17,7 +17,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { nombre, cantidad, categoriaId, fechaCobro, frecuencia, diasSemana, cuentaPago, notas } = body;
+    const { nombre, cantidad, categoriaId, fechaCobro, frecuencia, diasSemana, cuentaPago, tarjetaId, notas } = body;
 
     if (!nombre || !cantidad || !categoriaId || !frecuencia || !cuentaPago) {
       return Response.json(
@@ -41,9 +41,10 @@ export async function POST(request: Request) {
         frecuencia,
         diasSemana: frecuencia === 'semanal' ? diasSemana : null,
         cuentaPago,
+        tarjetaId: tarjetaId ? parseInt(tarjetaId) : null,
         notas,
       },
-      include: { categoria: true },
+      include: { categoria: true, tarjeta: true },
     });
 
     return Response.json(gasto, { status: 201 });
