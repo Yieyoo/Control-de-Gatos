@@ -129,7 +129,7 @@ function construirPeriodo(
               tipo: 'gasto',
               categoriaColor: g.categoria.color,
               categoriaNombre: g.categoria.nombre,
-              categoriaTipoPresupuesto: g.categoria.tipoPresupuesto,
+              categoriaTipoPresupuesto: g.tipoPresupuesto ?? g.categoria.tipoPresupuesto,
             });
           }
         });
@@ -158,7 +158,7 @@ function construirPeriodo(
           tipo: 'gasto',
           categoriaColor: g.categoria.color,
           categoriaNombre: g.categoria.nombre,
-          categoriaTipoPresupuesto: g.categoria.tipoPresupuesto,
+          categoriaTipoPresupuesto: g.tipoPresupuesto ?? g.categoria.tipoPresupuesto,
         })
       );
     });
@@ -200,7 +200,7 @@ function construirPeriodo(
       .filter((oc) => clasificarPresupuesto(oc.categoriaTipoPresupuesto) === tipo)
       .map((oc) => ({ nombre: oc.nombre, cantidad: oc.cantidad, categoriaNombre: oc.categoriaNombre, categoriaColor: oc.categoriaColor })),
     ...gastosVariablesEnPeriodo
-      .filter((g) => clasificarPresupuesto(g.categoria.tipoPresupuesto) === tipo)
+      .filter((g) => clasificarPresupuesto(g.tipoPresupuesto ?? g.categoria.tipoPresupuesto) === tipo)
       .map((g) => ({ nombre: g.nombre, cantidad: g.cantidad, categoriaNombre: g.categoria.nombre, categoriaColor: g.categoria.color })),
   ];
 

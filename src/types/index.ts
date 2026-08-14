@@ -41,6 +41,7 @@ export interface IGastoDomiciliado {
   tarjetaId?: number;
   tarjeta?: ITarjetaCredito;
   pagadoAdelantadoHasta?: string;
+  tipoPresupuesto?: 'necesidad' | 'gusto';
   activo: boolean;
   notas?: string;
 }
@@ -75,6 +76,7 @@ export interface IGastoVariable {
   categoria?: ICategoria;
   fecha: Date;
   notas?: string;
+  tipoPresupuesto?: 'necesidad' | 'gusto';
 }
 
 export interface ITarjetaCredito {

@@ -27,6 +27,7 @@ function GastosContenido() {
     cantidad: '',
     categoriaId: '',
     notas: '',
+    tipoPresupuesto: 'gusto' as 'necesidad' | 'gusto',
   });
 
   useEffect(() => {
@@ -71,12 +72,17 @@ function GastosContenido() {
       });
 
       if (!resp.ok) throw new Error('Error al crear gasto');
-      setFormData({ nombre: '', cantidad: '', categoriaId: '', notas: '' });
+      setFormData({ nombre: '', cantidad: '', categoriaId: '', notas: '', tipoPresupuesto: 'gusto' });
       setMostrarFormulario(false);
       cargarGastos();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
     }
+  };
+
+  const handleCategoriaChange = (categoriaId: string) => {
+    const categoria = categorias.find((c) => String(c.id) === categoriaId);
+    setFormData({ ...formData, categoriaId, tipoPresupuesto: categoria?.tipoPresupuesto ?? 'gusto' });
   };
 
   const handleEliminar = async (id: number) => {
@@ -147,7 +153,7 @@ function GastosContenido() {
 
           <select
             value={formData.categoriaId}
-            onChange={(e) => setFormData({ ...formData, categoriaId: e.target.value })}
+            onChange={(e) => handleCategoriaChange(e.target.value)}
             required
             className="w-full border border-gray-300 rounded px-3 py-2"
           >
@@ -158,6 +164,24 @@ function GastosContenido() {
               </option>
             ))}
           </select>
+
+          <div>
+            <p className="text-sm text-gray-600 mb-1">¿A qué se destina?</p>
+            <div className="flex bg-gray-100 rounded-lg p-1 text-sm font-medium w-fit">
+              {(['necesidad', 'gusto'] as const).map((tipo) => (
+                <button
+                  key={tipo}
+                  type="button"
+                  onClick={() => setFormData({ ...formData, tipoPresupuesto: tipo })}
+                  className={`px-3 py-1.5 rounded-md transition-colors ${
+                    formData.tipoPresupuesto === tipo ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                  }`}
+                >
+                  {tipo === 'necesidad' ? 'Necesidad' : 'Gusto'}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <textarea
             placeholder="Notas (opcional)"

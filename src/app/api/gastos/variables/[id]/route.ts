@@ -30,7 +30,7 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { nombre, cantidad, categoriaId, notas } = body;
+    const { nombre, cantidad, categoriaId, notas, tipoPresupuesto } = body;
 
     const gasto = await prisma.gastoVariable.update({
       where: { id: parseInt(id) },
@@ -39,6 +39,7 @@ export async function PUT(
         ...(cantidad && { cantidad: parseFloat(cantidad) }),
         ...(categoriaId && { categoriaId: parseInt(categoriaId) }),
         ...(notas && { notas }),
+        ...(tipoPresupuesto !== undefined && { tipoPresupuesto: tipoPresupuesto || null }),
       },
       include: { categoria: true },
     });

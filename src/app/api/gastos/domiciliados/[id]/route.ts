@@ -18,6 +18,7 @@ export async function PUT(
       cuentaPago,
       tarjetaId,
       pagadoAdelantadoHasta,
+      tipoPresupuesto,
       activo,
       notas,
     } = body;
@@ -36,6 +37,7 @@ export async function PUT(
         ...(pagadoAdelantadoHasta !== undefined && {
           pagadoAdelantadoHasta: pagadoAdelantadoHasta ? new Date(pagadoAdelantadoHasta) : null,
         }),
+        ...(tipoPresupuesto !== undefined && { tipoPresupuesto: tipoPresupuesto || null }),
         ...(activo !== undefined && { activo }),
         ...(notas !== undefined && { notas }),
       },

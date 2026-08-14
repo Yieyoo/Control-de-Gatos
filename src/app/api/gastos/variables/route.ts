@@ -17,7 +17,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { nombre, cantidad, categoriaId, notas } = body;
+    const { nombre, cantidad, categoriaId, notas, tipoPresupuesto } = body;
 
     if (!nombre || !cantidad || !categoriaId) {
       return Response.json(
@@ -32,6 +32,7 @@ export async function POST(request: Request) {
         cantidad: parseFloat(cantidad),
         categoriaId: parseInt(categoriaId),
         notas,
+        tipoPresupuesto: tipoPresupuesto || null,
         fecha: new Date(),
       },
       include: { categoria: true },

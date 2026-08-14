@@ -92,6 +92,7 @@ model GastoDomiciliado {
   tarjetaId           Int?     // Si este gasto se carga a una tarjeta de crédito
   tarjeta             TarjetaCredito? @relation(fields: [tarjetaId], references: [id], onDelete: SetNull)
   pagadoAdelantadoHasta DateTime? // Marca hasta qué fecha de cobro ya se pagó por adelantado (no cuenta como deuda de tarjeta)
+  tipoPresupuesto     String?  // "necesidad" o "gusto"; si es null, hereda el de la categoría
   activo              Boolean  @default(true)
   notas               String?
   fechaCreacion       DateTime @default(now())
@@ -149,6 +150,7 @@ model GastoVariable {
   categoria           Categoria @relation(fields: [categoriaId], references: [id])
   fecha               DateTime @default(now())
   notas               String?
+  tipoPresupuesto     String?  // "necesidad" o "gusto"; si es null, hereda el de la categoría
   fechaCreacion       DateTime @default(now())
 
   // Relación con transacción general

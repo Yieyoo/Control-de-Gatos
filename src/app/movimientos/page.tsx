@@ -82,6 +82,7 @@ export default function MovimientosPage() {
     frecuencia: 'mensual' as 'mensual' | 'quincenal' | 'semanal',
     cuentaPago: '',
     tarjetaId: '',
+    tipoPresupuesto: 'gusto' as 'necesidad' | 'gusto',
   });
 
   // Ahorros domiciliados
@@ -172,13 +173,27 @@ export default function MovimientosPage() {
         }),
       });
       if (!resp.ok) throw new Error('Error al crear gasto domiciliado');
-      setFormGasto({ nombre: '', cantidad: '', categoriaId: '', fechaCobro: '', frecuencia: 'mensual', cuentaPago: '', tarjetaId: '' });
+      setFormGasto({
+        nombre: '',
+        cantidad: '',
+        categoriaId: '',
+        fechaCobro: '',
+        frecuencia: 'mensual',
+        cuentaPago: '',
+        tarjetaId: '',
+        tipoPresupuesto: 'gusto',
+      });
       setDiasSemanaGasto([]);
       setMostrarFormGasto(false);
       cargarGastos();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
     }
+  };
+
+  const handleCategoriaGastoChange = (categoriaId: string) => {
+    const categoria = categorias.find((c) => String(c.id) === categoriaId);
+    setFormGasto({ ...formGasto, categoriaId, tipoPresupuesto: categoria?.tipoPresupuesto ?? 'gusto' });
   };
 
   const handleEliminarGasto = async (id: number) => {
@@ -274,7 +289,7 @@ export default function MovimientosPage() {
               />
               <select
                 value={formGasto.categoriaId}
-                onChange={(e) => setFormGasto({ ...formGasto, categoriaId: e.target.value })}
+                onChange={(e) => handleCategoriaGastoChange(e.target.value)}
                 required
                 className="w-full border border-gray-300 rounded px-3 py-2"
               >
@@ -283,6 +298,23 @@ export default function MovimientosPage() {
                   <option key={cat.id} value={cat.id}>{cat.nombre}</option>
                 ))}
               </select>
+              <div>
+                <p className="text-sm text-gray-600 mb-1">¿A qué se destina?</p>
+                <div className="flex bg-gray-100 rounded-lg p-1 text-sm font-medium w-fit">
+                  {(['necesidad', 'gusto'] as const).map((tipo) => (
+                    <button
+                      key={tipo}
+                      type="button"
+                      onClick={() => setFormGasto({ ...formGasto, tipoPresupuesto: tipo })}
+                      className={`px-3 py-1.5 rounded-md transition-colors ${
+                        formGasto.tipoPresupuesto === tipo ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                      }`}
+                    >
+                      {tipo === 'necesidad' ? 'Necesidad' : 'Gusto'}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <select
                 value={formGasto.frecuencia}
                 onChange={(e) => setFormGasto({ ...formGasto, frecuencia: e.target.value as typeof formGasto.frecuencia })}

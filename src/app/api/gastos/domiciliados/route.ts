@@ -17,7 +17,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { nombre, cantidad, categoriaId, fechaCobro, frecuencia, diasSemana, cuentaPago, tarjetaId, notas } = body;
+    const { nombre, cantidad, categoriaId, fechaCobro, frecuencia, diasSemana, cuentaPago, tarjetaId, tipoPresupuesto, notas } = body;
 
     if (!nombre || !cantidad || !categoriaId || !frecuencia || !cuentaPago) {
       return Response.json(
@@ -42,6 +42,7 @@ export async function POST(request: Request) {
         diasSemana: frecuencia === 'semanal' ? diasSemana : null,
         cuentaPago,
         tarjetaId: tarjetaId ? parseInt(tarjetaId) : null,
+        tipoPresupuesto: tipoPresupuesto || null,
         notas,
       },
       include: { categoria: true, tarjeta: true },
