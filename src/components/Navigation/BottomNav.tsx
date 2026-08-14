@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { cerrarSesion } from '@/lib/cerrarSesion';
 
 const masItems = [
   { href: '/ingresos', label: 'Ingresos', icono: '📈' },
@@ -53,6 +54,8 @@ export function BottomNav() {
   const pathname = usePathname();
   const [quickAddAbierto, setQuickAddAbierto] = useState(false);
   const [masAbierto, setMasAbierto] = useState(false);
+
+  if (pathname === '/login') return null;
 
   return (
     <>
@@ -115,6 +118,16 @@ export function BottomNav() {
               {item.label}
             </Link>
           ))}
+          <div className="border-t border-gray-100 mt-2 pt-2">
+            <button
+              type="button"
+              onClick={cerrarSesion}
+              className="w-full flex items-center gap-3 px-2 py-3 rounded-lg hover:bg-red-50 text-red-600 font-medium"
+            >
+              <span className="text-xl">🚪</span>
+              Cerrar sesión
+            </button>
+          </div>
         </Sheet>
       )}
     </>

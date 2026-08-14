@@ -3,6 +3,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { cerrarSesion } from '@/lib/cerrarSesion';
 
 const menuItems = [
   { href: '/', label: 'Dashboard', icono: '📊' },
@@ -17,6 +18,8 @@ const menuItems = [
 export function Navbar() {
   const pathname = usePathname();
 
+  if (pathname === '/login') return null;
+
   return (
     <nav className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-10">
       <div className="max-w-7xl mx-auto px-4">
@@ -25,7 +28,7 @@ export function Navbar() {
             💵 Control de Gastos
           </Link>
 
-          <div className="hidden md:flex space-x-1">
+          <div className="hidden md:flex items-center space-x-1">
             {menuItems.map((item) => {
               const isActive = pathname === item.href;
               return (
@@ -46,6 +49,12 @@ export function Navbar() {
                 </Link>
               );
             })}
+            <button
+              onClick={cerrarSesion}
+              className="px-3 py-2 rounded-md text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-red-600"
+            >
+              Cerrar sesión
+            </button>
           </div>
         </div>
       </div>
