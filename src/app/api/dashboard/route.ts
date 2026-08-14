@@ -30,6 +30,7 @@ import type {
   IDeudaTarjeta,
   IAhorroLugar,
   IPorcentajeDestino,
+  IItemPresupuesto,
 } from '@/types';
 import type { Ingreso, Prisma } from '@prisma/client';
 
@@ -48,6 +49,7 @@ interface OcurrenciaTag {
   fecha: Date;
   tipo: 'gasto' | 'ahorro';
   categoriaColor?: string;
+  categoriaNombre?: string;
   categoriaTipoPresupuesto?: string | null;
 }
 
@@ -108,6 +110,7 @@ function construirPeriodo(
             fecha: oc.fecha,
             tipo: 'gasto',
             categoriaColor: g.categoria.color,
+            categoriaNombre: g.categoria.nombre,
             categoriaTipoPresupuesto: g.categoria.tipoPresupuesto,
           });
         }
@@ -125,6 +128,7 @@ function construirPeriodo(
               fecha: oc.fecha,
               tipo: 'gasto',
               categoriaColor: g.categoria.color,
+              categoriaNombre: g.categoria.nombre,
               categoriaTipoPresupuesto: g.categoria.tipoPresupuesto,
             });
           }
@@ -153,6 +157,7 @@ function construirPeriodo(
           fecha: oc.fecha,
           tipo: 'gasto',
           categoriaColor: g.categoria.color,
+          categoriaNombre: g.categoria.nombre,
           categoriaTipoPresupuesto: g.categoria.tipoPresupuesto,
         })
       );
@@ -188,17 +193,25 @@ function construirPeriodo(
 
   // "% destinado a": cuánto de lo ya gastado/ahorrado este periodo fue a necesidades,
   // gustos o ahorro, comparado contra una meta (50% / 20% / monto fijo de ahorro).
+  // También se arma el detalle (items) de qué gastos componen cada rubro, para el popup.
   const gastosFijosPagados = gastoOcurrencias.filter((oc) => oc.fecha <= hoyFinDelDia);
-  const sumarPorTipo = (tipo: 'necesidad' | 'gusto') =>
-    gastosFijosPagados
+  const itemsPorTipo = (tipo: 'necesidad' | 'gusto'): IItemPresupuesto[] => [
+    ...gastosFijosPagados
       .filter((oc) => clasificarPresupuesto(oc.categoriaTipoPresupuesto) === tipo)
-      .reduce((s, oc) => s + oc.cantidad, 0) +
-    gastosVariablesEnPeriodo
+      .map((oc) => ({ nombre: oc.nombre, cantidad: oc.cantidad, categoriaNombre: oc.categoriaNombre, categoriaColor: oc.categoriaColor })),
+    ...gastosVariablesEnPeriodo
       .filter((g) => clasificarPresupuesto(g.categoria.tipoPresupuesto) === tipo)
-      .reduce((s, g) => s + g.cantidad, 0);
+      .map((g) => ({ nombre: g.nombre, cantidad: g.cantidad, categoriaNombre: g.categoria.nombre, categoriaColor: g.categoria.color })),
+  ];
 
-  const necesidadesMonto = sumarPorTipo('necesidad');
-  const gustosMonto = sumarPorTipo('gusto');
+  const itemsNecesidades = itemsPorTipo('necesidad');
+  const itemsGustos = itemsPorTipo('gusto');
+  const itemsAhorro: IItemPresupuesto[] = ahorroOcurrencias
+    .filter((oc) => oc.fecha <= hoyFinDelDia)
+    .map((oc) => ({ nombre: oc.nombre, cantidad: oc.cantidad }));
+
+  const necesidadesMonto = itemsNecesidades.reduce((s, i) => s + i.cantidad, 0);
+  const gustosMonto = itemsGustos.reduce((s, i) => s + i.cantidad, 0);
   const ahorroMonto = ahorroDelMesPagado;
 
   const metaNecesidadesMonto = (ingresosPeriodo * META_NECESIDADES_PCT) / 100;
@@ -211,18 +224,21 @@ function construirPeriodo(
       porcentaje: calcularPorcentaje(necesidadesMonto, ingresosPeriodo),
       metaMonto: metaNecesidadesMonto,
       metaPorcentaje: META_NECESIDADES_PCT,
+      items: itemsNecesidades.sort((a, b) => b.cantidad - a.cantidad),
     },
     gustos: {
       monto: gustosMonto,
       porcentaje: calcularPorcentaje(gustosMonto, ingresosPeriodo),
       metaMonto: metaGustosMonto,
       metaPorcentaje: META_GUSTOS_PCT,
+      items: itemsGustos.sort((a, b) => b.cantidad - a.cantidad),
     },
     ahorro: {
       monto: ahorroMonto,
       porcentaje: calcularPorcentaje(ahorroMonto, ingresosPeriodo),
       metaMonto: metaAhorroMonto,
       metaPorcentaje: calcularPorcentaje(metaAhorroMonto, ingresosPeriodo),
+      items: itemsAhorro.sort((a, b) => b.cantidad - a.cantidad),
     },
   };
 

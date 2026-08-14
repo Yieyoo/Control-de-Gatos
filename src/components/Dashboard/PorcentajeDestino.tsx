@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { formatearMoneda } from '@/utils/calculos';
 import type { IPorcentajeDestino, IRubroPresupuesto } from '@/types';
 
@@ -50,57 +51,116 @@ function estaSobreLaMeta(rubro: IRubroPresupuesto, favorable: 'menorEsMejor' | '
 }
 
 export function PorcentajeDestino({ datos }: PorcentajeDestinoProps) {
-  const irADetalle = () => {
-    document.getElementById('gastos-por-categoria')?.scrollIntoView({ behavior: 'smooth' });
-  };
+  const [rubroAbierto, setRubroAbierto] = useState<keyof IPorcentajeDestino | null>(null);
+  const rubroInfo = RUBROS.find((r) => r.clave === rubroAbierto);
+  const rubroDatos = rubroAbierto ? datos[rubroAbierto] : null;
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-          <span>🥧</span> % destinado a
-        </h2>
-        <button
-          type="button"
-          onClick={irADetalle}
-          className="text-xs font-medium border border-gray-200 rounded-full px-3 py-1.5 text-gray-600 hover:bg-gray-50 flex-shrink-0"
-        >
-          Ver detalle
-        </button>
-      </div>
+      <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2 mb-4">
+        <span>🥧</span> % destinado a
+      </h2>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-2">
         {RUBROS.map(({ clave, icono, titulo, colorTexto, colorBarra, colorFondoIcono, favorable }) => {
           const rubro = datos[clave];
           const sobreLaMeta = estaSobreLaMeta(rubro, favorable);
           const anchoBarra = Math.min(rubro.porcentaje, 100);
 
           return (
-            <div key={clave} className="space-y-2">
-              <div className="flex items-center gap-2">
-                <span className={`w-7 h-7 rounded-lg ${colorFondoIcono} flex items-center justify-center text-sm flex-shrink-0`}>
+            <button
+              key={clave}
+              type="button"
+              onClick={() => setRubroAbierto(clave)}
+              className="text-left space-y-1.5 rounded-lg p-1 -m-1 active:bg-gray-50"
+            >
+              <div className="flex items-center gap-1">
+                <span className={`w-5 h-5 rounded-md ${colorFondoIcono} flex items-center justify-center text-[10px] flex-shrink-0`}>
                   {icono}
                 </span>
-                <p className={`text-sm font-semibold ${colorTexto}`}>
+                <p className={`text-[11px] font-semibold leading-tight ${colorTexto}`}>
                   {Math.round(rubro.metaPorcentaje)}% — {formatearMoneda(rubro.metaMonto)}
                 </p>
               </div>
-              <p className="text-xs text-gray-500 leading-tight">{titulo}</p>
+              <p className="text-[10px] text-gray-500 leading-tight flex items-start gap-0.5">
+                <span className="flex-1">{titulo}</span>
+                <span className="text-gray-300 flex-shrink-0">›</span>
+              </p>
 
-              <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+              <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
                 <div
                   className={`h-full rounded-full ${sobreLaMeta ? 'bg-amber-500' : colorBarra}`}
                   style={{ width: `${anchoBarra}%` }}
                 />
               </div>
 
-              <p className={`text-xs ${sobreLaMeta ? 'text-amber-600 font-medium' : 'text-gray-500'}`}>
+              <p className={`text-[10px] leading-tight ${sobreLaMeta ? 'text-amber-600 font-medium' : 'text-gray-500'}`}>
                 {rubro.porcentaje.toFixed(1)}% ({formatearMoneda(rubro.monto)})
               </p>
-            </div>
+            </button>
           );
         })}
       </div>
+
+      {rubroAbierto && rubroInfo && rubroDatos && (
+        <div className="fixed inset-0 z-30" role="dialog" aria-modal="true">
+          <button
+            type="button"
+            aria-label="Cerrar"
+            onClick={() => setRubroAbierto(null)}
+            className="absolute inset-0 bg-black/40"
+          />
+          <div className="absolute bottom-0 left-0 right-0 max-h-[75vh] flex flex-col bg-white rounded-t-2xl p-5 pb-6 shadow-lg">
+            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4 flex-shrink-0" />
+            <div className="flex items-start justify-between gap-3 mb-1 flex-shrink-0">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                  <span>{rubroInfo.icono}</span> {rubroInfo.titulo}
+                </h3>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  {formatearMoneda(rubroDatos.monto)} de {formatearMoneda(rubroDatos.metaMonto)} meta
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRubroAbierto(null)}
+                aria-label="Cerrar"
+                className="text-gray-400 hover:text-gray-600 text-xl leading-none flex-shrink-0"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="overflow-y-auto mt-3 -mx-1 px-1">
+              {rubroDatos.items.length === 0 ? (
+                <p className="text-sm text-gray-500 py-4">Todavía no hay gastos en este rubro para este periodo.</p>
+              ) : (
+                <ul className="divide-y divide-gray-100">
+                  {rubroDatos.items.map((item, i) => (
+                    <li key={i} className="py-2.5 flex items-center gap-3">
+                      {item.categoriaColor && (
+                        <span
+                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: item.categoriaColor }}
+                        />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm text-gray-900 truncate">{item.nombre}</p>
+                        {item.categoriaNombre && (
+                          <p className="text-xs text-gray-500 truncate">{item.categoriaNombre}</p>
+                        )}
+                      </div>
+                      <p className="text-sm font-semibold text-gray-900 flex-shrink-0 tabular-nums">
+                        {formatearMoneda(item.cantidad)}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

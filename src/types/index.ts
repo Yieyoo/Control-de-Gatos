@@ -164,11 +164,19 @@ export interface IMovimientoPeriodo {
   categoriaColor?: string;
 }
 
+export interface IItemPresupuesto {
+  nombre: string;
+  cantidad: number;
+  categoriaNombre?: string;
+  categoriaColor?: string;
+}
+
 export interface IRubroPresupuesto {
   monto: number;
   porcentaje: number;
   metaMonto: number;
   metaPorcentaje: number;
+  items: IItemPresupuesto[];
 }
 
 export interface IPorcentajeDestino {
