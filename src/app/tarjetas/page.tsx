@@ -74,6 +74,14 @@ export default function TarjetasPage() {
     compraTarjetaId: '',
   });
 
+  const [formPagoCompraAbierto, setFormPagoCompraAbierto] = useState<number | null>(null);
+  const [formPagoCompra, setFormPagoCompra] = useState({
+    cantidad: '',
+    fuente: 'disponible' as IFuenteDinero,
+    ahorroLugarId: '',
+    depositoTerceroId: '',
+  });
+
   useEffect(() => {
     cargarTarjetas();
     cargarCompras();
@@ -227,6 +235,61 @@ export default function TarjetasPage() {
     try {
       const resp = await fetch(`/api/tarjetas/pagos/${id}`, { method: 'DELETE' });
       if (!resp.ok) throw new Error('Error al eliminar');
+      cargarPagos();
+      cargarAhorroLugares();
+      cargarDepositosTerceros();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error desconocido');
+    }
+  };
+
+  const pagosDeCompra = (compraId: number) => pagos.filter((p) => p.compraTarjetaId === compraId);
+
+  const abrirPagoCompra = (compra: ICompraTarjeta, cantidadSugerida: number) => {
+    setFormPagoCompraAbierto(compra.id);
+    setFormPagoCompra({
+      cantidad: cantidadSugerida > 0 ? String(cantidadSugerida) : '',
+      fuente: 'disponible',
+      ahorroLugarId: '',
+      depositoTerceroId: '',
+    });
+  };
+
+  const handleSubmitPagoCompra = async (e: React.FormEvent, compra: ICompraTarjeta, tarjetaId: number) => {
+    e.preventDefault();
+    try {
+      const resp = await fetch('/api/tarjetas/pagos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tarjetaId,
+          cantidad: formPagoCompra.cantidad,
+          concepto: `Pago: ${compra.nombre}`,
+          fuente: formPagoCompra.fuente,
+          ahorroLugarId: formPagoCompra.fuente === 'ahorro' ? formPagoCompra.ahorroLugarId : undefined,
+          depositoTerceroId: formPagoCompra.fuente === 'tercero' ? formPagoCompra.depositoTerceroId : undefined,
+          compraTarjetaId: compra.id,
+        }),
+      });
+      if (!resp.ok) {
+        const datos = await resp.json().catch(() => null);
+        throw new Error(datos?.error || 'Error al registrar el pago');
+      }
+      setFormPagoCompraAbierto(null);
+      cargarPagos();
+      cargarAhorroLugares();
+      cargarDepositosTerceros();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error desconocido');
+    }
+  };
+
+  const handleQuitarPagosCompra = async (compra: ICompraTarjeta) => {
+    if (!confirm('¿Quitar el pago (o pagos) registrados para esta compra?')) return;
+    try {
+      await Promise.all(
+        pagosDeCompra(compra.id).map((p) => fetch(`/api/tarjetas/pagos/${p.id}`, { method: 'DELETE' }))
+      );
       cargarPagos();
       cargarAhorroLugares();
       cargarDepositosTerceros();
@@ -693,6 +756,119 @@ export default function TarjetasPage() {
                             ↩️ Registrar devolución
                           </button>
                         )}
+
+                        {(() => {
+                          const pagosCompra = pagosDeCompra(c.id);
+                          const montoPagado = pagosCompra.reduce((s, p) => s + p.cantidad, 0);
+                          const neto = netoCompra(c);
+                          const pagada = montoPagado >= neto - 0.01;
+                          const saldoPendiente = Math.max(0, neto - montoPagado);
+
+                          return (
+                            <div className="pt-1 border-t border-gray-100 space-y-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    className="w-4 h-4"
+                                    checked={pagada}
+                                    onChange={() =>
+                                      pagada ? handleQuitarPagosCompra(c) : abrirPagoCompra(c, saldoPendiente)
+                                    }
+                                  />
+                                  {pagada
+                                    ? '✅ Pagada'
+                                    : montoPagado > 0
+                                    ? `Pagado ${formatearMoneda(montoPagado)} de ${formatearMoneda(neto)}`
+                                    : 'Sin pagar'}
+                                </label>
+                                {!pagada && (
+                                  <button
+                                    type="button"
+                                    onClick={() => abrirPagoCompra(c, 0)}
+                                    className="text-xs text-blue-600 hover:text-blue-800"
+                                  >
+                                    💰 Pagar una parte
+                                  </button>
+                                )}
+                              </div>
+
+                              {formPagoCompraAbierto === c.id && (
+                                <form
+                                  onSubmit={(e) => handleSubmitPagoCompra(e, c, tarjeta.id)}
+                                  className="space-y-2 bg-gray-50 rounded p-3"
+                                >
+                                  <input
+                                    type="number"
+                                    placeholder="Cantidad a pagar"
+                                    value={formPagoCompra.cantidad}
+                                    onChange={(e) => setFormPagoCompra({ ...formPagoCompra, cantidad: e.target.value })}
+                                    required
+                                    step="0.01"
+                                    max={saldoPendiente || undefined}
+                                    className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+                                  />
+                                  <div className="flex bg-white rounded-lg p-1 text-xs font-medium w-fit border border-gray-200 flex-wrap">
+                                    {(['disponible', 'ahorro', 'tercero'] as const).map((f) => (
+                                      <button
+                                        key={f}
+                                        type="button"
+                                        onClick={() => setFormPagoCompra({ ...formPagoCompra, fuente: f })}
+                                        className={`px-2.5 py-1 rounded-md transition-colors ${
+                                          formPagoCompra.fuente === f ? 'bg-gray-900 text-white' : 'text-gray-500'
+                                        }`}
+                                      >
+                                        {ETIQUETA_FUENTE[f]}
+                                      </button>
+                                    ))}
+                                  </div>
+                                  {formPagoCompra.fuente === 'ahorro' && (
+                                    <select
+                                      value={formPagoCompra.ahorroLugarId}
+                                      onChange={(e) => setFormPagoCompra({ ...formPagoCompra, ahorroLugarId: e.target.value })}
+                                      required
+                                      className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+                                    >
+                                      <option value="">¿De qué cuenta de ahorro?</option>
+                                      {ahorroLugares.map((a) => (
+                                        <option key={a.id} value={a.id}>{a.nombre} ({formatearMoneda(a.saldoActual)})</option>
+                                      ))}
+                                    </select>
+                                  )}
+                                  {formPagoCompra.fuente === 'tercero' && (
+                                    <select
+                                      value={formPagoCompra.depositoTerceroId}
+                                      onChange={(e) => setFormPagoCompra({ ...formPagoCompra, depositoTerceroId: e.target.value })}
+                                      required
+                                      className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+                                    >
+                                      <option value="">¿Con qué depósito de tercero?</option>
+                                      {depositosTerceros
+                                        .filter((d) => d.pendiente > 0)
+                                        .map((d) => (
+                                          <option key={d.id} value={d.id}>
+                                            {d.persona} — {d.concepto} ({formatearMoneda(d.pendiente)} pendiente)
+                                          </option>
+                                        ))}
+                                    </select>
+                                  )}
+                                  <div className="flex gap-2">
+                                    <button type="submit" className="bg-green-600 text-white px-3 py-1.5 rounded text-sm hover:bg-green-700">
+                                      Guardar
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setFormPagoCompraAbierto(null)}
+                                      className="bg-gray-400 text-white px-3 py-1.5 rounded text-sm hover:bg-gray-500"
+                                    >
+                                      Cancelar
+                                    </button>
+                                  </div>
+                                </form>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     )
                   )}
