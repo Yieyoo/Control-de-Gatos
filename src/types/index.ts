@@ -40,7 +40,10 @@ export interface IGastoDomiciliado {
   cuentaPago: string;
   tarjetaId?: number;
   tarjeta?: ITarjetaCredito;
+  /** Solo aplica si tarjetaId != null: hasta qué fecha de cobro ya se marcó "ya pagué este cargo". */
   pagadoAdelantadoHasta?: string;
+  /** Solo aplica si tarjetaId == null (efectivo): hasta qué fecha ya se generó un GastoVariable real. */
+  ultimaOcurrenciaMaterializada?: string;
   tipoPresupuesto?: 'necesidad' | 'gusto';
   activo: boolean;
   notas?: string;
@@ -54,6 +57,7 @@ export interface IAhorroDomiciliado {
   diasSemana?: string;
   ahorroDestinoId: number;
   ahorroDestino?: IAhorroLugar;
+  ultimaOcurrenciaMaterializada?: string;
   activo: boolean;
   notas?: string;
 }
@@ -68,6 +72,8 @@ export interface IGastoFijo {
   notas?: string;
 }
 
+export type IFuenteDinero = 'disponible' | 'ahorro' | 'tercero';
+
 export interface IGastoVariable {
   id: number;
   nombre: string;
@@ -77,6 +83,13 @@ export interface IGastoVariable {
   fecha: Date;
   notas?: string;
   tipoPresupuesto?: 'necesidad' | 'gusto';
+  fuente: IFuenteDinero;
+  ahorroLugarId?: number;
+  ahorroLugar?: IAhorroLugar;
+  depositoTerceroId?: number;
+  depositoTercero?: IDepositoTercero;
+  gastoDomiciliadoOrigenId?: number;
+  devoluciones?: IDevolucion[];
 }
 
 export interface ITarjetaCredito {
@@ -107,6 +120,10 @@ export interface ICompraTarjeta {
   categoria?: ICategoria;
   notas?: string;
   tipoPresupuesto?: 'necesidad' | 'gusto';
+  /** Meses sin intereses; null/undefined = de contado. */
+  numeroMeses?: number;
+  montoMensual?: number;
+  devoluciones?: IDevolucion[];
 }
 
 export interface IPagoTarjeta {
@@ -116,6 +133,12 @@ export interface IPagoTarjeta {
   concepto?: string;
   tarjetaId: number;
   tarjeta?: ITarjetaCredito;
+  fuente: IFuenteDinero;
+  ahorroLugarId?: number;
+  ahorroLugar?: IAhorroLugar;
+  depositoTerceroId?: number;
+  depositoTercero?: IDepositoTercero;
+  compraTarjetaId?: number;
 }
 
 export interface IMovimientoAhorro {
@@ -126,18 +149,34 @@ export interface IMovimientoAhorro {
   cantidad: number;
   fecha: string;
   concepto: string;
+  /** "manual" | "domiciliado" | "pago_gasto" | "pago_tarjeta" */
+  origen: 'manual' | 'domiciliado' | 'pago_gasto' | 'pago_tarjeta';
+  ahorroDomiciliadoOrigenId?: number;
 }
 
-export interface ITransaccion {
+export interface IDepositoTercero {
   id: number;
-  tipo: 'ingreso' | 'gasto_fijo' | 'gasto_variable' | 'ahorro' | 'transferencia';
-  subtipo?: string;
+  persona: string;
   cantidad: number;
-  fecha: Date;
   concepto: string;
-  categoriaId?: number;
-  cuenta?: string;
-  estado: 'completado' | 'programado' | 'pendiente';
+  fecha: string;
+  pagoRelacionado?: string;
+  notas?: string;
+  /** Calculados al leer, no se guardan: cantidad - suma de gastos/pagos vinculados. */
+  montoUtilizado: number;
+  pendiente: number;
+  estado: 'pendiente' | 'parcial' | 'utilizado';
+  /** En qué gastos/pagos se usó este depósito. */
+  usos?: { nombre: string; cantidad: number; fecha: string }[];
+}
+
+export interface IDevolucion {
+  id: number;
+  cantidad: number;
+  fecha: string;
+  concepto?: string;
+  gastoVariableId?: number;
+  compraTarjetaId?: number;
 }
 
 export interface IGastoPorCategoria {
@@ -165,6 +204,8 @@ export interface IMovimientoPeriodo {
   tipo: 'gasto' | 'ahorro';
   pagado: boolean;
   categoriaColor?: string;
+  /** true si es un cargo domiciliado de tarjeta (crédito, no efectivo) -- "pagado" aquí significa que lo marcaste con el checkbox, no que ya pasó la fecha. */
+  credito?: boolean;
 }
 
 export interface IItemPresupuesto {
@@ -201,6 +242,8 @@ export interface IResumenPeriodo {
   ahorroDelMes: number;
   ahorroDelMesPendiente: number;
   dineroDisponible: number;
+  /** Gastos fijos + ahorro programado que todavía falta que ocurra en este periodo (regla 12: "dinero comprometido"). */
+  dineroComprometido: number;
   dineroReal: number;
   porcentajeDestino: IPorcentajeDestino;
   movimientos: IMovimientoPeriodo[];
@@ -220,6 +263,8 @@ export interface IDashboardResumen {
   ahorrosLugares: IAhorroLugar[];
   deudaTarjetas: IDeudaTarjeta[];
   deudaTarjetasTotal: number;
+  /** Suma de "pendiente" de todos los depósitos de terceros (regla 12: "dinero de terceros"). */
+  dineroTerceroPendiente: number;
   gastosPorCategoria: IGastoPorCategoria[];
   proximosMovimientos: IProximoMovimiento[];
   periodos: {

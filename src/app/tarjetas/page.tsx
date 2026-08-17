@@ -2,7 +2,16 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import type { ITarjetaCredito, ICompraTarjeta, ICategoria, IPagoTarjeta, IGastoDomiciliado } from '@/types';
+import type {
+  ITarjetaCredito,
+  ICompraTarjeta,
+  ICategoria,
+  IPagoTarjeta,
+  IGastoDomiciliado,
+  IAhorroLugar,
+  IDepositoTercero,
+  IFuenteDinero,
+} from '@/types';
 import {
   formatearMoneda,
   formatearDiaMes,
@@ -14,12 +23,20 @@ import {
 
 const CORTE_1 = 10;
 
+const ETIQUETA_FUENTE: Record<IFuenteDinero, string> = {
+  disponible: '💵 Disponible',
+  ahorro: '🏦 Ahorro',
+  tercero: '🤝 Tercero',
+};
+
 export default function TarjetasPage() {
   const [tarjetas, setTarjetas] = useState<ITarjetaCredito[]>([]);
   const [compras, setCompras] = useState<ICompraTarjeta[]>([]);
   const [pagos, setPagos] = useState<IPagoTarjeta[]>([]);
   const [gastosDomiciliados, setGastosDomiciliados] = useState<IGastoDomiciliado[]>([]);
   const [categorias, setCategorias] = useState<ICategoria[]>([]);
+  const [ahorroLugares, setAhorroLugares] = useState<IAhorroLugar[]>([]);
+  const [depositosTerceros, setDepositosTerceros] = useState<IDepositoTercero[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,6 +49,8 @@ export default function TarjetasPage() {
     cantidad: '',
     categoriaId: '',
     tipoPresupuesto: 'gusto' as 'necesidad' | 'gusto',
+    esMSI: false,
+    numeroMeses: '',
   });
 
   const [editandoCompraId, setEditandoCompraId] = useState<number | null>(null);
@@ -42,8 +61,18 @@ export default function TarjetasPage() {
     tipoPresupuesto: 'gusto' as 'necesidad' | 'gusto',
   });
 
+  const [formDevolucionAbierto, setFormDevolucionAbierto] = useState<number | null>(null);
+  const [formDevolucion, setFormDevolucion] = useState({ cantidad: '', concepto: '' });
+
   const [formPagoAbierto, setFormPagoAbierto] = useState<number | null>(null);
-  const [formPago, setFormPago] = useState({ cantidad: '', concepto: '' });
+  const [formPago, setFormPago] = useState({
+    cantidad: '',
+    concepto: '',
+    fuente: 'disponible' as IFuenteDinero,
+    ahorroLugarId: '',
+    depositoTerceroId: '',
+    compraTarjetaId: '',
+  });
 
   useEffect(() => {
     cargarTarjetas();
@@ -51,7 +80,27 @@ export default function TarjetasPage() {
     cargarPagos();
     cargarGastosDomiciliados();
     cargarCategorias();
+    cargarAhorroLugares();
+    cargarDepositosTerceros();
   }, []);
+
+  const cargarAhorroLugares = async () => {
+    try {
+      const resp = await fetch('/api/ahorros');
+      if (resp.ok) setAhorroLugares(await resp.json());
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const cargarDepositosTerceros = async () => {
+    try {
+      const resp = await fetch('/api/terceros');
+      if (resp.ok) setDepositosTerceros(await resp.json());
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const cargarTarjetas = async () => {
     try {
@@ -151,12 +200,23 @@ export default function TarjetasPage() {
       const resp = await fetch('/api/tarjetas/pagos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...formPago, tarjetaId }),
+        body: JSON.stringify({
+          ...formPago,
+          tarjetaId,
+          ahorroLugarId: formPago.fuente === 'ahorro' ? formPago.ahorroLugarId : undefined,
+          depositoTerceroId: formPago.fuente === 'tercero' ? formPago.depositoTerceroId : undefined,
+          compraTarjetaId: formPago.compraTarjetaId || undefined,
+        }),
       });
-      if (!resp.ok) throw new Error('Error al registrar pago');
-      setFormPago({ cantidad: '', concepto: '' });
+      if (!resp.ok) {
+        const datos = await resp.json().catch(() => null);
+        throw new Error(datos?.error || 'Error al registrar pago');
+      }
+      setFormPago({ cantidad: '', concepto: '', fuente: 'disponible', ahorroLugarId: '', depositoTerceroId: '', compraTarjetaId: '' });
       setFormPagoAbierto(null);
       cargarPagos();
+      cargarAhorroLugares();
+      cargarDepositosTerceros();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
     }
@@ -168,6 +228,8 @@ export default function TarjetasPage() {
       const resp = await fetch(`/api/tarjetas/pagos/${id}`, { method: 'DELETE' });
       if (!resp.ok) throw new Error('Error al eliminar');
       cargarPagos();
+      cargarAhorroLugares();
+      cargarDepositosTerceros();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
     }
@@ -184,16 +246,40 @@ export default function TarjetasPage() {
       const resp = await fetch('/api/tarjetas/compras', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...formCompra, tarjetaId }),
+        body: JSON.stringify({
+          ...formCompra,
+          tarjetaId,
+          numeroMeses: formCompra.esMSI ? formCompra.numeroMeses : undefined,
+        }),
       });
       if (!resp.ok) throw new Error('Error al registrar compra');
-      setFormCompra({ nombre: '', cantidad: '', categoriaId: '', tipoPresupuesto: 'gusto' });
+      setFormCompra({ nombre: '', cantidad: '', categoriaId: '', tipoPresupuesto: 'gusto', esMSI: false, numeroMeses: '' });
       setFormCompraAbierto(null);
       cargarCompras();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
     }
   };
+
+  const handleSubmitDevolucion = async (e: React.FormEvent, compraTarjetaId: number) => {
+    e.preventDefault();
+    try {
+      const resp = await fetch('/api/devoluciones', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...formDevolucion, compraTarjetaId }),
+      });
+      if (!resp.ok) throw new Error('Error al registrar devolución');
+      setFormDevolucion({ cantidad: '', concepto: '' });
+      setFormDevolucionAbierto(null);
+      cargarCompras();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error desconocido');
+    }
+  };
+
+  const netoCompra = (compra: ICompraTarjeta) =>
+    compra.cantidad - (compra.devoluciones ?? []).reduce((s, d) => s + d.cantidad, 0);
 
   const handleEliminarCompra = async (id: number) => {
     if (!confirm('¿Eliminar esta compra?')) return;
@@ -267,13 +353,13 @@ export default function TarjetasPage() {
 
         const comprasActual = compras.filter((c) => enCiclo(c, cicloActual));
         const comprasAnterior = compras.filter((c) => enCiclo(c, cicloAnterior));
-        const totalActual = comprasActual.reduce((s, c) => s + c.cantidad, 0);
-        const totalAnterior = comprasAnterior.reduce((s, c) => s + c.cantidad, 0);
+        const totalActual = comprasActual.reduce((s, c) => s + netoCompra(c), 0);
+        const totalAnterior = comprasAnterior.reduce((s, c) => s + netoCompra(c), 0);
 
         const pagosTarjeta = pagos.filter((p) => p.tarjetaId === tarjeta.id);
         const totalCompradoSiempre = compras
           .filter((c) => c.tarjetaId === tarjeta.id)
-          .reduce((s, c) => s + c.cantidad, 0);
+          .reduce((s, c) => s + netoCompra(c), 0);
         const totalPagado = pagosTarjeta.reduce((s, p) => s + p.cantidad, 0);
 
         const cargosDomiciliadosTarjeta = gastosDomiciliados
@@ -417,6 +503,31 @@ export default function TarjetasPage() {
                     <option key={cat.id} value={cat.id}>{cat.nombre}</option>
                   ))}
                 </select>
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={formCompra.esMSI}
+                    onChange={(e) => setFormCompra({ ...formCompra, esMSI: e.target.checked })}
+                    className="w-4 h-4"
+                  />
+                  ¿A meses sin intereses?
+                </label>
+                {formCompra.esMSI && (
+                  <input
+                    type="number"
+                    placeholder="Número de meses (ej: 12)"
+                    value={formCompra.numeroMeses}
+                    onChange={(e) => setFormCompra({ ...formCompra, numeroMeses: e.target.value })}
+                    required
+                    min={2}
+                    className="w-full border border-gray-300 rounded px-3 py-2"
+                  />
+                )}
+                {formCompra.esMSI && formCompra.numeroMeses && formCompra.cantidad && (
+                  <p className="text-xs text-gray-500">
+                    {formatearMoneda(parseFloat(formCompra.cantidad) / parseInt(formCompra.numeroMeses))}/mes durante {formCompra.numeroMeses} meses
+                  </p>
+                )}
                 <div>
                   <p className="text-sm text-gray-600 mb-1">¿A qué se destina?</p>
                   <div className="flex bg-white rounded-lg p-1 text-sm font-medium w-fit border border-gray-200">
@@ -520,25 +631,68 @@ export default function TarjetasPage() {
                         </div>
                       </form>
                     ) : (
-                      <div
-                        key={c.id}
-                        className="flex items-center justify-between gap-3 border border-gray-200 rounded-lg p-3"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <p className="font-semibold truncate">{c.nombre}</p>
-                          <p className="text-xs text-gray-500 truncate">
-                            {c.categoria?.nombre ?? 'Sin categoría'} • {formatearDiaMes(new Date(c.fecha))}
-                          </p>
+                      <div key={c.id} className="border border-gray-200 rounded-lg p-3 space-y-1.5">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold truncate">{c.nombre}</p>
+                            <p className="text-xs text-gray-500 truncate">
+                              {c.categoria?.nombre ?? 'Sin categoría'} • {formatearDiaMes(new Date(c.fecha))}
+                              {c.numeroMeses && ` • ${c.numeroMeses} MSI (${formatearMoneda(c.montoMensual ?? 0)}/mes)`}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-3 flex-shrink-0">
+                            <div className="text-right">
+                              <p className="font-bold text-red-600 whitespace-nowrap">{formatearMoneda(netoCompra(c))}</p>
+                              {(c.devoluciones?.length ?? 0) > 0 && (
+                                <p className="text-xs text-gray-400 whitespace-nowrap line-through">{formatearMoneda(c.cantidad)}</p>
+                              )}
+                            </div>
+                            <button onClick={() => iniciarEdicionCompra(c)} className="text-blue-600 hover:text-blue-800">
+                              ✏️
+                            </button>
+                            <button onClick={() => handleEliminarCompra(c.id)} className="text-red-600 hover:text-red-800">
+                              🗑️
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-3 flex-shrink-0">
-                          <p className="font-bold text-red-600 whitespace-nowrap">{formatearMoneda(c.cantidad)}</p>
-                          <button onClick={() => iniciarEdicionCompra(c)} className="text-blue-600 hover:text-blue-800">
-                            ✏️
+
+                        {formDevolucionAbierto === c.id ? (
+                          <form
+                            onSubmit={(e) => handleSubmitDevolucion(e, c.id)}
+                            className="flex flex-wrap items-center gap-2 bg-gray-50 rounded p-2"
+                          >
+                            <input
+                              type="number"
+                              placeholder="Cantidad devuelta"
+                              value={formDevolucion.cantidad}
+                              onChange={(e) => setFormDevolucion({ ...formDevolucion, cantidad: e.target.value })}
+                              required
+                              step="0.01"
+                              className="border border-gray-300 rounded px-2 py-1 text-sm w-36"
+                            />
+                            <input
+                              type="text"
+                              placeholder="Concepto (opcional)"
+                              value={formDevolucion.concepto}
+                              onChange={(e) => setFormDevolucion({ ...formDevolucion, concepto: e.target.value })}
+                              className="border border-gray-300 rounded px-2 py-1 text-sm flex-1 min-w-[7rem]"
+                            />
+                            <button type="submit" className="bg-green-600 text-white px-2.5 py-1 rounded text-sm hover:bg-green-700">
+                              Guardar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setFormDevolucionAbierto(null)}
+                              className="bg-gray-400 text-white px-2.5 py-1 rounded text-sm hover:bg-gray-500"
+                            >
+                              Cancelar
+                            </button>
+                          </form>
+                        ) : (
+                          <button onClick={() => setFormDevolucionAbierto(c.id)} className="text-xs text-blue-600 hover:text-blue-800">
+                            ↩️ Registrar devolución
                           </button>
-                          <button onClick={() => handleEliminarCompra(c.id)} className="text-red-600 hover:text-red-800">
-                            🗑️
-                          </button>
-                        </div>
+                        )}
                       </div>
                     )
                   )}
@@ -575,6 +729,69 @@ export default function TarjetasPage() {
                     step="0.01"
                     className="w-full border border-gray-300 rounded px-3 py-2"
                   />
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">¿De dónde sale el dinero?</p>
+                    <div className="flex bg-white rounded-lg p-1 text-sm font-medium w-fit border border-gray-200 flex-wrap">
+                      {(['disponible', 'ahorro', 'tercero'] as const).map((f) => (
+                        <button
+                          key={f}
+                          type="button"
+                          onClick={() => setFormPago({ ...formPago, fuente: f })}
+                          className={`px-3 py-1.5 rounded-md transition-colors ${
+                            formPago.fuente === f ? 'bg-gray-900 text-white' : 'text-gray-500'
+                          }`}
+                        >
+                          {ETIQUETA_FUENTE[f]}
+                        </button>
+                      ))}
+                    </div>
+                    {formPago.fuente === 'ahorro' && (
+                      <select
+                        value={formPago.ahorroLugarId}
+                        onChange={(e) => setFormPago({ ...formPago, ahorroLugarId: e.target.value })}
+                        required
+                        className="w-full border border-gray-300 rounded px-3 py-2 mt-2"
+                      >
+                        <option value="">¿De qué cuenta de ahorro?</option>
+                        {ahorroLugares.map((a) => (
+                          <option key={a.id} value={a.id}>{a.nombre} ({formatearMoneda(a.saldoActual)})</option>
+                        ))}
+                      </select>
+                    )}
+                    {formPago.fuente === 'tercero' && (
+                      <select
+                        value={formPago.depositoTerceroId}
+                        onChange={(e) => setFormPago({ ...formPago, depositoTerceroId: e.target.value })}
+                        required
+                        className="w-full border border-gray-300 rounded px-3 py-2 mt-2"
+                      >
+                        <option value="">¿Con qué depósito de tercero?</option>
+                        {depositosTerceros
+                          .filter((d) => d.pendiente > 0)
+                          .map((d) => (
+                            <option key={d.id} value={d.id}>
+                              {d.persona} — {d.concepto} ({formatearMoneda(d.pendiente)} pendiente)
+                            </option>
+                          ))}
+                      </select>
+                    )}
+                  </div>
+                  {compras.filter((c) => c.tarjetaId === tarjeta.id).length > 0 && (
+                    <select
+                      value={formPago.compraTarjetaId}
+                      onChange={(e) => setFormPago({ ...formPago, compraTarjetaId: e.target.value })}
+                      className="w-full border border-gray-300 rounded px-3 py-2"
+                    >
+                      <option value="">¿A qué compra corresponde? (opcional)</option>
+                      {compras
+                        .filter((c) => c.tarjetaId === tarjeta.id)
+                        .map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.nombre}{c.numeroMeses ? ` (${c.numeroMeses} MSI)` : ''}
+                          </option>
+                        ))}
+                    </select>
+                  )}
                   <div className="flex gap-2">
                     <button type="submit" className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
                       Guardar
@@ -601,7 +818,9 @@ export default function TarjetasPage() {
                       >
                         <div className="min-w-0 flex-1">
                           <p className="font-semibold truncate">{p.concepto || 'Pago a la tarjeta'}</p>
-                          <p className="text-xs text-gray-500 truncate">{formatearDiaMes(new Date(p.fecha))}</p>
+                          <p className="text-xs text-gray-500 truncate">
+                            {formatearDiaMes(new Date(p.fecha))} • {ETIQUETA_FUENTE[p.fuente]}
+                          </p>
                         </div>
                         <div className="flex items-center gap-3 flex-shrink-0">
                           <p className="font-bold text-green-600 whitespace-nowrap">{formatearMoneda(p.cantidad)}</p>

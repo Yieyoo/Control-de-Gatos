@@ -47,6 +47,7 @@ export function DetalleMovimientos({ etiqueta, movimientos }: DetalleMovimientos
                     />
                     <span className={`flex-1 min-w-0 truncate text-sm ${m.pagado ? 'text-gray-400' : 'text-gray-900'}`}>
                       {m.nombre}
+                      {m.credito && ' 💳'}
                     </span>
                     <span className="text-xs text-gray-400 flex-shrink-0">{formatearFecha(m.fecha)}</span>
                     <span

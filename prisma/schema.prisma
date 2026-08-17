@@ -56,6 +56,8 @@ model AhorroLugar {
   movimientos         MovimientoAhorro[]
   ahorrosDomiciliados AhorroDomiciliado[]
   transferenciasOrigen MovimientoAhorro[] @relation("transferenciasOrigen")
+  gastosVariables     GastoVariable[]
+  pagosTarjeta        PagoTarjeta[]
 
   @@map("ahorro_lugares")
 }
@@ -72,8 +74,16 @@ model MovimientoAhorro {
   ahorroOrigenId      Int?     // Para transferencias
   ahorroOrigen        AhorroLugar? @relation("transferenciasOrigen", fields: [ahorroOrigenId], references: [id], onDelete: SetNull)
 
-  // Relación con transacción general
-  transacciones       Transaccion[]
+  // "manual" (afecta dinero disponible: transferencia manual disponible<->ahorro),
+  // "domiciliado" (materializado de un AhorroDomiciliado, ya contado vía el forecast de ahorro del periodo),
+  // "pago_gasto" / "pago_tarjeta" (retiro directo para pagar algo con fuente="ahorro", no toca disponible)
+  origen              String   @default("manual")
+  ahorroDomiciliadoOrigenId Int?
+  ahorroDomiciliadoOrigen   AhorroDomiciliado? @relation("materializadoDeAhorroDomiciliado", fields: [ahorroDomiciliadoOrigenId], references: [id], onDelete: SetNull)
+
+  // Retiro generado automáticamente al pagar algo con fuente="ahorro" (relación inversa, ver GastoVariable/PagoTarjeta)
+  gastoVariable       GastoVariable? @relation("retiroDeGasto")
+  pagoTarjeta         PagoTarjeta?   @relation("retiroDePago")
 
   @@map("movimientos_ahorro")
 }
@@ -91,7 +101,8 @@ model GastoDomiciliado {
   cuentaPago          String
   tarjetaId           Int?     // Si este gasto se carga a una tarjeta de crédito
   tarjeta             TarjetaCredito? @relation(fields: [tarjetaId], references: [id], onDelete: SetNull)
-  pagadoAdelantadoHasta DateTime? // Marca hasta qué fecha de cobro ya se pagó por adelantado (no cuenta como deuda de tarjeta)
+  pagadoAdelantadoHasta DateTime? // Solo aplica si tarjetaId != null: hasta qué fecha de cobro ya marcaste "ya pagué este cargo" (no cuenta como deuda de tarjeta ni como pendiente de disponible)
+  ultimaOcurrenciaMaterializada DateTime? // Solo aplica si tarjetaId == null (efectivo): hasta qué fecha ya se generó un GastoVariable real
   tipoPresupuesto     String?  // "necesidad" o "gusto"; si es null, hereda el de la categoría
   activo              Boolean  @default(true)
   notas               String?
@@ -99,7 +110,7 @@ model GastoDomiciliado {
   fechaActualizacion  DateTime @updatedAt
 
   // Relaciones
-  transacciones       Transaccion[]
+  gastosGenerados     GastoVariable[] @relation("materializadoDeGastoDomiciliado")
 
   @@map("gastos_domiciliados")
 }
@@ -114,13 +125,14 @@ model AhorroDomiciliado {
   ahorroDestinoId     Int
   ahorroDestino       AhorroLugar @relation(fields: [ahorroDestinoId], references: [id])
   fechaInicio         DateTime @default(now())
+  ultimaOcurrenciaMaterializada DateTime? // Hasta qué fecha ya se generó un MovimientoAhorro real
   activo              Boolean  @default(true)
   notas               String?
   fechaCreacion       DateTime @default(now())
   fechaActualizacion  DateTime @updatedAt
 
   // Relaciones
-  transacciones       Transaccion[]
+  movimientosGenerados MovimientoAhorro[] @relation("materializadoDeAhorroDomiciliado")
 
   @@map("ahorros_domiciliados")
 }
@@ -153,8 +165,26 @@ model GastoVariable {
   tipoPresupuesto     String?  // "necesidad" o "gusto"; si es null, hereda el de la categoría
   fechaCreacion       DateTime @default(now())
 
-  // Relación con transacción general
-  transacciones       Transaccion[]
+  // De dónde salió el dinero: "disponible" (default, resta dinero disponible),
+  // "ahorro" (sale de una cuenta de ahorro, ver movimientoAhorroId/ahorroLugarId,
+  // NO resta disponible pero sí cuenta en tus estadísticas de gasto), o
+  // "tercero" (dinero que alguien más te depositó, ver depositoTerceroId,
+  // NO resta disponible NI cuenta en tus estadísticas de gasto personal)
+  fuente              String   @default("disponible")
+
+  ahorroLugarId       Int?
+  ahorroLugar         AhorroLugar? @relation(fields: [ahorroLugarId], references: [id], onDelete: SetNull)
+  movimientoAhorroId  Int?     @unique // retiro creado automáticamente cuando fuente="ahorro"
+  movimientoAhorro    MovimientoAhorro? @relation("retiroDeGasto", fields: [movimientoAhorroId], references: [id], onDelete: SetNull)
+
+  depositoTerceroId   Int?
+  depositoTercero     DepositoTercero? @relation(fields: [depositoTerceroId], references: [id], onDelete: SetNull)
+
+  // Si este gasto se generó automáticamente desde un gasto domiciliado en efectivo
+  gastoDomiciliadoOrigenId Int?
+  gastoDomiciliadoOrigen   GastoDomiciliado? @relation("materializadoDeGastoDomiciliado", fields: [gastoDomiciliadoOrigenId], references: [id], onDelete: SetNull)
+
+  devoluciones        Devolucion[]
 
   @@map("gastos_variables")
 }
@@ -192,6 +222,15 @@ model CompraTarjeta {
   tipoPresupuesto     String?  // "necesidad" o "gusto"; si es null, hereda el de la categoría
   fechaCreacion       DateTime @default(now())
 
+  // Meses sin intereses: null = de contado. Si tiene valor, la compra completa
+  // ya cuenta como deuda de inmediato (igual que de contado); estos campos son
+  // solo para mostrar "$X/mes, N meses" -- el pago real sigue siendo PagoTarjeta.
+  numeroMeses         Int?
+  montoMensual        Float?
+
+  pagos               PagoTarjeta[] // pagos atribuidos opcionalmente a esta compra (para ver cuotas MSI pagadas)
+  devoluciones        Devolucion[]
+
   @@map("compras_tarjeta")
 }
 
@@ -205,35 +244,59 @@ model PagoTarjeta {
   tarjeta             TarjetaCredito @relation(fields: [tarjetaId], references: [id], onDelete: Cascade)
   fechaCreacion       DateTime @default(now())
 
+  // De dónde salió el dinero para pagar la tarjeta (mismo significado que en GastoVariable.fuente)
+  fuente              String   @default("disponible")
+
+  ahorroLugarId       Int?
+  ahorroLugar         AhorroLugar? @relation(fields: [ahorroLugarId], references: [id], onDelete: SetNull)
+  movimientoAhorroId  Int?     @unique
+  movimientoAhorro    MovimientoAhorro? @relation("retiroDePago", fields: [movimientoAhorroId], references: [id], onDelete: SetNull)
+
+  depositoTerceroId   Int?
+  depositoTercero     DepositoTercero? @relation(fields: [depositoTerceroId], references: [id], onDelete: SetNull)
+
+  // Atribución opcional: a qué compra específica corresponde este pago (útil para MSI)
+  compraTarjetaId     Int?
+  compraTarjeta       CompraTarjeta? @relation(fields: [compraTarjetaId], references: [id], onDelete: SetNull)
+
   @@map("pagos_tarjeta")
 }
 
-// Historial unificado de transacciones
-model Transaccion {
+// Dinero que alguien más te depositó para que pagaras algo específico (no es tuyo)
+model DepositoTercero {
   id                  Int      @id @default(autoincrement())
-  tipo                String   // "ingreso", "gasto_fijo", "gasto_variable", "ahorro", "transferencia"
-  subtipo             String?
+  persona             String
+  cantidad            Float
+  concepto            String
+  fecha               DateTime @default(now())
+  pagoRelacionado     String?  // descripción libre de a qué pago corresponde
+  notas               String?
+  fechaCreacion       DateTime @default(now())
+  fechaActualizacion  DateTime @updatedAt
+
+  // Lo "utilizado"/"pendiente"/"estado" se calculan al leer sumando estas relaciones,
+  // igual que ya se hace hoy con la deuda de tarjeta (no se guardan como columnas).
+  gastosVariables     GastoVariable[]
+  pagosTarjeta        PagoTarjeta[]
+
+  @@map("depositos_terceros")
+}
+
+// Devolución (parcial o total) de un gasto o compra de tarjeta ya registrados
+model Devolucion {
+  id                  Int      @id @default(autoincrement())
   cantidad            Float
   fecha               DateTime @default(now())
-  concepto            String
-  categoriaId         Int?
-  cuenta              String?
-  estado              String   @default("completado") // "completado", "programado", "pendiente"
-  
-  // Relaciones
-  gastoDomiciliadoId  Int?
-  gastoDomiciliado    GastoDomiciliado? @relation(fields: [gastoDomiciliadoId], references: [id], onDelete: SetNull)
-  
-  ahorroDomiciliadoId Int?
-  ahorroDomiciliado   AhorroDomiciliado? @relation(fields: [ahorroDomiciliadoId], references: [id], onDelete: SetNull)
-  
-  movimientoAhorroId  Int?
-  movimientoAhorro    MovimientoAhorro? @relation(fields: [movimientoAhorroId], references: [id], onDelete: SetNull)
-  
-  gastoVariableId     Int?
-  gastoVariable       GastoVariable? @relation(fields: [gastoVariableId], references: [id], onDelete: SetNull)
+  concepto            String?
+  fechaCreacion       DateTime @default(now())
 
-  @@map("transacciones")
+  gastoVariableId     Int?
+  gastoVariable       GastoVariable? @relation(fields: [gastoVariableId], references: [id], onDelete: Cascade)
+
+  compraTarjetaId     Int?
+  compraTarjeta       CompraTarjeta? @relation(fields: [compraTarjetaId], references: [id], onDelete: Cascade)
+
+  @@map("devoluciones")
 }
 
 // Configuración

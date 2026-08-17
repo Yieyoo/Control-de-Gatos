@@ -3,8 +3,14 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import type { IGastoVariable, ICategoria } from '@/types';
-import { formatearMoneda } from '@/utils/calculos';
+import type { IGastoVariable, ICategoria, IAhorroLugar, IDepositoTercero, IFuenteDinero } from '@/types';
+import { formatearMoneda, formatearDiaMes } from '@/utils/calculos';
+
+const ETIQUETA_FUENTE: Record<IFuenteDinero, string> = {
+  disponible: '💵 Disponible',
+  ahorro: '🏦 Ahorro',
+  tercero: '🤝 Tercero',
+};
 
 export default function GastosPage() {
   return (
@@ -18,16 +24,21 @@ function GastosContenido() {
   const searchParams = useSearchParams();
   const [gastos, setGastos] = useState<IGastoVariable[]>([]);
   const [categorias, setCategorias] = useState<ICategoria[]>([]);
+  const [ahorroLugares, setAhorroLugares] = useState<IAhorroLugar[]>([]);
+  const [depositosTerceros, setDepositosTerceros] = useState<IDepositoTercero[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mostrarFormulario, setMostrarFormulario] = useState(() => searchParams.get('nuevo') === '1');
-  
+
   const [formData, setFormData] = useState({
     nombre: '',
     cantidad: '',
     categoriaId: '',
     notas: '',
     tipoPresupuesto: 'gusto' as 'necesidad' | 'gusto',
+    fuente: 'disponible' as IFuenteDinero,
+    ahorroLugarId: '',
+    depositoTerceroId: '',
   });
 
   const [editandoId, setEditandoId] = useState<number | null>(null);
@@ -39,8 +50,11 @@ function GastosContenido() {
     tipoPresupuesto: 'gusto' as 'necesidad' | 'gusto',
   });
 
+  const [formDevolucionAbierto, setFormDevolucionAbierto] = useState<number | null>(null);
+  const [formDevolucion, setFormDevolucion] = useState({ cantidad: '', concepto: '' });
+
   useEffect(() => {
-    Promise.all([cargarGastos(), cargarCategorias()]);
+    Promise.all([cargarGastos(), cargarCategorias(), cargarAhorroLugares(), cargarDepositosTerceros()]);
   }, []);
 
   const cargarGastos = async () => {
@@ -67,6 +81,24 @@ function GastosContenido() {
     }
   };
 
+  const cargarAhorroLugares = async () => {
+    try {
+      const resp = await fetch('/api/ahorros');
+      if (resp.ok) setAhorroLugares(await resp.json());
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const cargarDepositosTerceros = async () => {
+    try {
+      const resp = await fetch('/api/terceros');
+      if (resp.ok) setDepositosTerceros(await resp.json());
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -77,13 +109,29 @@ function GastosContenido() {
           ...formData,
           cantidad: parseFloat(formData.cantidad),
           categoriaId: parseInt(formData.categoriaId),
+          ahorroLugarId: formData.fuente === 'ahorro' ? formData.ahorroLugarId : undefined,
+          depositoTerceroId: formData.fuente === 'tercero' ? formData.depositoTerceroId : undefined,
         }),
       });
 
-      if (!resp.ok) throw new Error('Error al crear gasto');
-      setFormData({ nombre: '', cantidad: '', categoriaId: '', notas: '', tipoPresupuesto: 'gusto' });
+      if (!resp.ok) {
+        const datos = await resp.json().catch(() => null);
+        throw new Error(datos?.error || 'Error al crear gasto');
+      }
+      setFormData({
+        nombre: '',
+        cantidad: '',
+        categoriaId: '',
+        notas: '',
+        tipoPresupuesto: 'gusto',
+        fuente: 'disponible',
+        ahorroLugarId: '',
+        depositoTerceroId: '',
+      });
       setMostrarFormulario(false);
       cargarGastos();
+      cargarAhorroLugares();
+      cargarDepositosTerceros();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
     }
@@ -100,6 +148,8 @@ function GastosContenido() {
       const resp = await fetch(`/api/gastos/variables/${id}`, { method: 'DELETE' });
       if (!resp.ok) throw new Error('Error al eliminar');
       cargarGastos();
+      cargarAhorroLugares();
+      cargarDepositosTerceros();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
     }
@@ -133,7 +183,10 @@ function GastosContenido() {
           categoriaId: parseInt(formEdicion.categoriaId),
         }),
       });
-      if (!resp.ok) throw new Error('Error al actualizar gasto');
+      if (!resp.ok) {
+        const datos = await resp.json().catch(() => null);
+        throw new Error(datos?.error || 'Error al actualizar gasto');
+      }
       setEditandoId(null);
       cargarGastos();
     } catch (err) {
@@ -141,9 +194,29 @@ function GastosContenido() {
     }
   };
 
+  const handleSubmitDevolucion = async (e: React.FormEvent, gastoVariableId: number) => {
+    e.preventDefault();
+    try {
+      const resp = await fetch('/api/devoluciones', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...formDevolucion, gastoVariableId }),
+      });
+      if (!resp.ok) throw new Error('Error al registrar devolución');
+      setFormDevolucion({ cantidad: '', concepto: '' });
+      setFormDevolucionAbierto(null);
+      cargarGastos();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error desconocido');
+    }
+  };
+
+  const netoDe = (gasto: IGastoVariable) =>
+    gasto.cantidad - (gasto.devoluciones ?? []).reduce((s, d) => s + d.cantidad, 0);
+
   if (cargando) return <div>Cargando...</div>;
 
-  const total = gastos.reduce((sum, g) => sum + g.cantidad, 0);
+  const total = gastos.reduce((sum, g) => sum + netoDe(g), 0);
 
   return (
     <div className="space-y-6">
@@ -185,7 +258,7 @@ function GastosContenido() {
             required
             className="w-full border border-gray-300 rounded px-3 py-2"
           />
-          
+
           <input
             type="number"
             placeholder="Cantidad"
@@ -209,6 +282,59 @@ function GastosContenido() {
               </option>
             ))}
           </select>
+
+          <div>
+            <p className="text-sm text-gray-600 mb-1">¿De dónde sale el dinero?</p>
+            <div className="flex bg-gray-100 rounded-lg p-1 text-sm font-medium w-fit flex-wrap">
+              {(['disponible', 'ahorro', 'tercero'] as const).map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setFormData({ ...formData, fuente: f })}
+                  className={`px-3 py-1.5 rounded-md transition-colors ${
+                    formData.fuente === f ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                  }`}
+                >
+                  {ETIQUETA_FUENTE[f]}
+                </button>
+              ))}
+            </div>
+            {formData.fuente === 'ahorro' && (
+              <select
+                value={formData.ahorroLugarId}
+                onChange={(e) => setFormData({ ...formData, ahorroLugarId: e.target.value })}
+                required
+                className="w-full border border-gray-300 rounded px-3 py-2 mt-2"
+              >
+                <option value="">¿De qué cuenta de ahorro?</option>
+                {ahorroLugares.map((a) => (
+                  <option key={a.id} value={a.id}>{a.nombre} ({formatearMoneda(a.saldoActual)})</option>
+                ))}
+              </select>
+            )}
+            {formData.fuente === 'tercero' && (
+              <select
+                value={formData.depositoTerceroId}
+                onChange={(e) => setFormData({ ...formData, depositoTerceroId: e.target.value })}
+                required
+                className="w-full border border-gray-300 rounded px-3 py-2 mt-2"
+              >
+                <option value="">¿Con qué depósito de tercero?</option>
+                {depositosTerceros
+                  .filter((d) => d.pendiente > 0)
+                  .map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.persona} — {d.concepto} ({formatearMoneda(d.pendiente)} pendiente)
+                    </option>
+                  ))}
+              </select>
+            )}
+            {formData.fuente === 'tercero' && depositosTerceros.filter((d) => d.pendiente > 0).length === 0 && (
+              <p className="text-xs text-amber-600 mt-1">
+                Primero registra un depósito en la sección Terceros.
+              </p>
+            )}
+          </div>
 
           <div>
             <p className="text-sm text-gray-600 mb-1">¿A qué se destina?</p>
@@ -331,30 +457,86 @@ function GastosContenido() {
           ) : (
             <div
               key={gasto.id}
-              className="bg-white border border-gray-200 rounded-lg p-4 flex justify-between items-center gap-3"
+              className="bg-white border border-gray-200 rounded-lg p-4 space-y-2"
             >
-              <div className="min-w-0 flex-1">
-                <p className="font-semibold truncate">{gasto.nombre}</p>
-                <p className="text-sm text-gray-600 truncate">
-                  {gasto.categoria?.nombre}
-                  {gasto.notas && ` • ${gasto.notas}`}
-                </p>
+              <div className="flex justify-between items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold truncate">{gasto.nombre}</p>
+                  <p className="text-sm text-gray-600 truncate">
+                    {gasto.categoria?.nombre}
+                    {gasto.notas && ` • ${gasto.notas}`}
+                    {' • '}
+                    {ETIQUETA_FUENTE[gasto.fuente]}
+                    {gasto.gastoDomiciliadoOrigenId != null && ' • 🔁 automático'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
+                  <div className="text-right">
+                    <p className="text-lg font-bold text-red-600 whitespace-nowrap">{formatearMoneda(netoDe(gasto))}</p>
+                    {(gasto.devoluciones?.length ?? 0) > 0 && (
+                      <p className="text-xs text-gray-400 whitespace-nowrap line-through">{formatearMoneda(gasto.cantidad)}</p>
+                    )}
+                  </div>
+                  <button onClick={() => iniciarEdicion(gasto)} className="text-blue-600 hover:text-blue-800">
+                    ✏️
+                  </button>
+                  <button onClick={() => handleEliminar(gasto.id)} className="text-red-600 hover:text-red-800">
+                    🗑️
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
-                <p className="text-lg font-bold text-red-600 whitespace-nowrap">{formatearMoneda(gasto.cantidad)}</p>
-                <button
-                  onClick={() => iniciarEdicion(gasto)}
-                  className="text-blue-600 hover:text-blue-800"
+
+              {(gasto.devoluciones?.length ?? 0) > 0 && (
+                <ul className="text-xs text-gray-500 space-y-0.5">
+                  {gasto.devoluciones!.map((d) => (
+                    <li key={d.id}>
+                      ↩️ Devolución {formatearMoneda(d.cantidad)} · {formatearDiaMes(new Date(d.fecha))}
+                      {d.concepto && ` · ${d.concepto}`}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {formDevolucionAbierto === gasto.id ? (
+                <form
+                  onSubmit={(e) => handleSubmitDevolucion(e, gasto.id)}
+                  className="flex flex-wrap items-center gap-2 bg-gray-50 rounded-lg p-2"
                 >
-                  ✏️
-                </button>
+                  <input
+                    type="number"
+                    placeholder="Cantidad devuelta"
+                    value={formDevolucion.cantidad}
+                    onChange={(e) => setFormDevolucion({ ...formDevolucion, cantidad: e.target.value })}
+                    required
+                    step="0.01"
+                    className="border border-gray-300 rounded px-2 py-1 text-sm w-40"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Concepto (opcional)"
+                    value={formDevolucion.concepto}
+                    onChange={(e) => setFormDevolucion({ ...formDevolucion, concepto: e.target.value })}
+                    className="border border-gray-300 rounded px-2 py-1 text-sm flex-1 min-w-[8rem]"
+                  />
+                  <button type="submit" className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700">
+                    Guardar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormDevolucionAbierto(null)}
+                    className="bg-gray-400 text-white px-3 py-1 rounded text-sm hover:bg-gray-500"
+                  >
+                    Cancelar
+                  </button>
+                </form>
+              ) : (
                 <button
-                  onClick={() => handleEliminar(gasto.id)}
-                  className="text-red-600 hover:text-red-800"
+                  onClick={() => setFormDevolucionAbierto(gasto.id)}
+                  className="text-xs text-blue-600 hover:text-blue-800"
                 >
-                  🗑️
+                  ↩️ Registrar devolución
                 </button>
-              </div>
+              )}
             </div>
           )
         )}

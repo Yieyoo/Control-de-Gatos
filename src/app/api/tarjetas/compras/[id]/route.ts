@@ -8,17 +8,27 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { nombre, cantidad, fecha, categoriaId, notas, tipoPresupuesto } = body;
+    const { nombre, cantidad, fecha, categoriaId, notas, tipoPresupuesto, numeroMeses } = body;
+
+    const existente = await prisma.compraTarjeta.findUnique({ where: { id: parseInt(id) } });
+    if (!existente) {
+      return Response.json({ error: 'Compra no encontrada' }, { status: 404 });
+    }
+
+    const cantidadFinal = cantidad !== undefined ? parseFloat(cantidad) : existente.cantidad;
+    const numeroMesesFinal = numeroMeses !== undefined ? (numeroMeses ? parseInt(numeroMeses) : null) : existente.numeroMeses;
 
     const compra = await prisma.compraTarjeta.update({
       where: { id: parseInt(id) },
       data: {
         ...(nombre && { nombre }),
-        ...(cantidad !== undefined && { cantidad: parseFloat(cantidad) }),
+        ...(cantidad !== undefined && { cantidad: cantidadFinal }),
         ...(fecha && { fecha: new Date(fecha) }),
         ...(categoriaId !== undefined && { categoriaId: categoriaId ? parseInt(categoriaId) : null }),
         ...(notas !== undefined && { notas }),
         ...(tipoPresupuesto !== undefined && { tipoPresupuesto: tipoPresupuesto || null }),
+        numeroMeses: numeroMesesFinal,
+        montoMensual: numeroMesesFinal ? cantidadFinal / numeroMesesFinal : null,
       },
       include: { categoria: true, tarjeta: true },
     });

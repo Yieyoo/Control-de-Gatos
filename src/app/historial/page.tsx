@@ -2,10 +2,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { IMovimientoAhorro, IPagoTarjeta } from '@/types';
+import type { IMovimientoAhorro, IPagoTarjeta, IGastoVariable, ICompraTarjeta } from '@/types';
 import { formatearMoneda, formatearDiaMes } from '@/utils/calculos';
 
-type Filtro = 'todos' | 'ahorros' | 'tarjeta';
+type Filtro = 'todos' | 'gastos' | 'ahorros' | 'tarjeta';
 
 interface ItemHistorial {
   id: string;
@@ -15,12 +15,20 @@ interface ItemHistorial {
   cantidad: number;
   signo: '+' | '-';
   color: string;
-  origen: 'ahorros' | 'tarjeta';
+  origen: 'gastos' | 'ahorros' | 'tarjeta';
 }
+
+const ETIQUETA_FUENTE: Record<string, string> = {
+  disponible: '💵 disponible',
+  ahorro: '🏦 ahorro',
+  tercero: '🤝 tercero',
+};
 
 export default function HistorialPage() {
   const [movimientos, setMovimientos] = useState<IMovimientoAhorro[]>([]);
   const [pagos, setPagos] = useState<IPagoTarjeta[]>([]);
+  const [gastos, setGastos] = useState<IGastoVariable[]>([]);
+  const [compras, setCompras] = useState<ICompraTarjeta[]>([]);
   const [cargando, setCargando] = useState(true);
   const [filtro, setFiltro] = useState<Filtro>('todos');
 
@@ -28,33 +36,66 @@ export default function HistorialPage() {
     Promise.all([
       fetch('/api/ahorros/movimientos').then((r) => (r.ok ? r.json() : [])),
       fetch('/api/tarjetas/pagos').then((r) => (r.ok ? r.json() : [])),
+      fetch('/api/gastos/variables').then((r) => (r.ok ? r.json() : [])),
+      fetch('/api/tarjetas/compras').then((r) => (r.ok ? r.json() : [])),
     ])
-      .then(([mov, pag]) => {
+      .then(([mov, pag, gas, com]) => {
         setMovimientos(mov);
         setPagos(pag);
+        setGastos(gas);
+        setCompras(com);
       })
       .finally(() => setCargando(false));
   }, []);
 
+  const netoDe = (item: { cantidad: number; devoluciones?: { cantidad: number }[] }) =>
+    item.cantidad - (item.devoluciones ?? []).reduce((s, d) => s + d.cantidad, 0);
+
   const items: ItemHistorial[] = [
-    ...movimientos.map((m) => ({
-      id: `ahorro-${m.id}`,
-      fecha: m.fecha,
-      titulo: m.concepto,
-      subtitulo: `${m.tipo === 'deposito' ? 'Depósito' : 'Retiro'} • ${m.ahorro?.nombre ?? 'Ahorro'}`,
-      cantidad: m.cantidad,
-      signo: (m.tipo === 'deposito' ? '+' : '-') as '+' | '-',
-      color: m.tipo === 'deposito' ? 'text-green-600' : 'text-red-600',
-      origen: 'ahorros' as const,
-    })),
+    // Los movimientos de ahorro que ya vienen de un gasto/pago (origen "pago_gasto"/
+    // "pago_tarjeta") no se listan aparte para no duplicar esa misma salida de dinero.
+    ...movimientos
+      .filter((m) => m.origen !== 'pago_gasto' && m.origen !== 'pago_tarjeta')
+      .map((m) => ({
+        id: `ahorro-${m.id}`,
+        fecha: m.fecha,
+        titulo: m.concepto,
+        subtitulo: `${m.tipo === 'deposito' ? 'Depósito' : 'Retiro'} • ${m.ahorro?.nombre ?? 'Ahorro'}${m.origen === 'domiciliado' ? ' • 🔁 automático' : ''}`,
+        cantidad: m.cantidad,
+        signo: (m.tipo === 'deposito' ? '+' : '-') as '+' | '-',
+        color: m.tipo === 'deposito' ? 'text-green-600' : 'text-red-600',
+        origen: 'ahorros' as const,
+      })),
     ...pagos.map((p) => ({
       id: `pago-${p.id}`,
       fecha: p.fecha,
       titulo: p.concepto || 'Pago a la tarjeta',
-      subtitulo: `Pago de tarjeta • ${p.tarjeta?.nombre ?? 'Tarjeta'}`,
+      subtitulo: `Pago de tarjeta • ${p.tarjeta?.nombre ?? 'Tarjeta'} • ${ETIQUETA_FUENTE[p.fuente] ?? p.fuente}`,
       cantidad: p.cantidad,
       signo: '-' as const,
       color: 'text-green-600',
+      origen: 'tarjeta' as const,
+    })),
+    ...gastos
+      .filter((g) => g.fuente !== 'tercero')
+      .map((g) => ({
+        id: `gasto-${g.id}`,
+        fecha: g.fecha as unknown as string,
+        titulo: g.nombre,
+        subtitulo: `Gasto • ${g.categoria?.nombre ?? 'Sin categoría'} • ${ETIQUETA_FUENTE[g.fuente] ?? g.fuente}${g.gastoDomiciliadoOrigenId != null ? ' • 🔁 automático' : ''}`,
+        cantidad: netoDe(g),
+        signo: '-' as const,
+        color: 'text-red-600',
+        origen: 'gastos' as const,
+      })),
+    ...compras.map((c) => ({
+      id: `compra-${c.id}`,
+      fecha: c.fecha,
+      titulo: c.nombre,
+      subtitulo: `Compra de tarjeta • ${c.tarjeta?.nombre ?? 'Tarjeta'}${c.numeroMeses ? ` • ${c.numeroMeses} MSI` : ''}`,
+      cantidad: netoDe(c),
+      signo: '-' as const,
+      color: 'text-red-600',
       origen: 'tarjeta' as const,
     })),
   ].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
@@ -65,12 +106,13 @@ export default function HistorialPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">📜 Historial de Movimientos</h1>
-        <p className="text-gray-600 mt-1">Depósitos y retiros de ahorro, y pagos a tarjeta de crédito</p>
+        <p className="text-gray-600 mt-1">Todo lo que has gastado, ahorrado y pagado</p>
       </div>
 
-      <div className="flex bg-gray-100 rounded-lg p-1 text-sm font-medium w-fit">
+      <div className="flex bg-gray-100 rounded-lg p-1 text-sm font-medium w-fit flex-wrap">
         {([
           ['todos', 'Todos'],
+          ['gastos', 'Gastos'],
           ['ahorros', 'Ahorros'],
           ['tarjeta', 'Tarjeta'],
         ] as const).map(([valor, etiqueta]) => (
@@ -90,16 +132,7 @@ export default function HistorialPage() {
         <div>Cargando...</div>
       ) : itemsFiltrados.length === 0 ? (
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
-          <p className="text-gray-600">
-            {filtro === 'todos'
-              ? 'Todavía no tienes movimientos registrados.'
-              : filtro === 'ahorros'
-              ? 'Todavía no tienes depósitos ni retiros de ahorro.'
-              : 'Todavía no tienes pagos de tarjeta registrados.'}
-          </p>
-          <p className="text-sm text-gray-500 mt-2">
-            Se registran desde el botón &quot;Registrar movimiento&quot; en Ahorros y &quot;Registrar pago&quot; en Tarjeta de Crédito.
-          </p>
+          <p className="text-gray-600">Todavía no tienes movimientos registrados.</p>
         </div>
       ) : (
         <div className="bg-white border border-gray-200 rounded-lg divide-y divide-gray-100">

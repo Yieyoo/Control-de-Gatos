@@ -415,31 +415,40 @@ function AhorrosContenido() {
                   <div className="mt-3 space-y-1.5">
                     {movimientos
                       .filter((m) => m.ahorroId === ahorro.id)
-                      .map((m) => (
-                        <div key={m.id} className="flex items-center justify-between gap-2 text-sm">
-                          <span className="min-w-0 flex-1 truncate text-gray-700">
-                            {m.tipo === 'deposito' ? '➕' : '➖'} {m.concepto}
-                          </span>
-                          <span className="text-xs text-gray-400 flex-shrink-0">
-                            {formatearDiaMes(new Date(m.fecha))}
-                          </span>
-                          <span
-                            className={`font-semibold flex-shrink-0 ${
-                              m.tipo === 'deposito' ? 'text-green-600' : 'text-red-600'
-                            }`}
-                          >
-                            {m.tipo === 'deposito' ? '+' : '-'}
-                            {formatearMoneda(m.cantidad)}
-                          </span>
-                          <button
-                            onClick={() => handleEliminarMovimiento(m.id)}
-                            className="text-gray-400 hover:text-red-600 flex-shrink-0"
-                            aria-label="Eliminar movimiento"
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      ))}
+                      .map((m) => {
+                        const puedeBorrar = m.origen !== 'pago_gasto' && m.origen !== 'pago_tarjeta';
+                        return (
+                          <div key={m.id} className="flex items-center justify-between gap-2 text-sm">
+                            <span className="min-w-0 flex-1 truncate text-gray-700">
+                              {m.tipo === 'deposito' ? '➕' : '➖'} {m.concepto}
+                              {m.origen === 'domiciliado' && ' · 🔁'}
+                              {(m.origen === 'pago_gasto' || m.origen === 'pago_tarjeta') && ' · 💸'}
+                            </span>
+                            <span className="text-xs text-gray-400 flex-shrink-0">
+                              {formatearDiaMes(new Date(m.fecha))}
+                            </span>
+                            <span
+                              className={`font-semibold flex-shrink-0 ${
+                                m.tipo === 'deposito' ? 'text-green-600' : 'text-red-600'
+                              }`}
+                            >
+                              {m.tipo === 'deposito' ? '+' : '-'}
+                              {formatearMoneda(m.cantidad)}
+                            </span>
+                            {puedeBorrar ? (
+                              <button
+                                onClick={() => handleEliminarMovimiento(m.id)}
+                                className="text-gray-400 hover:text-red-600 flex-shrink-0"
+                                aria-label="Eliminar movimiento"
+                              >
+                                🗑️
+                              </button>
+                            ) : (
+                              <span className="w-4 flex-shrink-0" title="Bórralo desde el gasto o pago que lo generó" />
+                            )}
+                          </div>
+                        );
+                      })}
                   </div>
                 )}
               </div>

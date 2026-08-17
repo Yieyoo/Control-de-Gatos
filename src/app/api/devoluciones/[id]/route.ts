@@ -1,5 +1,5 @@
-// src/app/api/tarjetas/pagos/[id]/route.ts
-import { eliminarPagoTarjeta } from '@/lib/finanzas';
+// src/app/api/devoluciones/[id]/route.ts
+import { prisma } from '@/lib/prisma';
 
 export async function DELETE(
   request: Request,
@@ -7,10 +7,10 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    await eliminarPagoTarjeta(parseInt(id));
+    await prisma.devolucion.delete({ where: { id: parseInt(id) } });
     return Response.json({ success: true });
   } catch (error) {
     console.error('Error:', error);
-    return Response.json({ error: 'Error al eliminar pago' }, { status: 500 });
+    return Response.json({ error: 'Error al eliminar devolución' }, { status: 500 });
   }
 }

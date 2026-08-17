@@ -15,12 +15,14 @@ interface ResumenFinancieroProps {
 const PIN_AHORRO = '1296';
 
 export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFinancieroProps) {
-  // Ahorro total empieza oculto siempre que se abre la app; solo se destapa con el PIN.
+  // Ahorro (y todo lo que depende de él, como el patrimonio total) empieza oculto
+  // siempre que se abre la app; solo se destapa con el PIN.
   const [ocultarAhorro, setOcultarAhorro] = useState(true);
   const [pidiendoPin, setPidiendoPin] = useState(false);
   const [pin, setPin] = useState('');
   const [pinIncorrecto, setPinIncorrecto] = useState(false);
   const p: IResumenPeriodo = resumen.periodos[vista];
+  const dineroTotal = p.dineroDisponible + resumen.ahorroTotal;
 
   const abrirPromptPin = () => {
     setPin('');
@@ -97,7 +99,7 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
 
       <p className="text-xs text-gray-500 mb-4">{p.rangoTexto}</p>
 
-      <div className="grid grid-cols-2 gap-4 mb-4">
+      <div className="grid grid-cols-2 gap-4 mb-5">
         {tarjetas.map((tarjeta) => (
           <div key={tarjeta.titulo} className="flex items-start gap-3">
             <div className={`w-10 h-10 rounded-xl ${tarjeta.badge} flex items-center justify-center text-lg flex-shrink-0`}>
@@ -116,11 +118,11 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div className="rounded-xl bg-green-50 p-4">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-lg">💵</span>
-            <p className="text-xs font-medium text-green-800">Dinero total</p>
+            <p className="text-xs font-medium text-green-800">Dinero disponible</p>
           </div>
           <p className="text-base sm:text-xl font-bold text-green-700 leading-tight">
             {formatearMoneda(p.dineroDisponible)}
@@ -137,16 +139,49 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
             <p className="text-[11px] text-green-800/60 leading-tight">con pendientes ya liquidados</p>
           </div>
         </div>
+
+        <div className="rounded-xl bg-amber-50 p-4">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-lg">📌</span>
+            <p className="text-xs font-medium text-amber-800">Dinero comprometido</p>
+          </div>
+          <p className="text-base sm:text-xl font-bold text-amber-700 leading-tight">
+            {formatearMoneda(p.dineroComprometido)}
+          </p>
+          <p className="text-[11px] text-amber-800/60 leading-tight mt-1">gastos y ahorro que faltan este periodo</p>
+        </div>
+
+        <div className="rounded-xl bg-slate-100 p-4">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-lg">🤝</span>
+            <p className="text-xs font-medium text-slate-800">Dinero de terceros</p>
+          </div>
+          <p className="text-base sm:text-xl font-bold text-slate-700 leading-tight">
+            {formatearMoneda(resumen.dineroTerceroPendiente)}
+          </p>
+          <p className="text-[11px] text-slate-800/60 leading-tight mt-1">no es tuyo, pendiente de usar</p>
+        </div>
+
+        <div className="rounded-xl bg-red-50 p-4">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-lg">💳</span>
+            <p className="text-xs font-medium text-red-800">Deuda de tarjetas</p>
+          </div>
+          <p className="text-base sm:text-xl font-bold text-red-700 leading-tight">
+            {formatearMoneda(resumen.deudaTarjetasTotal)}
+          </p>
+        </div>
+
         <div className="rounded-xl bg-blue-50 p-4">
           <div className="flex items-center justify-between gap-2 mb-1">
             <div className="flex items-center gap-2">
               <span className="text-lg">🏛️</span>
-              <p className="text-xs font-medium text-blue-800">Ahorro total</p>
+              <p className="text-xs font-medium text-blue-800">Ahorro e inversión</p>
             </div>
             <button
               type="button"
               onClick={ocultarAhorro ? abrirPromptPin : ocultarDeNuevo}
-              aria-label={ocultarAhorro ? 'Mostrar ahorro total' : 'Ocultar ahorro total'}
+              aria-label={ocultarAhorro ? 'Mostrar ahorro' : 'Ocultar ahorro'}
               className="text-blue-700/60 hover:text-blue-700"
             >
               {ocultarAhorro ? '🙈' : '👁️'}
@@ -198,6 +233,17 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
               )}
             </>
           )}
+        </div>
+
+        <div className="rounded-xl bg-emerald-50 p-4">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-lg">🧮</span>
+            <p className="text-xs font-medium text-emerald-800">Dinero total</p>
+          </div>
+          <p className="text-base sm:text-xl font-bold text-emerald-700 leading-tight">
+            {ocultarAhorro ? '•••••••' : formatearMoneda(dineroTotal)}
+          </p>
+          <p className="text-[11px] text-emerald-800/60 leading-tight mt-1">disponible + ahorro e inversión</p>
         </div>
       </div>
     </div>
