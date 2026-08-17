@@ -62,11 +62,6 @@ export default function Home() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">📊 Dashboard</h1>
-        <p className="text-gray-600">Resumen general de tus finanzas</p>
-      </div>
-
       <ResumenFinanciero resumen={resumen} vista={vista} onCambiarVista={setVista} />
       <PorcentajeDestino datos={resumen.periodos[vista].porcentajeDestino} />
       {vista !== 'mes' && (
