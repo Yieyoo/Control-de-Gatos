@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
-import { formatearMoneda } from '@/utils/calculos';
-import type { IDashboardResumen, IResumenPeriodo } from '@/types';
+import { useEffect, useState } from 'react';
+import { formatearMoneda, formatearDiaMes, hoyMexico, cicloTarjetaActual, ocurrenciasDeGastoEnRangos } from '@/utils/calculos';
+import type { IDashboardResumen, IResumenPeriodo, ICompraTarjeta, IPagoTarjeta, IGastoDomiciliado } from '@/types';
 
 type Vista = 'mes' | 'quincena1' | 'quincena2';
 
@@ -13,6 +13,139 @@ interface ResumenFinancieroProps {
 }
 
 const PIN_AHORRO = '1296';
+const CORTE_1 = 10;
+
+interface CargoDomiciliadoResumen {
+  nombre: string;
+  monto: number;
+  fecha: Date | null;
+  pagadoAdelantado: boolean;
+}
+
+function DeudaTarjetasExpandible({ tarjetas }: { tarjetas: IDashboardResumen['deudaTarjetas'] }) {
+  const [expandido, setExpandido] = useState(false);
+  const [cargado, setCargado] = useState(false);
+  const [compras, setCompras] = useState<ICompraTarjeta[]>([]);
+  const [pagos, setPagos] = useState<IPagoTarjeta[]>([]);
+  const [gastosDomiciliados, setGastosDomiciliados] = useState<IGastoDomiciliado[]>([]);
+
+  useEffect(() => {
+    if (!expandido || cargado) return;
+    Promise.all([
+      fetch('/api/tarjetas/compras').then((r) => (r.ok ? r.json() : [])),
+      fetch('/api/tarjetas/pagos').then((r) => (r.ok ? r.json() : [])),
+      fetch('/api/gastos/domiciliados').then((r) => (r.ok ? r.json() : [])),
+    ]).then(([c, p, g]) => {
+      setCompras(c);
+      setPagos(p);
+      setGastosDomiciliados(g);
+      setCargado(true);
+    });
+  }, [expandido, cargado]);
+
+  if (tarjetas.length === 0) return null;
+
+  const total = tarjetas.reduce((s, t) => s + t.debe, 0);
+  const hoy = hoyMexico();
+
+  return (
+    <div className="mt-4 pt-3 border-t border-gray-100">
+      <button
+        type="button"
+        onClick={() => setExpandido((v) => !v)}
+        className="w-full flex items-center justify-between"
+      >
+        <span className="flex items-center gap-2 text-sm font-medium text-gray-700">
+          <span className="text-lg">💳</span> Deuda de tarjetas
+        </span>
+        <span className="flex items-center gap-2">
+          <span className="font-bold text-red-600">{formatearMoneda(total)}</span>
+          <span className="text-gray-400 text-xs">{expandido ? '▲' : '▼'}</span>
+        </span>
+      </button>
+
+      {expandido && (
+        <div className="mt-3 space-y-4">
+          {!cargado ? (
+            <p className="text-xs text-gray-400">Cargando...</p>
+          ) : (
+            tarjetas.map((t) => {
+              const cicloActual = cicloTarjetaActual(hoy, t.diaCorte);
+              const comprasTarjeta = compras.filter((c) => c.tarjetaId === t.id);
+              const pagosTarjeta = pagos.filter((p) => p.tarjetaId === t.id);
+              const cargosDomiciliados: CargoDomiciliadoResumen[] = gastosDomiciliados
+                .filter((g) => g.activo && g.tarjetaId === t.id)
+                .map((g) => {
+                  const ocurrencias = ocurrenciasDeGastoEnRangos(g, [cicloActual], CORTE_1);
+                  const fechaMasReciente = ocurrencias.reduce<Date | null>(
+                    (max, oc) => (!max || oc.fecha > max ? oc.fecha : max),
+                    null
+                  );
+                  const monto = ocurrencias.reduce((s, oc) => s + oc.cantidad, 0);
+                  const pagadoAdelantado = !!(
+                    g.pagadoAdelantadoHasta &&
+                    fechaMasReciente &&
+                    new Date(g.pagadoAdelantadoHasta) >= fechaMasReciente
+                  );
+                  return { nombre: g.nombre, monto, fecha: fechaMasReciente, pagadoAdelantado };
+                })
+                .filter((c) => c.fecha !== null);
+
+              if (comprasTarjeta.length === 0 && cargosDomiciliados.length === 0 && pagosTarjeta.length === 0) {
+                return null;
+              }
+
+              return (
+                <div key={t.id}>
+                  <p className="text-xs font-semibold text-gray-500 mb-1.5">
+                    {t.nombre} · debes {formatearMoneda(t.debe)}
+                  </p>
+                  <ul className="space-y-1">
+                    {comprasTarjeta.map((c) => (
+                      <li key={`compra-${c.id}`} className="flex items-center justify-between gap-2 text-sm">
+                        <span className="min-w-0 flex-1 truncate text-gray-700">{c.nombre}</span>
+                        <span className="text-xs text-gray-400 flex-shrink-0">{formatearDiaMes(new Date(c.fecha))}</span>
+                        <span className="font-semibold text-red-600 flex-shrink-0">{formatearMoneda(c.cantidad)}</span>
+                      </li>
+                    ))}
+                    {cargosDomiciliados.map((c, i) => (
+                      <li key={`cargo-${i}`} className="flex items-center justify-between gap-2 text-sm">
+                        <span
+                          className={`min-w-0 flex-1 truncate ${
+                            c.pagadoAdelantado ? 'text-gray-400 line-through' : 'text-gray-700'
+                          }`}
+                        >
+                          {c.nombre}
+                        </span>
+                        <span
+                          className={`font-semibold flex-shrink-0 ${
+                            c.pagadoAdelantado ? 'text-gray-400' : 'text-red-600'
+                          }`}
+                        >
+                          {formatearMoneda(c.monto)}
+                        </span>
+                      </li>
+                    ))}
+                    {pagosTarjeta.map((p) => (
+                      <li key={`pago-${p.id}`} className="flex items-center justify-between gap-2 text-sm">
+                        <span className="min-w-0 flex-1 truncate text-gray-700">{p.concepto || 'Pago'}</span>
+                        <span className="text-xs text-gray-400 flex-shrink-0">{formatearDiaMes(new Date(p.fecha))}</span>
+                        <span className="font-semibold text-green-600 flex-shrink-0">-{formatearMoneda(p.cantidad)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })
+          )}
+          <p className="text-[11px] text-gray-400">
+            En rojo lo que falta pagar (compras y cargos pendientes), en gris lo que ya marcaste como pagado, en verde tus pagos.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFinancieroProps) {
   // Ahorro total empieza oculto siempre que se abre la app; solo se destapa con el PIN.
@@ -116,7 +249,7 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
         ))}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <div className="rounded-xl bg-green-50 p-4">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-lg">💵</span>
@@ -136,16 +269,6 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
             </p>
             <p className="text-[11px] text-green-800/60 leading-tight">con pendientes ya liquidados</p>
           </div>
-        </div>
-
-        <div className="rounded-xl bg-red-50 p-4">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-lg">💳</span>
-            <p className="text-xs font-medium text-red-800">Deuda de tarjetas</p>
-          </div>
-          <p className="text-base sm:text-xl font-bold text-red-700 leading-tight">
-            {formatearMoneda(resumen.deudaTarjetasTotal)}
-          </p>
         </div>
 
         <div className="rounded-xl bg-blue-50 p-4">
@@ -211,6 +334,8 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
           )}
         </div>
       </div>
+
+      <DeudaTarjetasExpandible tarjetas={resumen.deudaTarjetas} />
     </div>
   );
 }

@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { ResumenFinanciero } from '@/components/Dashboard/ResumenFinanciero';
 import { PorcentajeDestino } from '@/components/Dashboard/PorcentajeDestino';
 import { DetalleMovimientos } from '@/components/Dashboard/DetalleMovimientos';
-import { DeudaTarjetas } from '@/components/Dashboard/DeudaTarjetas';
 import { GastosPorCategoria } from '@/components/Dashboard/GastosPorCategoria';
 import { ProximosMovimientos } from '@/components/Dashboard/ProximosMovimientos';
 import type { IDashboardResumen } from '@/types';
@@ -76,7 +75,6 @@ export default function Home() {
           movimientos={resumen.periodos[vista].movimientos}
         />
       )}
-      <DeudaTarjetas tarjetas={resumen.deudaTarjetas} />
       <GastosPorCategoria categorias={resumen.gastosPorCategoria} />
       <ProximosMovimientos movimientos={resumen.proximosMovimientos} />
     </div>
