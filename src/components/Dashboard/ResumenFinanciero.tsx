@@ -54,9 +54,9 @@ function DeudaTarjetasExpandible({
 
   const total = tarjetas.reduce((s, t) => s + t.debe, 0);
   const hoy = hoyMexico();
-  // En "Actual"/"Próxima" solo interesa lo que falta pagar (rojo); en "Mes" se
-  // ve el panorama completo (lo pagado en gris + lo pendiente en rojo).
-  const soloPendientes = vista !== 'mes';
+  // En "Próxima" solo interesa lo que falta pagar (rojo); en "Actual" y "Mes"
+  // se ve el panorama completo (lo pagado en gris + lo pendiente en rojo).
+  const soloPendientes = vista === 'quincena2';
 
   return (
     <div className="mt-4 pt-3 border-t border-gray-100">
@@ -169,7 +169,7 @@ function DeudaTarjetasExpandible({
           )}
           <p className="text-[11px] text-gray-400">
             {soloPendientes
-              ? 'En rojo lo que falta pagar. Cambia a "Mes" para ver también lo ya pagado.'
+              ? 'En rojo lo que falta pagar. Cambia a "Actual" o "Mes" para ver también lo ya pagado.'
               : 'En rojo lo que falta pagar, en gris lo que ya marcaste como pagado.'}
           </p>
         </div>
