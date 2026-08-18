@@ -296,14 +296,34 @@ function construirPeriodo(
   const gastoFijoOcurrencias = gastoOcurrencias.filter((oc) => oc.gastoDomiciliadoId == null);
   const gastoDomOcurrencias = gastoOcurrencias.filter((oc) => oc.gastoDomiciliadoId != null);
 
+  // Los cargos domiciliados de tarjeta (Colegiatura, Chat GPT, etc.) SÍ son
+  // gasto fijo -- solo que se pagan con crédito en vez de efectivo. Cuentan
+  // para el total de "Gastos fijos" y para "Dinero real" (dineroComprometido,
+  // más abajo) igual que cualquier otro gasto fijo pendiente, pero NO tocan
+  // "Dinero disponible" -- ese solo baja cuando pagas la tarjeta de verdad
+  // (ver efectoPagoTarjeta). "Pagado" aquí es el mismo checkbox "ya pagué
+  // este cargo" (pagadoAdelantadoHasta) que ya se usa en /tarjetas.
+  const cargosTarjetaPagados = cargosTarjetaDomiciliada
+    .filter((c) => c.pagadoAdelantado)
+    .reduce((s, c) => s + c.cantidad, 0);
+  const cargosTarjetaPendientes = cargosTarjetaDomiciliada
+    .filter((c) => !c.pagadoAdelantado)
+    .reduce((s, c) => s + c.cantidad, 0);
+
   // "Pagado" de gastos fijos = GastoFijo ya ocurrido (virtual, sin materializar) +
-  // domiciliados en efectivo ya confirmados este periodo (filas reales).
+  // domiciliados en efectivo ya confirmados este periodo (filas reales) +
+  // cargos de tarjeta ya marcados como pagados.
   const gastosFijosPagado =
-    sumar(gastoFijoOcurrencias, true) + gastosMaterializadosFijos.reduce((s, g) => s + neto(g), 0);
+    sumar(gastoFijoOcurrencias, true) +
+    gastosMaterializadosFijos.reduce((s, g) => s + neto(g), 0) +
+    cargosTarjetaPagados;
   // Pendiente = GastoFijo cuya fecha aún no llega + TODO gasto domiciliado en
-  // efectivo sin confirmar de este periodo (haya pasado su fecha o no).
+  // efectivo sin confirmar de este periodo (haya pasado su fecha o no) +
+  // cargos de tarjeta sin marcar como pagados.
   const gastosFijosPendiente =
-    sumar(gastoFijoOcurrencias, false) + gastoDomOcurrencias.reduce((s, oc) => s + oc.cantidad, 0);
+    sumar(gastoFijoOcurrencias, false) +
+    gastoDomOcurrencias.reduce((s, oc) => s + oc.cantidad, 0) +
+    cargosTarjetaPendientes;
   const ahorroDelMesPagado = ahorroDomiciliadoMaterializadoPeriodo;
   // Todas las ocurrencias de ahorro que quedan en `ahorroOcurrencias` son, por
   // construcción, las que aún no se marcaron como enviadas (ver el filtro
