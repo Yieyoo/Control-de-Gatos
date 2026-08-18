@@ -99,8 +99,7 @@ function construirPeriodo(
   gastosVariables: GastoVariableConTodo[],
   comprasTarjeta: CompraTarjetaConTodo[],
   pagosTarjeta: PagoTarjeta[],
-  movimientosAhorro: MovimientoAhorro[],
-  deudaTarjetasTotal: number
+  movimientosAhorro: MovimientoAhorro[]
 ): IResumenPeriodo {
   const hoyFinDelDia = finDelDia(hoy);
 
@@ -335,14 +334,11 @@ function construirPeriodo(
     })),
   });
   const dineroComprometido = gastosFijosPendiente + ahorroDelMesPendiente;
-  // "Dinero real": lo que de verdad puedes gastar libremente -- tu saldo de
-  // banco (dineroDisponible), menos lo que ya está comprometido este periodo
-  // (gastos fijos y ahorro pendientes) y menos toda tu deuda de tarjetas
-  // (dinero que ya no es tuyo, aunque todavía no lo hayas pagado). La deuda
-  // es la misma sin importar el periodo que se esté viendo (no tiene un
-  // "corte" propio como los gastos/ahorros), así que se resta igual en
-  // quincena actual, próxima y mes.
-  const dineroReal = dineroDisponible - dineroComprometido - deudaTarjetasTotal;
+  // "Dinero real": tu saldo de este periodo (dineroDisponible), pero
+  // imaginando que también se liquidan los pendientes de este mismo periodo
+  // (gastos fijos y ahorro que aún no se confirman). La deuda de tarjeta no
+  // se resta aquí -- vive aparte, en "Deuda de tarjetas".
+  const dineroReal = dineroDisponible - dineroComprometido;
 
   // "% destinado a": cuánto de lo ya gastado/ahorrado este periodo fue a necesidades,
   // gustos o ahorro, comparado contra una meta (50% / 20% / monto fijo de ahorro).
@@ -559,7 +555,6 @@ export async function GET() {
       comprasTarjeta,
       pagosTarjeta,
       movimientosAhorro,
-      deudaTarjetasTotal,
     ] as const;
 
     // Cada quincena tiene su propio arranque (calcula su "Dinero disponible" a
@@ -586,7 +581,7 @@ export async function GET() {
     );
     const mes = construirPeriodo('mes', 'Este mes', formatearRango(rangoMes), [rangoMes], false, hoy, ...args);
     mes.dineroDisponible = quincena1.dineroDisponible + quincena2.dineroDisponible;
-    mes.dineroReal = mes.dineroDisponible - mes.dineroComprometido - deudaTarjetasTotal;
+    mes.dineroReal = mes.dineroDisponible - mes.dineroComprometido;
 
     // Gastos por categoría del mes (fijos + domiciliados de tarjeta (proyección) +
     // reales del mes: variables manuales/confirmados + compras de tarjeta).
