@@ -72,8 +72,18 @@ function DeudaTarjetasExpandible({ tarjetas }: { tarjetas: IDashboardResumen['de
           ) : (
             tarjetas.map((t) => {
               const cicloActual = cicloTarjetaActual(hoy, t.diaCorte);
-              const comprasTarjeta = compras.filter((c) => c.tarjetaId === t.id);
               const pagosTarjeta = pagos.filter((p) => p.tarjetaId === t.id);
+              const comprasTarjeta = compras
+                .filter((c) => c.tarjetaId === t.id)
+                .map((c) => {
+                  const montoPagado = pagos
+                    .filter((p) => p.compraTarjetaId === c.id)
+                    .reduce((s, p) => s + p.cantidad, 0);
+                  const neto = c.cantidad - (c.devoluciones ?? []).reduce((s, d) => s + d.cantidad, 0);
+                  const pagada = montoPagado >= neto - 0.01;
+                  const saldoPendiente = Math.max(0, neto - montoPagado);
+                  return { compra: c, montoPagado, neto, pagada, saldoPendiente };
+                });
               const cargosDomiciliados: CargoDomiciliadoResumen[] = gastosDomiciliados
                 .filter((g) => g.activo && g.tarjetaId === t.id)
                 .map((g) => {
@@ -102,11 +112,26 @@ function DeudaTarjetasExpandible({ tarjetas }: { tarjetas: IDashboardResumen['de
                     {t.nombre} · debes {formatearMoneda(t.debe)}
                   </p>
                   <ul className="space-y-1">
-                    {comprasTarjeta.map((c) => (
+                    {comprasTarjeta.map(({ compra: c, montoPagado, neto, pagada, saldoPendiente }) => (
                       <li key={`compra-${c.id}`} className="flex items-center justify-between gap-2 text-sm">
-                        <span className="min-w-0 flex-1 truncate text-gray-700">{c.nombre}</span>
+                        <span
+                          className={`min-w-0 flex-1 truncate ${
+                            pagada ? 'text-gray-400 line-through' : 'text-gray-700'
+                          }`}
+                        >
+                          {c.nombre}
+                          {!pagada && montoPagado > 0 && (
+                            <span className="text-[10px] text-green-600 ml-1">
+                              (pagado {formatearMoneda(montoPagado)})
+                            </span>
+                          )}
+                        </span>
                         <span className="text-xs text-gray-400 flex-shrink-0">{formatearDiaMes(new Date(c.fecha))}</span>
-                        <span className="font-semibold text-red-600 flex-shrink-0">{formatearMoneda(c.cantidad)}</span>
+                        <span
+                          className={`font-semibold flex-shrink-0 ${pagada ? 'text-gray-400' : 'text-red-600'}`}
+                        >
+                          {formatearMoneda(pagada ? neto : saldoPendiente)}
+                        </span>
                       </li>
                     ))}
                     {cargosDomiciliados.map((c, i) => (
