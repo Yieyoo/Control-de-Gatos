@@ -73,6 +73,7 @@ export default function Home() {
         <DetalleMovimientos
           etiqueta={resumen.periodos[vista].etiqueta}
           movimientos={resumen.periodos[vista].movimientos}
+          onAhorroActualizado={cargarResumen}
         />
       )}
       <GastosPorCategoria categorias={resumen.gastosPorCategoria} />

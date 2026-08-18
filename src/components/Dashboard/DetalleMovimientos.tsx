@@ -1,11 +1,13 @@
 'use client';
 
+import { useState } from 'react';
 import { formatearMoneda } from '@/utils/calculos';
 import type { IMovimientoPeriodo } from '@/types';
 
 interface DetalleMovimientosProps {
   etiqueta: string;
   movimientos: IMovimientoPeriodo[];
+  onAhorroActualizado: () => void;
 }
 
 // timeZone: 'UTC' es a propósito -- la fecha ya viene como medianoche UTC
@@ -20,15 +22,35 @@ function formatearFecha(fechaISO: string): string {
   });
 }
 
-export function DetalleMovimientos({ etiqueta, movimientos }: DetalleMovimientosProps) {
+export function DetalleMovimientos({ etiqueta, movimientos, onAhorroActualizado }: DetalleMovimientosProps) {
+  const [enviando, setEnviando] = useState<number | null>(null);
   const gastos = movimientos.filter((m) => m.tipo === 'gasto');
   const ahorros = movimientos.filter((m) => m.tipo === 'ahorro');
+
+  const handleToggleEnviado = async (m: IMovimientoPeriodo) => {
+    if (!m.ahorroDomiciliadoId) return;
+    setEnviando(m.ahorroDomiciliadoId);
+    try {
+      const resp = await fetch(`/api/ahorros/domiciliados/${m.ahorroDomiciliadoId}/confirmar`, {
+        method: m.pagado ? 'DELETE' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fecha: m.fecha }),
+      });
+      if (!resp.ok) throw new Error('Error al actualizar el ahorro');
+      onAhorroActualizado();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setEnviando(null);
+    }
+  };
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
       <h2 className="text-lg font-bold text-gray-900 mb-1">Detalle de {etiqueta}</h2>
       <p className="text-xs text-gray-500 mb-4">
-        En gris lo que ya salió de tu cuenta; en naranja lo que todavía no llega.
+        En gris lo que ya salió de tu cuenta; en naranja lo que todavía no llega. En ahorros, marca la
+        palomita cuando realmente hagas la transferencia.
       </p>
 
       {movimientos.length === 0 ? (
@@ -84,6 +106,16 @@ export function DetalleMovimientos({ etiqueta, movimientos }: DetalleMovimientos
                     >
                       {formatearMoneda(m.cantidad)}
                     </span>
+                    {m.ahorroDomiciliadoId != null && (
+                      <input
+                        type="checkbox"
+                        checked={m.pagado}
+                        disabled={enviando === m.ahorroDomiciliadoId}
+                        onChange={() => handleToggleEnviado(m)}
+                        title="¿Ya enviaste este ahorro?"
+                        className="w-4 h-4 flex-shrink-0"
+                      />
+                    )}
                   </li>
                 ))}
               </ul>

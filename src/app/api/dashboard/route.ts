@@ -56,6 +56,8 @@ interface OcurrenciaTag {
   categoriaColor?: string;
   categoriaNombre?: string;
   categoriaTipoPresupuesto?: string | null;
+  /** Solo en ocurrencias tipo="ahorro" pendientes: id del AhorroDomiciliado para poder marcarlas como enviadas. */
+  ahorroDomiciliadoId?: number;
 }
 
 interface CargoTarjetaDomiciliado {
@@ -125,6 +127,14 @@ function construirPeriodo(
   // tarjeta (tarjetaId != null) nunca se materializan: siguen siendo
   // proyección + el checkbox manual "ya pagué este cargo", y van aparte en
   // `cargosTarjetaDomiciliada` (no restan disponible salvo que estén marcados).
+  //
+  // Los ahorros domiciliados NO se materializan solo porque ya llegó la fecha
+  // (regla 8: a veces se envían más tarde) -- siguen siendo proyección +
+  // checkbox manual "ya lo envié" (`enviadoHasta`, ver confirmarAhorroDomiciliado
+  // en src/lib/finanzas.ts), igual que los cargos de tarjeta. Por eso aquí se
+  // proyectan TODAS sus ocurrencias del periodo (pasadas y futuras) que no
+  // estén ya marcadas como enviadas; las marcadas se leen de movimientosAhorro
+  // (ya son filas reales).
   const ocurrencias: OcurrenciaTag[] = [];
   const cargosTarjetaDomiciliada: CargoTarjetaDomiciliado[] = [];
   const gastosFijosActivos = gastosFijos.filter((g) => g.activo);
@@ -133,6 +143,20 @@ function construirPeriodo(
 
   const estaMarcadoPagado = (g: GastoDomiciliadoConCategoria, fecha: Date) =>
     !!(g.pagadoAdelantadoHasta && new Date(g.pagadoAdelantadoHasta) >= fecha);
+
+  // A diferencia de "pagadoAdelantadoHasta" (una fecha límite acumulativa, válida
+  // para cargos de tarjeta), cada ocurrencia de ahorro domiciliado es una
+  // transferencia independiente -- confirmar la de esta semana no implica que
+  // la de la semana pasada también se envió. Por eso se compara contra las
+  // filas reales ya confirmadas (MovimientoAhorro con origen="domiciliado"),
+  // no contra un solo marcador acumulado.
+  const ahorroDomiciliadoEnviado = new Set(
+    movimientosAhorro
+      .filter((m) => m.origen === 'domiciliado' && m.ahorroDomiciliadoOrigenId != null)
+      .map((m) => `${m.ahorroDomiciliadoOrigenId}|${new Date(m.fecha).getTime()}`)
+  );
+  const estaEnviado = (a: AhorroDomiciliado, fecha: Date) =>
+    ahorroDomiciliadoEnviado.has(`${a.id}|${fecha.getTime()}`);
 
   for (const { año, mes } of mesesTocados(rangos)) {
     gastosFijosActivos.forEach((g) => {
@@ -183,8 +207,14 @@ function construirPeriodo(
       .forEach((a) => {
         const dia = diaMexico(new Date(a.fechaInicio));
         ocurrenciasDelMes(dia, a.frecuencia, a.cantidad, año, mes, CORTE_1).forEach((oc) => {
-          if (fechaEnRangos(oc.fecha, rangos) && oc.fecha > hoyFinDelDia) {
-            ocurrencias.push({ nombre: a.nombre, cantidad: oc.cantidad, fecha: oc.fecha, tipo: 'ahorro' });
+          if (fechaEnRangos(oc.fecha, rangos) && !estaEnviado(a, oc.fecha)) {
+            ocurrencias.push({
+              nombre: a.nombre,
+              cantidad: oc.cantidad,
+              fecha: oc.fecha,
+              tipo: 'ahorro',
+              ahorroDomiciliadoId: a.id,
+            });
           }
         });
       });
@@ -220,8 +250,14 @@ function construirPeriodo(
     .filter((a) => a.frecuencia === 'semanal')
     .forEach((a) => {
       ocurrenciasSemanales(parseDiasSemana(a.diasSemana), a.cantidad, rangos).forEach((oc) => {
-        if (oc.fecha > hoyFinDelDia) {
-          ocurrencias.push({ nombre: a.nombre, cantidad: oc.cantidad, fecha: oc.fecha, tipo: 'ahorro' });
+        if (!estaEnviado(a, oc.fecha)) {
+          ocurrencias.push({
+            nombre: a.nombre,
+            cantidad: oc.cantidad,
+            fecha: oc.fecha,
+            tipo: 'ahorro',
+            ahorroDomiciliadoId: a.id,
+          });
         }
       });
     });
@@ -254,7 +290,11 @@ function construirPeriodo(
     sumar(gastoOcurrencias, true) + gastosMaterializadosFijos.reduce((s, g) => s + neto(g), 0);
   const gastosFijosPendiente = sumar(gastoOcurrencias, false);
   const ahorroDelMesPagado = ahorroDomiciliadoMaterializadoPeriodo;
-  const ahorroDelMesPendiente = sumar(ahorroOcurrencias, false);
+  // Todas las ocurrencias de ahorro que quedan en `ahorroOcurrencias` son, por
+  // construcción, las que aún no se marcaron como enviadas (ver el filtro
+  // `!estaEnviado` más arriba) -- no hay que separarlas por fecha como en
+  // gastos fijos, porque aquí "pendiente" no depende de si ya pasó la fecha.
+  const ahorroDelMesPendiente = ahorroOcurrencias.reduce((s, oc) => s + oc.cantidad, 0);
   const gastosVariablesPeriodo = gastosManualesPropios.reduce((s, g) => s + neto(g), 0);
 
   // "Dinero disponible" ya NO se calcula a partir del ingreso del periodo: ese
@@ -336,9 +376,23 @@ function construirPeriodo(
       cantidad: oc.cantidad,
       fecha: oc.fecha.toISOString(),
       tipo: oc.tipo,
-      pagado: oc.fecha <= hoyFinDelDia,
+      // Los gastos fijos se dan por pagados cuando ya pasó su fecha; los
+      // ahorros que llegan aquí son siempre los que faltan por marcar como
+      // enviados (ver el filtro `!estaEnviado` más arriba), sin importar la fecha.
+      pagado: oc.tipo === 'ahorro' ? false : oc.fecha <= hoyFinDelDia,
       categoriaColor: oc.categoriaColor,
+      ahorroDomiciliadoId: oc.ahorroDomiciliadoId,
     })),
+    ...movimientosAhorroEnPeriodo
+      .filter((m) => m.origen === 'domiciliado')
+      .map((m) => ({
+        nombre: m.concepto,
+        cantidad: m.cantidad,
+        fecha: new Date(m.fecha).toISOString(),
+        tipo: 'ahorro' as const,
+        pagado: true,
+        ahorroDomiciliadoId: m.ahorroDomiciliadoOrigenId ?? undefined,
+      })),
     ...gastosMaterializadosFijos.map((g) => ({
       nombre: g.nombre,
       cantidad: neto(g),

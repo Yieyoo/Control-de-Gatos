@@ -58,6 +58,8 @@ export interface IAhorroDomiciliado {
   ahorroDestinoId: number;
   ahorroDestino?: IAhorroLugar;
   ultimaOcurrenciaMaterializada?: string;
+  /** Hasta qué fecha de ocurrencia ya se marcó "ya lo envié" (crea el movimiento real y descuenta disponible). */
+  enviadoHasta?: string;
   activo: boolean;
   notas?: string;
 }
@@ -206,6 +208,8 @@ export interface IMovimientoPeriodo {
   categoriaColor?: string;
   /** true si es un cargo domiciliado de tarjeta (crédito, no efectivo) -- "pagado" aquí significa que lo marcaste con el checkbox, no que ya pasó la fecha. */
   credito?: boolean;
+  /** Solo en tipo="ahorro": id del AhorroDomiciliado, para poder marcar/desmarcar "ya lo envié" con un checkbox. */
+  ahorroDomiciliadoId?: number;
 }
 
 export interface IItemPresupuesto {

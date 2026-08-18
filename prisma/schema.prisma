@@ -76,8 +76,10 @@ model MovimientoAhorro {
   ahorroOrigen        AhorroLugar? @relation("transferenciasOrigen", fields: [ahorroOrigenId], references: [id], onDelete: SetNull)
 
   // "manual" (afecta dinero disponible: transferencia manual disponible<->ahorro),
-  // "domiciliado" (materializado de un AhorroDomiciliado, ya contado vía el forecast de ahorro del periodo),
-  // "pago_gasto" / "pago_tarjeta" (retiro directo para pagar algo con fuente="ahorro", no toca disponible)
+  // "domiciliado" (confirmado a mano con el checkbox "ya lo envié" de un
+  // AhorroDomiciliado -- ver confirmarAhorroDomiciliado en src/lib/finanzas.ts;
+  // también afecta dinero disponible), "pago_gasto" / "pago_tarjeta" (retiro
+  // directo para pagar algo con fuente="ahorro", no toca disponible)
   origen              String   @default("manual")
   ahorroDomiciliadoOrigenId Int?
   ahorroDomiciliadoOrigen   AhorroDomiciliado? @relation("materializadoDeAhorroDomiciliado", fields: [ahorroDomiciliadoOrigenId], references: [id], onDelete: SetNull)
@@ -86,6 +88,10 @@ model MovimientoAhorro {
   gastoVariable       GastoVariable? @relation("retiroDeGasto")
   pagoTarjeta         PagoTarjeta?   @relation("retiroDePago")
 
+  // Evita confirmar dos veces la misma ocurrencia de un ahorro domiciliado
+  // (ej. doble clic en el checkbox) -- NULLs no chocan entre sí en Postgres,
+  // así que no afecta a movimientos de otros orígenes.
+  @@unique([ahorroDomiciliadoOrigenId, fecha])
   @@map("movimientos_ahorro")
 }
 
@@ -126,7 +132,8 @@ model AhorroDomiciliado {
   ahorroDestinoId     Int
   ahorroDestino       AhorroLugar @relation(fields: [ahorroDestinoId], references: [id])
   fechaInicio         DateTime @default(now())
-  ultimaOcurrenciaMaterializada DateTime? // Hasta qué fecha ya se generó un MovimientoAhorro real
+  ultimaOcurrenciaMaterializada DateTime? // Ya no se usa para generar movimientos automáticamente (ver enviadoHasta); se conserva por compatibilidad con datos existentes.
+  enviadoHasta        DateTime? // Hasta qué fecha de ocurrencia ya marcaste "ya lo envié" -- crea el MovimientoAhorro real y descuenta dinero disponible.
   activo              Boolean  @default(true)
   notas               String?
   fechaCreacion       DateTime @default(now())
