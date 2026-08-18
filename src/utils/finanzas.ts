@@ -5,9 +5,11 @@
 // disponible; si sale de ahorro o de un depósito de tercero, no resta
 // disponible (pero un gasto pagado con ahorro sí sigue contando como tu
 // gasto real, mientras que uno pagado con dinero de tercero no cuenta para
-// nada tuyo). PAGO de tarjeta liquida una deuda ya contada como gasto -- no
-// vuelve a contarse como gasto. TRANSFERENCIA entre disponible y ahorro sí
-// mueve el número de disponible, pero no es gasto ni ingreso.
+// nada tuyo). La TARJETA se lleva completa aparte: ni comprar ni pagarla
+// tocan el disponible -- toda esa deuda vive solo en "Debes en total" (ver
+// efectoPagoTarjeta/efectoCargoTarjetaDomiciliado). TRANSFERENCIA entre
+// disponible y ahorro sí mueve el número de disponible, pero no es gasto
+// ni ingreso.
 
 import type { IFuenteDinero } from '@/types';
 
@@ -38,9 +40,15 @@ export function efectoGastoVariable(fuente: IFuenteDinero): EfectoDisponible {
   return fuente === 'disponible' ? 'resta' : 'ninguno';
 }
 
-/** Un pago de tarjeta solo resta disponible si se pagó con dinero disponible (no con ahorro ni con dinero de tercero). */
-export function efectoPagoTarjeta(fuente: IFuenteDinero): EfectoDisponible {
-  return fuente === 'disponible' ? 'resta' : 'ninguno';
+/**
+ * Un pago de tarjeta NUNCA toca el dinero disponible, sin importar la fuente.
+ * La tarjeta se lleva por completo aparte (ver "Debes en total" en /tarjetas):
+ * comprar sube esa deuda, pagar la baja, pero ninguna de las dos cosas debe
+ * verse reflejada en el disponible del día a día -- solo importa cuánto
+ * dinero ajeno a la tarjeta tienes libre.
+ */
+export function efectoPagoTarjeta(_fuente: IFuenteDinero): EfectoDisponible {
+  return 'ninguno';
 }
 
 /**
@@ -62,13 +70,12 @@ export function efectoMovimientoAhorro(
 
 /**
  * Un cargo domiciliado ligado a una tarjeta (GastoDomiciliado.tarjetaId) es
- * una compra a crédito: mientras esté pendiente, no toca disponible (solo
- * cuenta como deuda de tarjeta). Recién cuando el usuario lo marca como
- * pagado con el checkbox, se trata como si hubieras pagado ese cargo de tu
- * dinero disponible.
+ * una compra a crédito: nunca toca el dinero disponible, esté pendiente o
+ * marcado como pagado con el checkbox -- es deuda de tarjeta, se lleva
+ * completa aparte en "Debes en total" (ver efectoPagoTarjeta).
  */
-export function efectoCargoTarjetaDomiciliado(marcadoComoPagado: boolean): EfectoDisponible {
-  return marcadoComoPagado ? 'resta' : 'ninguno';
+export function efectoCargoTarjetaDomiciliado(_marcadoComoPagado: boolean): EfectoDisponible {
+  return 'ninguno';
 }
 
 /**

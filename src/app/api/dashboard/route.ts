@@ -235,11 +235,6 @@ function construirPeriodo(
 
   const comprasTarjetaEnPeriodo = comprasTarjeta.filter((c) => fechaEnRangos(new Date(c.fecha), rangos));
 
-  const pagosTarjetaEnPeriodo = pagosTarjeta.filter((p) => fechaEnRangos(new Date(p.fecha), rangos));
-  const pagosTarjetaDisponiblePeriodo = pagosTarjetaEnPeriodo
-    .filter((p) => p.fuente === 'disponible')
-    .reduce((s, p) => s + p.cantidad, 0);
-
   const movimientosAhorroEnPeriodo = movimientosAhorro.filter((m) => fechaEnRangos(new Date(m.fecha), rangos));
   // Transferencia manual disponible<->ahorro: depósito = sale de disponible, retiro = regresa a disponible.
   const transferenciasAhorroManuales = movimientosAhorroEnPeriodo.filter((m) => m.origen === 'manual');
@@ -251,10 +246,6 @@ function construirPeriodo(
   const ahorroDomiciliadoMaterializadoPeriodo = movimientosAhorroEnPeriodo
     .filter((m) => m.origen === 'domiciliado')
     .reduce((s, m) => s + m.cantidad, 0);
-
-  const cargosTarjetaDomiciliadaPagadosPeriodo = cargosTarjetaDomiciliada
-    .filter((c) => c.pagadoAdelantado && c.fecha <= hoyFinDelDia)
-    .reduce((s, c) => s + c.cantidad, 0);
 
   const sumar = (ocs: OcurrenciaTag[], pagado: boolean) =>
     ocs.filter((oc) => (oc.fecha <= hoyFinDelDia) === pagado).reduce((s, oc) => s + oc.cantidad, 0);
@@ -274,14 +265,14 @@ function construirPeriodo(
     .filter((g) => g.fuente === 'disponible')
     .reduce((s, g) => s + neto(g), 0);
 
+  // La tarjeta se lleva completa aparte (ver "Debes en total" en /tarjetas):
+  // ni comprar ni pagarla tocan el disponible, sea cual sea la fuente del pago.
   const dineroDisponible =
     ingresosPeriodo -
     gastosFijosPagado -
     gastosVariablesDisponiblePeriodo -
     ahorroDelMesPagado -
-    pagosTarjetaDisponiblePeriodo -
-    transferenciaAhorroManualNeta -
-    cargosTarjetaDomiciliadaPagadosPeriodo;
+    transferenciaAhorroManualNeta;
   const dineroComprometido = gastosFijosPendiente + ahorroDelMesPendiente;
   // "Dinero real": el disponible de hoy, pero imaginando que también se liquidan
   // los pendientes de este periodo (gastos fijos y ahorros que aún no llegan). La

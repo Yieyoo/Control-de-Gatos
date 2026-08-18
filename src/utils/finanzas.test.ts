@@ -31,17 +31,17 @@ describe('2. Compra con tarjeta', () => {
 });
 
 describe('3. Pago de tarjeta', () => {
-  it('pagar la tarjeta con dinero disponible resta disponible y reduce la deuda, sin volver a contarse como gasto', () => {
+  it('pagar la tarjeta (con cualquier fuente) reduce la deuda pero nunca resta el disponible -- la tarjeta se lleva aparte', () => {
     const disponibleAntes = 10000;
     const pagoTarjeta = { cantidad: 1000, efecto: efectoPagoTarjeta('disponible') };
-    expect(sumarDineroDisponible(disponibleAntes, [pagoTarjeta])).toBe(9000);
+    expect(sumarDineroDisponible(disponibleAntes, [pagoTarjeta])).toBe(disponibleAntes);
 
     const comprado = 1000;
     const pagado = 1000;
     expect(calcularDeudaTarjeta(comprado, pagado, 0)).toBe(0);
   });
 
-  it('pagar la tarjeta con ahorro o dinero de terceros NO resta el disponible', () => {
+  it('pagar la tarjeta con ahorro o dinero de terceros tampoco resta el disponible', () => {
     const disponibleAntes = 10000;
     const pagoDesdeAhorro = { cantidad: 1000, efecto: efectoPagoTarjeta('ahorro') };
     const pagoDesdeTercero = { cantidad: 1000, efecto: efectoPagoTarjeta('tercero') };
@@ -51,7 +51,7 @@ describe('3. Pago de tarjeta', () => {
 });
 
 describe('4. Pago parcial de tarjeta', () => {
-  it('deuda 5000, pago 2000 -> deuda 3000, disponible -2000', () => {
+  it('deuda 5000, pago 2000 -> deuda 3000, disponible sin cambio (la tarjeta se lleva aparte)', () => {
     const deudaAnterior = calcularDeudaTarjeta(5000, 0, 0);
     const pago = 2000;
     const nuevaDeuda = calcularDeudaTarjeta(5000, pago, 0);
@@ -60,7 +60,7 @@ describe('4. Pago parcial de tarjeta', () => {
 
     const disponibleAntes = 8000;
     const movimiento = { cantidad: pago, efecto: efectoPagoTarjeta('disponible') };
-    expect(sumarDineroDisponible(disponibleAntes, [movimiento])).toBe(6000);
+    expect(sumarDineroDisponible(disponibleAntes, [movimiento])).toBe(disponibleAntes);
   });
 });
 
@@ -73,7 +73,7 @@ describe('5. Compra a meses sin intereses (MSI)', () => {
     expect(calcularDeudaTarjeta(cantidad, 0, 0)).toBe(12000);
   });
 
-  it('pagar una mensualidad de MSI se comporta igual que cualquier pago de tarjeta (sin gasto adicional)', () => {
+  it('pagar una mensualidad de MSI se comporta igual que cualquier pago de tarjeta (sin gasto adicional, sin tocar disponible)', () => {
     const deudaTrasCompra = calcularDeudaTarjeta(12000, 0, 0);
     const mensualidad = 1000;
     const deudaTrasPago = calcularDeudaTarjeta(12000, mensualidad, 0);
@@ -81,7 +81,7 @@ describe('5. Compra a meses sin intereses (MSI)', () => {
 
     const disponibleAntes = 20000;
     const pago = { cantidad: mensualidad, efecto: efectoPagoTarjeta('disponible') };
-    expect(sumarDineroDisponible(disponibleAntes, [pago])).toBe(19000);
+    expect(sumarDineroDisponible(disponibleAntes, [pago])).toBe(disponibleAntes);
   });
 });
 
@@ -166,9 +166,9 @@ describe('Cargos domiciliados de tarjeta (checkbox manual)', () => {
     expect(sumarDineroDisponible(disponibleAntes, [cargo])).toBe(disponibleAntes);
   });
 
-  it('al marcarlo como pagado, resta disponible', () => {
+  it('marcado como pagado tampoco resta disponible -- es deuda de tarjeta, se lleva aparte', () => {
     const disponibleAntes = 6000;
     const cargo = { cantidad: 300, efecto: efectoCargoTarjetaDomiciliado(true) };
-    expect(sumarDineroDisponible(disponibleAntes, [cargo])).toBe(5700);
+    expect(sumarDineroDisponible(disponibleAntes, [cargo])).toBe(disponibleAntes);
   });
 });
