@@ -1,7 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { formatearMoneda, formatearDiaMes, hoyMexico, cicloTarjetaActual, ocurrenciasDeGastoEnRangos } from '@/utils/calculos';
+import {
+  formatearMoneda,
+  formatearDiaMes,
+  hoyMexico,
+  periodoQuincenaActual,
+  periodoQuincenaSiguiente,
+  ocurrenciasDeGastoEnRangos,
+  type RangoFechas,
+} from '@/utils/calculos';
 import type { IDashboardResumen, IResumenPeriodo, ICompraTarjeta, IPagoTarjeta, IGastoDomiciliado } from '@/types';
 
 type Vista = 'mes' | 'quincena1' | 'quincena2';
@@ -14,6 +22,7 @@ interface ResumenFinancieroProps {
 
 const PIN_AHORRO = '1296';
 const CORTE_1 = 10;
+const CORTE_2 = 25;
 
 interface CargoDomiciliadoResumen {
   nombre: string;
@@ -56,6 +65,14 @@ function DeudaTarjetasExpandible({
   // En "Próxima" solo interesa lo que falta pagar (rojo); en "Actual" y "Mes"
   // se ve el panorama completo (lo pagado en gris + lo pendiente en rojo).
   const soloPendientes = vista === 'quincena2';
+  // Los cargos domiciliados de tarjeta (Claude, Plan Telcel, etc.) se listan
+  // según la quincena que se esté viendo, no según el ciclo de corte de la
+  // tarjeta -- así uno que cobra el día 28 solo aparece por primera vez en la
+  // quincena donde realmente cae, no antes.
+  const periodoActual = periodoQuincenaActual(hoy, CORTE_1, CORTE_2);
+  const periodoProximo = periodoQuincenaSiguiente(periodoActual, CORTE_1, CORTE_2);
+  const rangosCargos: RangoFechas[] =
+    vista === 'quincena1' ? [periodoActual] : vista === 'quincena2' ? [periodoProximo] : [periodoActual, periodoProximo];
 
   return (
     <div className="mt-4 pt-3 border-t border-gray-100">
@@ -79,7 +96,6 @@ function DeudaTarjetasExpandible({
             <p className="text-xs text-gray-400">Cargando...</p>
           ) : (
             tarjetas.map((t) => {
-              const cicloActual = cicloTarjetaActual(hoy, t.diaCorte);
               const comprasTarjeta = compras
                 .filter((c) => c.tarjetaId === t.id)
                 .map((c) => {
@@ -95,7 +111,7 @@ function DeudaTarjetasExpandible({
               const cargosDomiciliados: CargoDomiciliadoResumen[] = gastosDomiciliados
                 .filter((g) => g.activo && g.tarjetaId === t.id)
                 .map((g) => {
-                  const ocurrencias = ocurrenciasDeGastoEnRangos(g, [cicloActual], CORTE_1);
+                  const ocurrencias = ocurrenciasDeGastoEnRangos(g, rangosCargos, CORTE_1);
                   const fechaMasReciente = ocurrencias.reduce<Date | null>(
                     (max, oc) => (!max || oc.fecha > max ? oc.fecha : max),
                     null
