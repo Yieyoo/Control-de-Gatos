@@ -100,7 +100,8 @@ function construirPeriodo(
   comprasTarjeta: CompraTarjetaConTodo[],
   pagosTarjeta: PagoTarjeta[],
   movimientosAhorro: MovimientoAhorro[],
-  dineroDisponibleCalculado: number
+  dineroDisponibleCalculado: number,
+  deudaTarjetasTotal: number
 ): IResumenPeriodo {
   const hoyFinDelDia = finDelDia(hoy);
 
@@ -318,10 +319,14 @@ function construirPeriodo(
   // el mismo valor para mes/quincena1/quincena2 (siempre "tu saldo real de hoy").
   const dineroDisponible = dineroDisponibleCalculado;
   const dineroComprometido = gastosFijosPendiente + ahorroDelMesPendiente;
-  // "Dinero real": tu saldo real de hoy, pero imaginando que también se liquidan
-  // los pendientes de este periodo (gastos fijos y ahorros que aún no llegan). La
-  // deuda de tarjeta no se resta aquí porque no necesariamente se paga en esta quincena.
-  const dineroReal = dineroDisponible - dineroComprometido;
+  // "Dinero real": lo que de verdad puedes gastar libremente -- tu saldo de
+  // banco (dineroDisponible), menos lo que ya está comprometido este periodo
+  // (gastos fijos y ahorro pendientes) y menos toda tu deuda de tarjetas
+  // (dinero que ya no es tuyo, aunque todavía no lo hayas pagado). La deuda
+  // es la misma sin importar el periodo que se esté viendo (no tiene un
+  // "corte" propio como los gastos/ahorros), así que se resta igual en
+  // quincena actual, próxima y mes.
+  const dineroReal = dineroDisponible - dineroComprometido - deudaTarjetasTotal;
 
   // "% destinado a": cuánto de lo ya gastado/ahorrado este periodo fue a necesidades,
   // gustos o ahorro, comparado contra una meta (50% / 20% / monto fijo de ahorro).
@@ -558,6 +563,7 @@ export async function GET() {
       pagosTarjeta,
       movimientosAhorro,
       dineroDisponibleCalculado,
+      deudaTarjetasTotal,
     ] as const;
 
     const mes = construirPeriodo('mes', 'Este mes', formatearRango(rangoMes), [rangoMes], false, hoy, ...args);
