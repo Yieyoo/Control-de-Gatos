@@ -23,7 +23,13 @@ interface CargoDomiciliadoResumen {
   pagadoAdelantado: boolean;
 }
 
-function DeudaTarjetasExpandible({ tarjetas }: { tarjetas: IDashboardResumen['deudaTarjetas'] }) {
+function DeudaTarjetasExpandible({
+  tarjetas,
+  vista,
+}: {
+  tarjetas: IDashboardResumen['deudaTarjetas'];
+  vista: Vista;
+}) {
   const [expandido, setExpandido] = useState(false);
   const [cargado, setCargado] = useState(false);
   const [compras, setCompras] = useState<ICompraTarjeta[]>([]);
@@ -48,6 +54,9 @@ function DeudaTarjetasExpandible({ tarjetas }: { tarjetas: IDashboardResumen['de
 
   const total = tarjetas.reduce((s, t) => s + t.debe, 0);
   const hoy = hoyMexico();
+  // En "Actual"/"Próxima" solo interesa lo que falta pagar (rojo); en "Mes" se
+  // ve el panorama completo (lo pagado en gris + lo pendiente en rojo).
+  const soloPendientes = vista !== 'mes';
 
   return (
     <div className="mt-4 pt-3 border-t border-gray-100">
@@ -72,7 +81,6 @@ function DeudaTarjetasExpandible({ tarjetas }: { tarjetas: IDashboardResumen['de
           ) : (
             tarjetas.map((t) => {
               const cicloActual = cicloTarjetaActual(hoy, t.diaCorte);
-              const pagosTarjeta = pagos.filter((p) => p.tarjetaId === t.id);
               const comprasTarjeta = compras
                 .filter((c) => c.tarjetaId === t.id)
                 .map((c) => {
@@ -83,7 +91,8 @@ function DeudaTarjetasExpandible({ tarjetas }: { tarjetas: IDashboardResumen['de
                   const pagada = montoPagado >= neto - 0.01;
                   const saldoPendiente = Math.max(0, neto - montoPagado);
                   return { compra: c, montoPagado, neto, pagada, saldoPendiente };
-                });
+                })
+                .filter((c) => !soloPendientes || !c.pagada);
               const cargosDomiciliados: CargoDomiciliadoResumen[] = gastosDomiciliados
                 .filter((g) => g.activo && g.tarjetaId === t.id)
                 .map((g) => {
@@ -100,9 +109,10 @@ function DeudaTarjetasExpandible({ tarjetas }: { tarjetas: IDashboardResumen['de
                   );
                   return { nombre: g.nombre, monto, fecha: fechaMasReciente, pagadoAdelantado };
                 })
-                .filter((c) => c.fecha !== null);
+                .filter((c) => c.fecha !== null)
+                .filter((c) => !soloPendientes || !c.pagadoAdelantado);
 
-              if (comprasTarjeta.length === 0 && cargosDomiciliados.length === 0 && pagosTarjeta.length === 0) {
+              if (comprasTarjeta.length === 0 && cargosDomiciliados.length === 0) {
                 return null;
               }
 
@@ -152,20 +162,15 @@ function DeudaTarjetasExpandible({ tarjetas }: { tarjetas: IDashboardResumen['de
                         </span>
                       </li>
                     ))}
-                    {pagosTarjeta.map((p) => (
-                      <li key={`pago-${p.id}`} className="flex items-center justify-between gap-2 text-sm">
-                        <span className="min-w-0 flex-1 truncate text-gray-700">{p.concepto || 'Pago'}</span>
-                        <span className="text-xs text-gray-400 flex-shrink-0">{formatearDiaMes(new Date(p.fecha))}</span>
-                        <span className="font-semibold text-green-600 flex-shrink-0">-{formatearMoneda(p.cantidad)}</span>
-                      </li>
-                    ))}
                   </ul>
                 </div>
               );
             })
           )}
           <p className="text-[11px] text-gray-400">
-            En rojo lo que falta pagar (compras y cargos pendientes), en gris lo que ya marcaste como pagado, en verde tus pagos.
+            {soloPendientes
+              ? 'En rojo lo que falta pagar. Cambia a "Mes" para ver también lo ya pagado.'
+              : 'En rojo lo que falta pagar, en gris lo que ya marcaste como pagado.'}
           </p>
         </div>
       )}
@@ -430,7 +435,7 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista, onSaldoActua
         </div>
       </div>
 
-      <DeudaTarjetasExpandible tarjetas={resumen.deudaTarjetas} />
+      <DeudaTarjetasExpandible tarjetas={resumen.deudaTarjetas} vista={vista} />
     </div>
   );
 }
