@@ -12,11 +12,7 @@
 // crear/borrar la fila correcta.
 
 import { prisma } from '@/lib/prisma';
-import { fechaUTC, finDelDia } from '@/utils/calculos';
 import { Prisma } from '@prisma/client';
-
-const CORTE_1 = 10;
-const CORTE_2 = 25;
 
 export type FuenteDinero = 'disponible' | 'ahorro' | 'tercero';
 
@@ -320,83 +316,6 @@ export async function deshacerAhorroDomiciliado(id: number, fecha: Date): Promis
     }),
     prisma.ahorroDomiciliado.update({ where: { id }, data: { enviadoHasta: null } }),
   ]);
-}
-
-// --- Ingreso acumulado (derivado, sin persistir nada) ---
-
-/** Todos los pares {año, mes} desde `desde` hasta `hasta`, inclusive, en orden. */
-function mesesEntre(desde: Date, hasta: Date): { año: number; mes: number }[] {
-  const resultado: { año: number; mes: number }[] = [];
-  let año = desde.getUTCFullYear();
-  let mes = desde.getUTCMonth();
-  const añoFin = hasta.getUTCFullYear();
-  const mesFin = hasta.getUTCMonth();
-  while (año < añoFin || (año === añoFin && mes <= mesFin)) {
-    resultado.push({ año, mes });
-    mes += 1;
-    if (mes > 11) {
-      mes = 0;
-      año += 1;
-    }
-  }
-  return resultado;
-}
-
-interface Ocurrencia {
-  cantidad: number;
-  fecha: Date;
-}
-
-/**
- * Ocurrencias de pago de un Ingreso entre `desde` (exclusivo) y `hasta`
- * (inclusive). A diferencia de los gastos domiciliados, un Ingreso no tiene
- * un "día de cobro" propio -- se paga en los mismos cortes que ya usa toda
- * la app para las quincenas (día 10 y 25): quincenal cae en ambos, mensual
- * solo en el día 10. "único" se acredita una sola vez, en su fechaInicio.
- */
-function ocurrenciasIngresoEnRango(
-  ingreso: { frecuencia: string; fechaInicio: Date; cantidad: number },
-  desde: Date,
-  hasta: Date
-): Ocurrencia[] {
-  const hastaFin = finDelDia(hasta);
-
-  if (ingreso.frecuencia === 'unico') {
-    const fecha = fechaUTC(
-      ingreso.fechaInicio.getUTCFullYear(),
-      ingreso.fechaInicio.getUTCMonth(),
-      ingreso.fechaInicio.getUTCDate()
-    );
-    return fecha > desde && fecha <= hastaFin ? [{ cantidad: ingreso.cantidad, fecha }] : [];
-  }
-
-  const diasDePago = ingreso.frecuencia === 'quincenal' ? [CORTE_1, CORTE_2] : [CORTE_1];
-  const resultado: Ocurrencia[] = [];
-  for (const { año, mes } of mesesEntre(desde, hasta)) {
-    diasDePago.forEach((dia) => {
-      const fecha = fechaUTC(año, mes, dia);
-      if (fecha > desde && fecha <= hastaFin) resultado.push({ cantidad: ingreso.cantidad, fecha });
-    });
-  }
-  return resultado.sort((a, b) => a.fecha.getTime() - b.fecha.getTime());
-}
-
-/**
- * Cuánto de un Ingreso ya se acreditó a la fecha (todas sus ocurrencias
- * desde que se creó hasta hoy, inclusive) -- se recalcula de cero cada vez,
- * no se guarda ningún marcador de "hasta dónde ya se acreditó".
- */
-export function montoIngresoAcumulado(
-  ingresos: { activo: boolean; frecuencia: string; fechaInicio: Date; cantidad: number }[],
-  hoy: Date
-): number {
-  return ingresos
-    .filter((ing) => ing.activo)
-    .reduce((total, ing) => {
-      const desde = new Date(ing.fechaInicio.getTime() - 1);
-      const ocurrencias = ocurrenciasIngresoEnRango(ing, desde, hoy);
-      return total + ocurrencias.reduce((s, oc) => s + oc.cantidad, 0);
-    }, 0);
 }
 
 // --- Depósitos de terceros ---

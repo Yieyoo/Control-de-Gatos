@@ -1,6 +1,6 @@
 // src/app/api/dashboard/route.ts
 import { prisma } from '@/lib/prisma';
-import { montoIngresoAcumulado, montoUtilizadoDeposito } from '@/lib/finanzas';
+import { montoUtilizadoDeposito } from '@/lib/finanzas';
 import { gastoNeto, calcularDeudaTarjeta, calcularEstadoDeposito, calcularDineroDisponible } from '@/utils/finanzas';
 import {
   calcularProximaFechaMensual,
@@ -100,7 +100,6 @@ function construirPeriodo(
   comprasTarjeta: CompraTarjetaConTodo[],
   pagosTarjeta: PagoTarjeta[],
   movimientosAhorro: MovimientoAhorro[],
-  dineroDisponibleCalculado: number,
   deudaTarjetasTotal: number
 ): IResumenPeriodo {
   const hoyFinDelDia = finDelDia(hoy);
@@ -108,8 +107,8 @@ function construirPeriodo(
   // Ingreso no tiene un día fijo como los gastos domiciliados, así que se prorratea
   // según el tipo de periodo: una quincena ve una vez el monto quincenal (y la mitad
   // del mensual); el mes completo ve el doble del quincenal (dos quincenas) y el
-  // mensual completo. Esto es solo para MOSTRAR el ingreso esperado de cada periodo;
-  // lo que realmente se suma a "Dinero disponible" es montoIngresoAcumulado (ver GET).
+  // mensual completo. Es el ingreso "de esta quincena" -- el punto de partida de
+  // "Dinero disponible" de este periodo específico (ver más abajo).
   const ingresosPeriodo = ingresos.reduce((sum, ing) => {
     if (!ing.activo) return sum;
     if (ing.frecuencia === 'quincenal') return sum + (esQuincena ? ing.cantidad : ing.cantidad * 2);
@@ -279,6 +278,7 @@ function construirPeriodo(
   const gastosMaterializadosFijos = gastosPropiosEnPeriodo.filter((g) => g.gastoDomiciliadoOrigenId != null);
 
   const comprasTarjetaEnPeriodo = comprasTarjeta.filter((c) => fechaEnRangos(new Date(c.fecha), rangos));
+  const pagosTarjetaEnPeriodo = pagosTarjeta.filter((p) => fechaEnRangos(new Date(p.fecha), rangos));
 
   const movimientosAhorroEnPeriodo = movimientosAhorro.filter((m) => fechaEnRangos(new Date(m.fecha), rangos));
   // Ahorro domiciliado ya confirmado en este periodo (transferencia real disponible->ahorro).
@@ -313,11 +313,27 @@ function construirPeriodo(
   const ahorroDelMesPendiente = ahorroOcurrencias.reduce((s, oc) => s + oc.cantidad, 0);
   const gastosVariablesPeriodo = gastosManualesPropios.reduce((s, g) => s + neto(g), 0);
 
-  // "Dinero disponible" es 100% derivado (ver calcularDineroDisponible en
-  // src/utils/finanzas.ts, calculado una sola vez en GET() a partir de tus
-  // movimientos reales) -- nunca se guarda ni se corrige a mano, así que es
-  // el mismo valor para mes/quincena1/quincena2 (siempre "tu saldo real de hoy").
-  const dineroDisponible = dineroDisponibleCalculado;
+  // "Dinero disponible" de ESTE periodo: el ingreso de esta quincena/mes menos
+  // lo que ya salió de verdad en este mismo periodo (gastos y pagos de tarjeta
+  // con fuente="disponible", movimientos de ahorro) -- nunca se guarda ni se
+  // corrige a mano, se recalcula de cero cada vez a partir de las filas reales
+  // (ver calcularDineroDisponible en src/utils/finanzas.ts). Cada quincena
+  // tiene su propio arranque (el ingreso de esa quincena); "Mes" no se calcula
+  // aparte, es la suma de las dos quincenas (se sobreescribe en GET()).
+  const dineroDisponible = calcularDineroDisponible({
+    ingresoAcumulado: ingresosPeriodo,
+    gastosVariables: gastosPropiosEnPeriodo.map((g) => ({
+      cantidad: g.cantidad,
+      fuente: g.fuente as IFuenteDinero,
+      devoluciones: g.devoluciones,
+    })),
+    pagosTarjeta: pagosTarjetaEnPeriodo.map((p) => ({ cantidad: p.cantidad, fuente: p.fuente as IFuenteDinero })),
+    movimientosAhorro: movimientosAhorroEnPeriodo.map((m) => ({
+      cantidad: m.cantidad,
+      tipo: m.tipo as 'deposito' | 'retiro',
+      origen: m.origen as 'manual' | 'domiciliado' | 'pago_gasto' | 'pago_tarjeta',
+    })),
+  });
   const dineroComprometido = gastosFijosPendiente + ahorroDelMesPendiente;
   // "Dinero real": lo que de verdad puedes gastar libremente -- tu saldo de
   // banco (dineroDisponible), menos lo que ya está comprometido este periodo
@@ -491,25 +507,6 @@ export async function GET() {
 
     const hoy = hoyMexico();
 
-    // "Dinero disponible" se calcula de cero cada vez, sumando el ingreso ya
-    // acreditado a la fecha y aplicando el efecto de cada movimiento real ya
-    // registrado -- nunca se guarda ni se corrige a mano (ver calcularDineroDisponible).
-    const ingresoAcumulado = montoIngresoAcumulado(ingresos, hoy);
-    const dineroDisponibleCalculado = calcularDineroDisponible({
-      ingresoAcumulado,
-      gastosVariables: gastosVariables.map((g) => ({
-        cantidad: g.cantidad,
-        fuente: g.fuente as IFuenteDinero,
-        devoluciones: g.devoluciones,
-      })),
-      pagosTarjeta: pagosTarjeta.map((p) => ({ cantidad: p.cantidad, fuente: p.fuente as IFuenteDinero })),
-      movimientosAhorro: movimientosAhorro.map((m) => ({
-        cantidad: m.cantidad,
-        tipo: m.tipo as 'deposito' | 'retiro',
-        origen: m.origen as 'manual' | 'domiciliado' | 'pago_gasto' | 'pago_tarjeta',
-      })),
-    });
-
     const ahorroTotal = ahorrosLugares.reduce((sum: number, ahorro) => sum + ahorro.saldoActual, 0);
     const dineroTerceroPendiente = depositosTerceros.reduce(
       (sum, d) => sum + calcularEstadoDeposito(d.cantidad, montoUtilizadoDeposito(d)).pendiente,
@@ -562,11 +559,13 @@ export async function GET() {
       comprasTarjeta,
       pagosTarjeta,
       movimientosAhorro,
-      dineroDisponibleCalculado,
       deudaTarjetasTotal,
     ] as const;
 
-    const mes = construirPeriodo('mes', 'Este mes', formatearRango(rangoMes), [rangoMes], false, hoy, ...args);
+    // Cada quincena tiene su propio arranque (calcula su "Dinero disponible" a
+    // partir de SU ingreso y SUS movimientos reales, ver construirPeriodo). El
+    // mes no tiene un cálculo propio para ese número -- es la suma de las dos
+    // quincenas, así que se calculan primero y luego se usan para "Mes".
     const quincena1 = construirPeriodo(
       'quincena1',
       'la quincena actual',
@@ -585,6 +584,9 @@ export async function GET() {
       hoy,
       ...args
     );
+    const mes = construirPeriodo('mes', 'Este mes', formatearRango(rangoMes), [rangoMes], false, hoy, ...args);
+    mes.dineroDisponible = quincena1.dineroDisponible + quincena2.dineroDisponible;
+    mes.dineroReal = mes.dineroDisponible - mes.dineroComprometido - deudaTarjetasTotal;
 
     // Gastos por categoría del mes (fijos + domiciliados de tarjeta (proyección) +
     // reales del mes: variables manuales/confirmados + compras de tarjeta).
