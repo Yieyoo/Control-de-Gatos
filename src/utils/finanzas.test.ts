@@ -6,6 +6,7 @@ import {
   efectoPagoTarjeta,
   efectoMovimientoAhorro,
   efectoCargoTarjetaDomiciliado,
+  calcularDineroDisponible,
   gastoNeto,
   calcularDeudaTarjeta,
   calcularMontoMensualMSI,
@@ -31,17 +32,17 @@ describe('2. Compra con tarjeta', () => {
 });
 
 describe('3. Pago de tarjeta', () => {
-  it('pagar la tarjeta (con cualquier fuente) reduce la deuda pero nunca resta el disponible -- la tarjeta se lleva aparte', () => {
+  it('pagar la tarjeta con dinero disponible SÍ resta el disponible -- es dinero real saliendo de tu cuenta', () => {
     const disponibleAntes = 10000;
     const pagoTarjeta = { cantidad: 1000, efecto: efectoPagoTarjeta('disponible') };
-    expect(sumarDineroDisponible(disponibleAntes, [pagoTarjeta])).toBe(disponibleAntes);
+    expect(sumarDineroDisponible(disponibleAntes, [pagoTarjeta])).toBe(9000);
 
     const comprado = 1000;
     const pagado = 1000;
     expect(calcularDeudaTarjeta(comprado, pagado, 0)).toBe(0);
   });
 
-  it('pagar la tarjeta con ahorro o dinero de terceros tampoco resta el disponible', () => {
+  it('pagar la tarjeta con ahorro o dinero de terceros no resta el disponible (ese dinero no salió de tu cuenta)', () => {
     const disponibleAntes = 10000;
     const pagoDesdeAhorro = { cantidad: 1000, efecto: efectoPagoTarjeta('ahorro') };
     const pagoDesdeTercero = { cantidad: 1000, efecto: efectoPagoTarjeta('tercero') };
@@ -51,7 +52,7 @@ describe('3. Pago de tarjeta', () => {
 });
 
 describe('4. Pago parcial de tarjeta', () => {
-  it('deuda 5000, pago 2000 -> deuda 3000, disponible sin cambio (la tarjeta se lleva aparte)', () => {
+  it('deuda 5000, pago 2000 desde disponible -> deuda 3000, disponible baja 2000', () => {
     const deudaAnterior = calcularDeudaTarjeta(5000, 0, 0);
     const pago = 2000;
     const nuevaDeuda = calcularDeudaTarjeta(5000, pago, 0);
@@ -60,7 +61,7 @@ describe('4. Pago parcial de tarjeta', () => {
 
     const disponibleAntes = 8000;
     const movimiento = { cantidad: pago, efecto: efectoPagoTarjeta('disponible') };
-    expect(sumarDineroDisponible(disponibleAntes, [movimiento])).toBe(disponibleAntes);
+    expect(sumarDineroDisponible(disponibleAntes, [movimiento])).toBe(6000);
   });
 });
 
@@ -73,7 +74,7 @@ describe('5. Compra a meses sin intereses (MSI)', () => {
     expect(calcularDeudaTarjeta(cantidad, 0, 0)).toBe(12000);
   });
 
-  it('pagar una mensualidad de MSI se comporta igual que cualquier pago de tarjeta (sin gasto adicional, sin tocar disponible)', () => {
+  it('pagar una mensualidad de MSI desde disponible resta esa mensualidad del disponible', () => {
     const deudaTrasCompra = calcularDeudaTarjeta(12000, 0, 0);
     const mensualidad = 1000;
     const deudaTrasPago = calcularDeudaTarjeta(12000, mensualidad, 0);
@@ -81,7 +82,7 @@ describe('5. Compra a meses sin intereses (MSI)', () => {
 
     const disponibleAntes = 20000;
     const pago = { cantidad: mensualidad, efecto: efectoPagoTarjeta('disponible') };
-    expect(sumarDineroDisponible(disponibleAntes, [pago])).toBe(disponibleAntes);
+    expect(sumarDineroDisponible(disponibleAntes, [pago])).toBe(19000);
   });
 });
 
@@ -92,8 +93,11 @@ describe('6. Transferencia a ahorro', () => {
     expect(sumarDineroDisponible(disponibleAntes, [transferencia])).toBe(4000);
   });
 
-  it('un depósito materializado de un ahorro domiciliado no se cuenta aquí (ya se cuenta en el forecast de ahorro del periodo)', () => {
-    expect(efectoMovimientoAhorro('deposito', 'domiciliado')).toBe('ninguno');
+  it('confirmar ("ya lo envié") un ahorro domiciliado resta disponible igual que una transferencia manual', () => {
+    expect(efectoMovimientoAhorro('deposito', 'domiciliado')).toBe('resta');
+    const disponibleAntes = 5000;
+    const deposito = { cantidad: 1000, efecto: efectoMovimientoAhorro('deposito', 'domiciliado') };
+    expect(sumarDineroDisponible(disponibleAntes, [deposito])).toBe(4000);
   });
 });
 
@@ -166,9 +170,49 @@ describe('Cargos domiciliados de tarjeta (checkbox manual)', () => {
     expect(sumarDineroDisponible(disponibleAntes, [cargo])).toBe(disponibleAntes);
   });
 
-  it('marcado como pagado tampoco resta disponible -- es deuda de tarjeta, se lleva aparte', () => {
+  it('marcado como pagado tampoco resta disponible directamente -- solo el pago real de la tarjeta lo hace', () => {
     const disponibleAntes = 6000;
     const cargo = { cantidad: 300, efecto: efectoCargoTarjetaDomiciliado(true) };
     expect(sumarDineroDisponible(disponibleAntes, [cargo])).toBe(disponibleAntes);
+  });
+});
+
+describe('13. calcularDineroDisponible (derivado de movimientos reales)', () => {
+  it('sin ningún movimiento, disponible = ingreso acumulado', () => {
+    const resultado = calcularDineroDisponible({
+      ingresoAcumulado: 11951.8,
+      gastosVariables: [],
+      pagosTarjeta: [],
+      movimientosAhorro: [],
+    });
+    expect(resultado).toBeCloseTo(11951.8, 5);
+  });
+
+  it('combina gasto (disponible), gasto (ahorro, no resta), pago de tarjeta (disponible), y ahorro domiciliado confirmado', () => {
+    const resultado = calcularDineroDisponible({
+      ingresoAcumulado: 10000,
+      gastosVariables: [
+        { cantidad: 700, fuente: 'disponible', devoluciones: [] },
+        { cantidad: 500, fuente: 'ahorro', devoluciones: [] }, // no resta disponible
+        { cantidad: 200, fuente: 'tercero', devoluciones: [] }, // no resta disponible
+      ],
+      pagosTarjeta: [{ cantidad: 1000, fuente: 'disponible' }],
+      movimientosAhorro: [
+        { cantidad: 1000, tipo: 'deposito', origen: 'domiciliado' }, // resta
+        { cantidad: 500, tipo: 'retiro', origen: 'manual' }, // suma
+      ],
+    });
+    // 10000 - 700 (gasto disponible) - 1000 (pago tarjeta disponible) - 1000 (ahorro domiciliado) + 500 (retiro manual)
+    expect(resultado).toBe(7800);
+  });
+
+  it('un gasto con devolución parcial descuenta el neto, no el bruto', () => {
+    const resultado = calcularDineroDisponible({
+      ingresoAcumulado: 1000,
+      gastosVariables: [{ cantidad: 1000, fuente: 'disponible', devoluciones: [{ cantidad: 300 }] }],
+      pagosTarjeta: [],
+      movimientosAhorro: [],
+    });
+    expect(resultado).toBe(300);
   });
 });

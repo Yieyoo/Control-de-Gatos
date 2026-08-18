@@ -210,6 +210,8 @@ export interface IMovimientoPeriodo {
   credito?: boolean;
   /** Solo en tipo="ahorro": id del AhorroDomiciliado, para poder marcar/desmarcar "ya lo envié" con un checkbox. */
   ahorroDomiciliadoId?: number;
+  /** Solo en tipo="gasto" domiciliado en efectivo (no "credito"): id del GastoDomiciliado, para poder marcar/desmarcar "ya se cobró" con un checkbox. */
+  gastoDomiciliadoId?: number;
 }
 
 export interface IItemPresupuesto {

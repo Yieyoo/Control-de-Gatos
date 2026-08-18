@@ -66,14 +66,13 @@ export default function Home() {
         resumen={resumen}
         vista={vista}
         onCambiarVista={setVista}
-        onSaldoActualizado={cargarResumen}
       />
       <PorcentajeDestino datos={resumen.periodos[vista].porcentajeDestino} />
       {vista !== 'mes' && (
         <DetalleMovimientos
           etiqueta={resumen.periodos[vista].etiqueta}
           movimientos={resumen.periodos[vista].movimientos}
-          onAhorroActualizado={cargarResumen}
+          onActualizar={cargarResumen}
         />
       )}
       <GastosPorCategoria categorias={resumen.gastosPorCategoria} />

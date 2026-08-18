@@ -1,7 +1,7 @@
 // src/app/api/dashboard/route.ts
 import { prisma } from '@/lib/prisma';
-import { materializarDomiciliados, materializarIngresos, montoUtilizadoDeposito, CLAVE_SALDO_DISPONIBLE } from '@/lib/finanzas';
-import { gastoNeto, calcularDeudaTarjeta, calcularEstadoDeposito } from '@/utils/finanzas';
+import { montoIngresoAcumulado, montoUtilizadoDeposito } from '@/lib/finanzas';
+import { gastoNeto, calcularDeudaTarjeta, calcularEstadoDeposito, calcularDineroDisponible } from '@/utils/finanzas';
 import {
   calcularProximaFechaMensual,
   calcularProximaFechaDesdeInicio,
@@ -31,6 +31,7 @@ import type {
   IResumenPeriodo,
   IDeudaTarjeta,
   IAhorroLugar,
+  IFuenteDinero,
   IPorcentajeDestino,
   IItemPresupuesto,
 } from '@/types';
@@ -44,7 +45,7 @@ type AhorroDomiciliado = Prisma.AhorroDomiciliadoGetPayload<Record<string, never
 type PagoTarjeta = Prisma.PagoTarjetaGetPayload<Record<string, never>>;
 type MovimientoAhorro = Prisma.MovimientoAhorroGetPayload<Record<string, never>>;
 
-// Días de pago del usuario: quincenas de 10 a 25 y de 26 al 10 del mes siguiente
+// Días de pago del usuario: quincenas de 10 a 24 y de 25 al 9 del mes siguiente
 const CORTE_1 = 10;
 const CORTE_2 = 25;
 
@@ -58,6 +59,8 @@ interface OcurrenciaTag {
   categoriaTipoPresupuesto?: string | null;
   /** Solo en ocurrencias tipo="ahorro" pendientes: id del AhorroDomiciliado para poder marcarlas como enviadas. */
   ahorroDomiciliadoId?: number;
+  /** Solo en ocurrencias tipo="gasto" que vienen de un GastoDomiciliado en efectivo pendiente: su id, para poder confirmarlas. */
+  gastoDomiciliadoId?: number;
 }
 
 interface CargoTarjetaDomiciliado {
@@ -97,14 +100,15 @@ function construirPeriodo(
   comprasTarjeta: CompraTarjetaConTodo[],
   pagosTarjeta: PagoTarjeta[],
   movimientosAhorro: MovimientoAhorro[],
-  saldoDisponibleManual: number
+  dineroDisponibleCalculado: number
 ): IResumenPeriodo {
   const hoyFinDelDia = finDelDia(hoy);
 
   // Ingreso no tiene un día fijo como los gastos domiciliados, así que se prorratea
   // según el tipo de periodo: una quincena ve una vez el monto quincenal (y la mitad
   // del mensual); el mes completo ve el doble del quincenal (dos quincenas) y el
-  // mensual completo.
+  // mensual completo. Esto es solo para MOSTRAR el ingreso esperado de cada periodo;
+  // lo que realmente se suma a "Dinero disponible" es montoIngresoAcumulado (ver GET).
   const ingresosPeriodo = ingresos.reduce((sum, ing) => {
     if (!ing.activo) return sum;
     if (ing.frecuencia === 'quincenal') return sum + (esQuincena ? ing.cantidad : ing.cantidad * 2);
@@ -116,25 +120,19 @@ function construirPeriodo(
   }, 0);
 
   // Ocurrencias de gastos/ahorros fijos dentro de este periodo específico. Un
-  // periodo puede tocar hasta 2 meses de calendario (ej. 26 ago - 10 sep), así
+  // periodo puede tocar hasta 2 meses de calendario (ej. 25 ago - 9 sep), así
   // que generamos las ocurrencias mensuales/quincenales para cada mes tocado.
   //
-  // Los gastos domiciliados EN EFECTIVO (sin tarjetaId) ya se materializan en
-  // GastoVariable real en cuanto llega su fecha (ver materializarDomiciliados en
-  // src/lib/finanzas.ts) -- así que aquí solo se proyectan sus ocurrencias
-  // FUTURAS (para "pendiente"/"dinero comprometido"); las pasadas se leen más
-  // abajo desde gastosVariables (ya son filas reales). Los ligados a una
-  // tarjeta (tarjetaId != null) nunca se materializan: siguen siendo
-  // proyección + el checkbox manual "ya pagué este cargo", y van aparte en
-  // `cargosTarjetaDomiciliada` (no restan disponible salvo que estén marcados).
-  //
-  // Los ahorros domiciliados NO se materializan solo porque ya llegó la fecha
-  // (regla 8: a veces se envían más tarde) -- siguen siendo proyección +
-  // checkbox manual "ya lo envié" (`enviadoHasta`, ver confirmarAhorroDomiciliado
-  // en src/lib/finanzas.ts), igual que los cargos de tarjeta. Por eso aquí se
-  // proyectan TODAS sus ocurrencias del periodo (pasadas y futuras) que no
-  // estén ya marcadas como enviadas; las marcadas se leen de movimientosAhorro
-  // (ya son filas reales).
+  // Ni los gastos domiciliados en efectivo NI los ahorros domiciliados se
+  // materializan solo porque ya llegó su fecha (un compromiso pendiente no
+  // significa que el dinero ya salió/entró) -- ambos son proyección +
+  // confirmación manual con checkbox. Por eso aquí se proyectan TODAS sus
+  // ocurrencias del periodo (pasadas y futuras) que no estén ya confirmadas;
+  // las confirmadas se leen de gastosVariables/movimientosAhorro (ya son
+  // filas reales). Los gastos domiciliados ligados a una tarjeta
+  // (tarjetaId != null) son harina de otro costal: siguen siendo proyección +
+  // el checkbox "ya pagué este cargo" (`pagadoAdelantadoHasta`), y van aparte
+  // en `cargosTarjetaDomiciliada` -- no son "gasto fijo", son deuda de tarjeta.
   const ocurrencias: OcurrenciaTag[] = [];
   const cargosTarjetaDomiciliada: CargoTarjetaDomiciliado[] = [];
   const gastosFijosActivos = gastosFijos.filter((g) => g.activo);
@@ -144,12 +142,19 @@ function construirPeriodo(
   const estaMarcadoPagado = (g: GastoDomiciliadoConCategoria, fecha: Date) =>
     !!(g.pagadoAdelantadoHasta && new Date(g.pagadoAdelantadoHasta) >= fecha);
 
-  // A diferencia de "pagadoAdelantadoHasta" (una fecha límite acumulativa, válida
-  // para cargos de tarjeta), cada ocurrencia de ahorro domiciliado es una
-  // transferencia independiente -- confirmar la de esta semana no implica que
-  // la de la semana pasada también se envió. Por eso se compara contra las
-  // filas reales ya confirmadas (MovimientoAhorro con origen="domiciliado"),
-  // no contra un solo marcador acumulado.
+  // Cada ocurrencia de un domiciliado (gasto en efectivo o ahorro) es una
+  // transferencia independiente -- confirmar la de esta quincena no implica
+  // que la de la quincena pasada también se cobró/envió. Por eso se compara
+  // contra las filas reales ya confirmadas, no contra un solo marcador
+  // acumulado tipo "pagado hasta la fecha X".
+  const gastoDomiciliadoConfirmado = new Set(
+    gastosVariables
+      .filter((g) => g.gastoDomiciliadoOrigenId != null)
+      .map((g) => `${g.gastoDomiciliadoOrigenId}|${new Date(g.fecha).getTime()}`)
+  );
+  const estaConfirmadoGasto = (g: GastoDomiciliadoConCategoria, fecha: Date) =>
+    gastoDomiciliadoConfirmado.has(`${g.id}|${fecha.getTime()}`);
+
   const ahorroDomiciliadoEnviado = new Set(
     movimientosAhorro
       .filter((m) => m.origen === 'domiciliado' && m.ahorroDomiciliadoOrigenId != null)
@@ -189,7 +194,7 @@ function construirPeriodo(
             });
             return;
           }
-          if (oc.fecha <= hoyFinDelDia) return; // ya materializado, se lee de gastosVariables
+          if (estaConfirmadoGasto(g, oc.fecha)) return; // ya confirmado, se lee de gastosVariables
           ocurrencias.push({
             nombre: g.nombre,
             cantidad: oc.cantidad,
@@ -198,6 +203,7 @@ function construirPeriodo(
             categoriaColor: g.categoria.color,
             categoriaNombre: g.categoria.nombre,
             categoriaTipoPresupuesto: g.tipoPresupuesto ?? g.categoria.tipoPresupuesto,
+            gastoDomiciliadoId: g.id,
           });
         });
       });
@@ -233,7 +239,7 @@ function construirPeriodo(
           });
           return;
         }
-        if (oc.fecha <= hoyFinDelDia) return;
+        if (estaConfirmadoGasto(g, oc.fecha)) return;
         ocurrencias.push({
           nombre: g.nombre,
           cantidad: oc.cantidad,
@@ -242,6 +248,7 @@ function construirPeriodo(
           categoriaColor: g.categoria.color,
           categoriaNombre: g.categoria.nombre,
           categoriaTipoPresupuesto: g.tipoPresupuesto ?? g.categoria.tipoPresupuesto,
+          gastoDomiciliadoId: g.id,
         });
       });
     });
@@ -263,7 +270,7 @@ function construirPeriodo(
     });
 
   // Gastos variables reales en el periodo: los que el usuario registró a mano y
-  // los que se materializaron de un gasto domiciliado en efectivo. Se excluyen
+  // los que se confirmaron desde un gasto domiciliado en efectivo. Se excluyen
   // los pagados con dinero de un tercero (regla 8: no son gasto tuyo).
   const gastosVariablesEnPeriodo = gastosVariables.filter((g) => fechaEnRangos(new Date(g.fecha), rangos));
   const gastosPropiosEnPeriodo = gastosVariablesEnPeriodo.filter((g) => g.fuente !== 'tercero');
@@ -273,7 +280,7 @@ function construirPeriodo(
   const comprasTarjetaEnPeriodo = comprasTarjeta.filter((c) => fechaEnRangos(new Date(c.fecha), rangos));
 
   const movimientosAhorroEnPeriodo = movimientosAhorro.filter((m) => fechaEnRangos(new Date(m.fecha), rangos));
-  // Ahorro domiciliado ya materializado en este periodo (transferencia real disponible->ahorro).
+  // Ahorro domiciliado ya confirmado en este periodo (transferencia real disponible->ahorro).
   const ahorroDomiciliadoMaterializadoPeriodo = movimientosAhorroEnPeriodo
     .filter((m) => m.origen === 'domiciliado')
     .reduce((s, m) => s + m.cantidad, 0);
@@ -283,26 +290,33 @@ function construirPeriodo(
 
   const gastoOcurrencias = ocurrencias.filter((oc) => oc.tipo === 'gasto');
   const ahorroOcurrencias = ocurrencias.filter((oc) => oc.tipo === 'ahorro');
+  // GastoFijo (sin gestión en la UI hoy, pero su lógica de fecha se conserva) vs.
+  // GastoDomiciliado en efectivo (siempre pendiente hasta que se confirma,
+  // sin importar la fecha -- ver el filtro `!estaConfirmadoGasto` más arriba).
+  const gastoFijoOcurrencias = gastoOcurrencias.filter((oc) => oc.gastoDomiciliadoId == null);
+  const gastoDomOcurrencias = gastoOcurrencias.filter((oc) => oc.gastoDomiciliadoId != null);
 
   // "Pagado" de gastos fijos = GastoFijo ya ocurrido (virtual, sin materializar) +
-  // domiciliados en efectivo ya materializados este periodo (filas reales).
+  // domiciliados en efectivo ya confirmados este periodo (filas reales).
   const gastosFijosPagado =
-    sumar(gastoOcurrencias, true) + gastosMaterializadosFijos.reduce((s, g) => s + neto(g), 0);
-  const gastosFijosPendiente = sumar(gastoOcurrencias, false);
+    sumar(gastoFijoOcurrencias, true) + gastosMaterializadosFijos.reduce((s, g) => s + neto(g), 0);
+  // Pendiente = GastoFijo cuya fecha aún no llega + TODO gasto domiciliado en
+  // efectivo sin confirmar de este periodo (haya pasado su fecha o no).
+  const gastosFijosPendiente =
+    sumar(gastoFijoOcurrencias, false) + gastoDomOcurrencias.reduce((s, oc) => s + oc.cantidad, 0);
   const ahorroDelMesPagado = ahorroDomiciliadoMaterializadoPeriodo;
   // Todas las ocurrencias de ahorro que quedan en `ahorroOcurrencias` son, por
   // construcción, las que aún no se marcaron como enviadas (ver el filtro
-  // `!estaEnviado` más arriba) -- no hay que separarlas por fecha como en
-  // gastos fijos, porque aquí "pendiente" no depende de si ya pasó la fecha.
+  // `!estaEnviado` más arriba) -- no hay que separarlas por fecha, porque aquí
+  // "pendiente" no depende de si ya pasó la fecha.
   const ahorroDelMesPendiente = ahorroOcurrencias.reduce((s, oc) => s + oc.cantidad, 0);
   const gastosVariablesPeriodo = gastosManualesPropios.reduce((s, g) => s + neto(g), 0);
 
-  // "Dinero disponible" ya NO se calcula a partir del ingreso del periodo: ese
-  // cálculo nunca puede igualar tu saldo real de banco porque la app no ve tu
-  // historial completo (intereses, comisiones, movimientos de años previos).
-  // En su lugar es un saldo que tú mantienes al día a mano (igual que tus
-  // cuentas de ahorro), guardado en Configuracion -- ver saldoDisponibleManual.
-  const dineroDisponible = saldoDisponibleManual;
+  // "Dinero disponible" es 100% derivado (ver calcularDineroDisponible en
+  // src/utils/finanzas.ts, calculado una sola vez en GET() a partir de tus
+  // movimientos reales) -- nunca se guarda ni se corrige a mano, así que es
+  // el mismo valor para mes/quincena1/quincena2 (siempre "tu saldo real de hoy").
+  const dineroDisponible = dineroDisponibleCalculado;
   const dineroComprometido = gastosFijosPendiente + ahorroDelMesPendiente;
   // "Dinero real": tu saldo real de hoy, pero imaginando que también se liquidan
   // los pendientes de este periodo (gastos fijos y ahorros que aún no llegan). La
@@ -312,11 +326,11 @@ function construirPeriodo(
   // "% destinado a": cuánto de lo ya gastado/ahorrado este periodo fue a necesidades,
   // gustos o ahorro, comparado contra una meta (50% / 20% / monto fijo de ahorro).
   // También se arma el detalle (items) de qué gastos componen cada rubro, para el popup.
-  // Incluye gastos fijos manuales ya ocurridos (gastoOcurrencias aquí solo trae GastoFijo
-  // en el pasado -- los domiciliados en efectivo ya están en gastosManualesPropios/
-  // gastosMaterializadosFijos, materializados) + compras de tarjeta; excluye lo pagado
-  // con dinero de un tercero.
-  const gastosFijosPagados = gastoOcurrencias.filter((oc) => oc.fecha <= hoyFinDelDia);
+  // Incluye gastos fijos manuales ya ocurridos (gastoFijoOcurrencias aquí solo trae
+  // GastoFijo en el pasado -- los domiciliados en efectivo ya están en
+  // gastosManualesPropios/gastosMaterializadosFijos, confirmados) + compras de
+  // tarjeta; excluye lo pagado con dinero de un tercero.
+  const gastosFijosPagados = gastoFijoOcurrencias.filter((oc) => oc.fecha <= hoyFinDelDia);
   const gastosParaPresupuesto = [...gastosManualesPropios, ...gastosMaterializadosFijos];
   const itemsPorTipo = (tipo: 'necesidad' | 'gusto'): IItemPresupuesto[] => [
     ...gastosFijosPagados
@@ -332,8 +346,8 @@ function construirPeriodo(
 
   const itemsNecesidades = itemsPorTipo('necesidad');
   const itemsGustos = itemsPorTipo('gusto');
-  // El ahorro ya ocurrido de este periodo viene de las filas reales materializadas
-  // (ahorroOcurrencias, aquí, solo tiene lo FUTURO -- ver el filtro más arriba).
+  // El ahorro ya ocurrido de este periodo viene de las filas reales confirmadas
+  // (ahorroOcurrencias, aquí, solo tiene lo pendiente -- ver el filtro más arriba).
   const itemsAhorro: IItemPresupuesto[] = movimientosAhorroEnPeriodo
     .filter((m) => m.origen === 'domiciliado')
     .map((m) => ({ nombre: m.concepto, cantidad: m.cantidad }));
@@ -376,12 +390,14 @@ function construirPeriodo(
       cantidad: oc.cantidad,
       fecha: oc.fecha.toISOString(),
       tipo: oc.tipo,
-      // Los gastos fijos se dan por pagados cuando ya pasó su fecha; los
-      // ahorros que llegan aquí son siempre los que faltan por marcar como
-      // enviados (ver el filtro `!estaEnviado` más arriba), sin importar la fecha.
-      pagado: oc.tipo === 'ahorro' ? false : oc.fecha <= hoyFinDelDia,
+      // Los GastoFijo se dan por pagados cuando ya pasó su fecha; los ahorros y
+      // los gastos domiciliados en efectivo que llegan aquí son siempre los que
+      // faltan por confirmar (ver los filtros `!estaEnviado`/`!estaConfirmadoGasto`
+      // más arriba), sin importar la fecha.
+      pagado: oc.tipo === 'ahorro' ? false : oc.gastoDomiciliadoId != null ? false : oc.fecha <= hoyFinDelDia,
       categoriaColor: oc.categoriaColor,
       ahorroDomiciliadoId: oc.ahorroDomiciliadoId,
+      gastoDomiciliadoId: oc.gastoDomiciliadoId,
     })),
     ...movimientosAhorroEnPeriodo
       .filter((m) => m.origen === 'domiciliado')
@@ -400,6 +416,7 @@ function construirPeriodo(
       tipo: 'gasto' as const,
       pagado: true,
       categoriaColor: g.categoria.color,
+      gastoDomiciliadoId: g.gastoDomiciliadoOrigenId ?? undefined,
     })),
     ...gastosManualesPropios.map((g) => ({
       nombre: g.nombre,
@@ -441,14 +458,6 @@ function construirPeriodo(
 
 export async function GET() {
   try {
-    // Convierte en filas reales (GastoVariable / MovimientoAhorro) los domiciliados
-    // en efectivo y de ahorro cuya fecha ya llegó. Idempotente -- no hace nada si ya
-    // está al día. Los domiciliados de tarjeta no se tocan (siguen siendo checkbox manual).
-    await materializarDomiciliados();
-    // Acredita al saldo disponible los ingresos (nómina, etc.) cuya fecha de
-    // pago ya llegó desde la última vez. También idempotente.
-    await materializarIngresos();
-
     const [
       ingresos,
       ahorrosLugares,
@@ -461,7 +470,6 @@ export async function GET() {
       pagosTarjeta,
       movimientosAhorro,
       depositosTerceros,
-      configSaldo,
     ] = await Promise.all([
       prisma.ingreso.findMany({ where: { activo: true } }),
       prisma.ahorroLugar.findMany(),
@@ -474,10 +482,28 @@ export async function GET() {
       prisma.pagoTarjeta.findMany(),
       prisma.movimientoAhorro.findMany(),
       prisma.depositoTercero.findMany({ include: { gastosVariables: true, pagosTarjeta: true } }),
-      prisma.configuracion.findUnique({ where: { clave: CLAVE_SALDO_DISPONIBLE } }),
     ]);
 
-    const saldoDisponibleManual = configSaldo ? parseFloat(configSaldo.valor) : 0;
+    const hoy = hoyMexico();
+
+    // "Dinero disponible" se calcula de cero cada vez, sumando el ingreso ya
+    // acreditado a la fecha y aplicando el efecto de cada movimiento real ya
+    // registrado -- nunca se guarda ni se corrige a mano (ver calcularDineroDisponible).
+    const ingresoAcumulado = montoIngresoAcumulado(ingresos, hoy);
+    const dineroDisponibleCalculado = calcularDineroDisponible({
+      ingresoAcumulado,
+      gastosVariables: gastosVariables.map((g) => ({
+        cantidad: g.cantidad,
+        fuente: g.fuente as IFuenteDinero,
+        devoluciones: g.devoluciones,
+      })),
+      pagosTarjeta: pagosTarjeta.map((p) => ({ cantidad: p.cantidad, fuente: p.fuente as IFuenteDinero })),
+      movimientosAhorro: movimientosAhorro.map((m) => ({
+        cantidad: m.cantidad,
+        tipo: m.tipo as 'deposito' | 'retiro',
+        origen: m.origen as 'manual' | 'domiciliado' | 'pago_gasto' | 'pago_tarjeta',
+      })),
+    });
 
     const ahorroTotal = ahorrosLugares.reduce((sum: number, ahorro) => sum + ahorro.saldoActual, 0);
     const dineroTerceroPendiente = depositosTerceros.reduce(
@@ -485,7 +511,6 @@ export async function GET() {
       0
     );
 
-    const hoy = hoyMexico();
     const rangoMes = rangoMesActual(hoy);
     const periodoActual = periodoQuincenaActual(hoy, CORTE_1, CORTE_2);
     const periodoProximo = periodoQuincenaSiguiente(periodoActual, CORTE_1, CORTE_2);
@@ -532,7 +557,7 @@ export async function GET() {
       comprasTarjeta,
       pagosTarjeta,
       movimientosAhorro,
-      saldoDisponibleManual,
+      dineroDisponibleCalculado,
     ] as const;
 
     const mes = construirPeriodo('mes', 'Este mes', formatearRango(rangoMes), [rangoMes], false, hoy, ...args);
@@ -556,9 +581,9 @@ export async function GET() {
     );
 
     // Gastos por categoría del mes (fijos + domiciliados de tarjeta (proyección) +
-    // reales del mes: variables manuales/materializados + compras de tarjeta).
+    // reales del mes: variables manuales/confirmados + compras de tarjeta).
     // Los domiciliados EN EFECTIVO ya no se proyectan aquí -- ya están en
-    // `gastosVariables` (materializados) para evitar contarlos dos veces.
+    // `gastosVariables` (una vez confirmados) para evitar contarlos dos veces.
     const montosPorCategoria = new Map<number, { nombre: string; color: string; monto: number }>();
     const acumular = (
       categoriaId: number | null | undefined,

@@ -131,8 +131,11 @@ export function rangoMesActual(hoy: Date = hoyMexico()): RangoFechas {
 
 /**
  * La quincena (según los días de pago del usuario, ej. 10 y 25) que contiene la
- * fecha dada: puede ser corte1-corte2 (ej. 10-25) o corte2+1 al corte1 del mes
- * siguiente (ej. 26 ago - 10 sep) -- esta última cruza de un mes a otro.
+ * fecha dada: primera quincena = [corte1, corte2 - 1] (ej. 10-24), segunda
+ * quincena = [corte2, corte1 - 1 del mes siguiente] (ej. 25 - 9 del mes
+ * siguiente) -- esta última cruza de un mes a otro. Los cortes (10 y 25) son
+ * los días de pago; cada quincena termina justo un día antes de que empiece
+ * la siguiente, sin traslape.
  */
 export function periodoQuincenaActual(
   hoy: Date = hoyMexico(),
@@ -143,17 +146,17 @@ export function periodoQuincenaActual(
   const año = hoy.getUTCFullYear();
   const mes = hoy.getUTCMonth();
 
-  if (dia >= corte1 && dia <= corte2) {
-    return { inicio: fechaUTC(año, mes, corte1), fin: fechaUTC(año, mes, corte2) };
+  if (dia >= corte1 && dia < corte2) {
+    return { inicio: fechaUTC(año, mes, corte1), fin: fechaUTC(año, mes, corte2 - 1) };
   }
-  if (dia > corte2) {
+  if (dia >= corte2) {
     const mesSig = mes === 11 ? 0 : mes + 1;
     const añoSig = mes === 11 ? año + 1 : año;
-    return { inicio: fechaUTC(año, mes, corte2 + 1), fin: fechaUTC(añoSig, mesSig, corte1) };
+    return { inicio: fechaUTC(año, mes, corte2), fin: fechaUTC(añoSig, mesSig, corte1 - 1) };
   }
   const mesAnt = mes === 0 ? 11 : mes - 1;
   const añoAnt = mes === 0 ? año - 1 : año;
-  return { inicio: fechaUTC(añoAnt, mesAnt, corte2 + 1), fin: fechaUTC(año, mes, corte1) };
+  return { inicio: fechaUTC(añoAnt, mesAnt, corte2), fin: fechaUTC(año, mes, corte1 - 1) };
 }
 
 /** La quincena inmediatamente después de la que se le pasa. */

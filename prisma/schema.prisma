@@ -109,7 +109,7 @@ model GastoDomiciliado {
   tarjetaId           Int?     // Si este gasto se carga a una tarjeta de crédito
   tarjeta             TarjetaCredito? @relation(fields: [tarjetaId], references: [id], onDelete: SetNull)
   pagadoAdelantadoHasta DateTime? // Solo aplica si tarjetaId != null: hasta qué fecha de cobro ya marcaste "ya pagué este cargo" (no cuenta como deuda de tarjeta ni como pendiente de disponible)
-  ultimaOcurrenciaMaterializada DateTime? // Solo aplica si tarjetaId == null (efectivo): hasta qué fecha ya se generó un GastoVariable real
+  ultimaOcurrenciaMaterializada DateTime? // Ya no se usa (si tarjetaId == null, cada ocurrencia se confirma a mano y se detecta por la fila real en GastoVariable, no por este marcador); se conserva por compatibilidad con datos existentes.
   tipoPresupuesto     String?  // "necesidad" o "gusto"; si es null, hereda el de la categoría
   activo              Boolean  @default(true)
   notas               String?
@@ -188,12 +188,17 @@ model GastoVariable {
   depositoTerceroId   Int?
   depositoTercero     DepositoTercero? @relation(fields: [depositoTerceroId], references: [id], onDelete: SetNull)
 
-  // Si este gasto se generó automáticamente desde un gasto domiciliado en efectivo
+  // Si este gasto se generó al confirmar ("ya se cobró") una ocurrencia de un
+  // gasto domiciliado en efectivo
   gastoDomiciliadoOrigenId Int?
   gastoDomiciliadoOrigen   GastoDomiciliado? @relation("materializadoDeGastoDomiciliado", fields: [gastoDomiciliadoOrigenId], references: [id], onDelete: SetNull)
 
   devoluciones        Devolucion[]
 
+  // Evita confirmar dos veces la misma ocurrencia de un gasto domiciliado
+  // (ej. doble clic en el checkbox) -- NULLs no chocan entre sí en Postgres,
+  // así que no afecta a gastos variables manuales.
+  @@unique([gastoDomiciliadoOrigenId, fecha])
   @@map("gastos_variables")
 }
 

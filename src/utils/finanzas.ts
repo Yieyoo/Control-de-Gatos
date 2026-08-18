@@ -1,15 +1,24 @@
 // src/utils/finanzas.ts
 //
 // Reglas puras de contabilidad (sin Prisma, testeables con fixtures). El
-// principio general: GASTO resta disponible solo si sale de tu dinero
-// disponible; si sale de ahorro o de un depósito de tercero, no resta
-// disponible (pero un gasto pagado con ahorro sí sigue contando como tu
-// gasto real, mientras que uno pagado con dinero de tercero no cuenta para
-// nada tuyo). La TARJETA se lleva completa aparte: ni comprar ni pagarla
-// tocan el disponible -- toda esa deuda vive solo en "Debes en total" (ver
-// efectoPagoTarjeta/efectoCargoTarjetaDomiciliado). TRANSFERENCIA entre
-// disponible y ahorro sí mueve el número de disponible, pero no es gasto
-// ni ingreso.
+// principio general: "Dinero disponible" es un valor 100% DERIVADO -- se
+// recalcula sumando/restando los movimientos reales ya registrados cada vez
+// que se pide, nunca se guarda ni se corrige a mano (ver calcularDineroDisponible).
+// Un compromiso pendiente (gasto fijo sin confirmar, ahorro programado sin
+// enviar, compra de tarjeta sin pagar) NUNCA resta disponible -- solo lo hace
+// cuando se confirma/registra el movimiento real:
+//   - GASTO: resta disponible solo si sale de tu dinero disponible; si sale
+//     de ahorro o de un depósito de tercero, no resta disponible (pero un
+//     gasto pagado con ahorro sí sigue contando como tu gasto real, mientras
+//     que uno pagado con dinero de tercero no cuenta para nada tuyo).
+//   - COMPRA de tarjeta: nunca resta disponible -- solo sube la deuda de esa
+//     tarjeta (ver "Debes en total"). Es deuda que vas pagando después.
+//   - PAGO de tarjeta: si sale de tu disponible, sí lo resta (es dinero real
+//     que salió de tu cuenta); si sale de ahorro, resta esa cuenta de ahorro
+//     en vez de disponible; si es de un tercero, no resta nada tuyo.
+//   - TRANSFERENCIA a/desde ahorro (manual o un ahorro domiciliado ya
+//     confirmado con el checkbox "ya lo envié") sí mueve disponible, pero no
+//     es gasto ni ingreso.
 
 import type { IFuenteDinero } from '@/types';
 
@@ -41,22 +50,20 @@ export function efectoGastoVariable(fuente: IFuenteDinero): EfectoDisponible {
 }
 
 /**
- * Un pago de tarjeta NUNCA toca el dinero disponible, sin importar la fuente.
- * La tarjeta se lleva por completo aparte (ver "Debes en total" en /tarjetas):
- * comprar sube esa deuda, pagar la baja, pero ninguna de las dos cosas debe
- * verse reflejada en el disponible del día a día -- solo importa cuánto
- * dinero ajeno a la tarjeta tienes libre.
+ * Un pago de tarjeta (abono a la deuda) resta disponible solo si salió de tu
+ * dinero disponible en efectivo -- igual que un gasto normal. La compra en sí
+ * nunca resta disponible (solo sube la deuda); es el pago real el que sí
+ * representa dinero saliendo de tu cuenta.
  */
-export function efectoPagoTarjeta(_fuente: IFuenteDinero): EfectoDisponible {
-  return 'ninguno';
+export function efectoPagoTarjeta(fuente: IFuenteDinero): EfectoDisponible {
+  return fuente === 'disponible' ? 'resta' : 'ninguno';
 }
 
 /**
- * Un movimiento de ahorro solo mueve el disponible cuando es una
- * transferencia manual entre tu disponible y tu ahorro: depósito manual =
- * sale de disponible, retiro manual = regresa a disponible. Los
- * materializados de un ahorro domiciliado ya se cuentan aparte (vía el
- * forecast de "ahorro del periodo"), y un retiro para pagar algo
+ * Un movimiento de ahorro mueve el disponible cuando es una transferencia
+ * manual, o un ahorro domiciliado ya confirmado con el checkbox "ya lo
+ * envié" (origen "domiciliado") -- en ambos casos depósito = sale de
+ * disponible, retiro = regresa a disponible. Un retiro para pagar algo
  * directamente (origen "pago_gasto"/"pago_tarjeta") nunca pasa por
  * disponible -- el gasto/pago que lo generó es lo que se contabiliza.
  */
@@ -64,7 +71,7 @@ export function efectoMovimientoAhorro(
   tipo: 'deposito' | 'retiro',
   origen: 'manual' | 'domiciliado' | 'pago_gasto' | 'pago_tarjeta'
 ): EfectoDisponible {
-  if (origen !== 'manual') return 'ninguno';
+  if (origen === 'pago_gasto' || origen === 'pago_tarjeta') return 'ninguno';
   return tipo === 'deposito' ? 'resta' : 'suma';
 }
 
@@ -76,6 +83,40 @@ export function efectoMovimientoAhorro(
  */
 export function efectoCargoTarjetaDomiciliado(_marcadoComoPagado: boolean): EfectoDisponible {
   return 'ninguno';
+}
+
+/**
+ * Dinero disponible: se calcula de cero cada vez, sumando el ingreso ya
+ * acreditado a la fecha y aplicando el efecto de cada movimiento real ya
+ * registrado (gastos, pagos de tarjeta, movimientos de ahorro) -- nunca es
+ * un contador que se ajusta a mano ni que se pueda desincronizar: siempre
+ * es la suma exacta de lo que realmente ocurrió hasta hoy.
+ */
+export function calcularDineroDisponible(datos: {
+  ingresoAcumulado: number;
+  gastosVariables: { cantidad: number; fuente: IFuenteDinero; devoluciones: { cantidad: number }[] }[];
+  pagosTarjeta: { cantidad: number; fuente: IFuenteDinero }[];
+  movimientosAhorro: {
+    cantidad: number;
+    tipo: 'deposito' | 'retiro';
+    origen: 'manual' | 'domiciliado' | 'pago_gasto' | 'pago_tarjeta';
+  }[];
+}): number {
+  const movimientos: MovimientoCaja[] = [
+    ...datos.gastosVariables.map((g) => ({
+      cantidad: gastoNeto(g.cantidad, g.devoluciones),
+      efecto: efectoGastoVariable(g.fuente),
+    })),
+    ...datos.pagosTarjeta.map((p) => ({
+      cantidad: p.cantidad,
+      efecto: efectoPagoTarjeta(p.fuente),
+    })),
+    ...datos.movimientosAhorro.map((m) => ({
+      cantidad: m.cantidad,
+      efecto: efectoMovimientoAhorro(m.tipo, m.origen),
+    })),
+  ];
+  return sumarDineroDisponible(datos.ingresoAcumulado, movimientos);
 }
 
 /**

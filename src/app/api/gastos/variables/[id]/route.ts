@@ -1,6 +1,6 @@
 // src/app/api/gastos/variables/[id]/route.ts
 import { prisma } from '@/lib/prisma';
-import { eliminarGastoVariable, ajustarSaldoDisponible } from '@/lib/finanzas';
+import { eliminarGastoVariable } from '@/lib/finanzas';
 
 export async function GET(
   request: Request,
@@ -58,13 +58,6 @@ export async function PUT(
       },
       include: { categoria: true, ahorroLugar: true, depositoTercero: true, devoluciones: true },
     });
-
-    // Si cambió la cantidad de un gasto pagado con dinero disponible, ajustar
-    // el saldo por la diferencia (más gasto = resta más; menos gasto = regresa).
-    if (existente.fuente === 'disponible' && cantidad !== undefined) {
-      const diferencia = existente.cantidad - parseFloat(cantidad);
-      if (diferencia !== 0) await ajustarSaldoDisponible(diferencia);
-    }
 
     return Response.json(gasto);
   } catch (error) {

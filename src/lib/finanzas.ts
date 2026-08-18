@@ -2,48 +2,23 @@
 //
 // Orquesta las escrituras que involucran más de una tabla (por ejemplo, un
 // gasto pagado con dinero de ahorro también tiene que mover el saldo de esa
-// cuenta de ahorro) y la materialización de los domiciliados en efectivo.
-// La lógica de "qué efecto tiene cada movimiento sobre el dinero disponible"
-// vive en src/utils/finanzas.ts (puro, testeado); aquí solo se decide qué
-// filas crear/borrar en la base de datos.
+// cuenta de ahorro). La lógica de "qué efecto tiene cada movimiento sobre el
+// dinero disponible" vive en src/utils/finanzas.ts (puro, testeado); aquí
+// solo se decide qué filas crear/borrar en la base de datos. "Dinero
+// disponible" ya no se guarda en ningún lado -- se recalcula de cero cada
+// vez a partir de las filas reales (ver calcularDineroDisponible en
+// src/utils/finanzas.ts, usado desde src/app/api/dashboard/route.ts), así
+// que aquí NUNCA hace falta "ajustar" ni "corregir" ningún saldo: basta con
+// crear/borrar la fila correcta.
 
 import { prisma } from '@/lib/prisma';
-import {
-  hoyMexico,
-  fechaUTC,
-  finDelDia,
-  ocurrenciasDelMes,
-  ocurrenciasSemanales,
-  parseDiasSemana,
-} from '@/utils/calculos';
+import { fechaUTC, finDelDia } from '@/utils/calculos';
 import { Prisma } from '@prisma/client';
 
 const CORTE_1 = 10;
 const CORTE_2 = 25;
 
 export type FuenteDinero = 'disponible' | 'ahorro' | 'tercero';
-
-// Clave en Configuracion donde se guarda el saldo disponible real: un número
-// que se ajusta solo con tus ingresos y gastos reales (ver ajustarSaldoDisponible
-// y materializarIngresos), y que también puedes corregir a mano desde el
-// Dashboard cuando lo revises contra tu banco.
-export const CLAVE_SALDO_DISPONIBLE = 'saldoDisponibleManual';
-
-/**
- * Suma (o resta, si delta es negativo) al saldo disponible guardado en
- * Configuracion. No es perfectamente atómico (lee, calcula, escribe) pero
- * esta app es de un solo usuario, así que el riesgo de carrera es mínimo.
- */
-export async function ajustarSaldoDisponible(delta: number): Promise<void> {
-  if (delta === 0) return;
-  const config = await prisma.configuracion.findUnique({ where: { clave: CLAVE_SALDO_DISPONIBLE } });
-  const actual = config ? parseFloat(config.valor) : 0;
-  await prisma.configuracion.upsert({
-    where: { clave: CLAVE_SALDO_DISPONIBLE },
-    create: { clave: CLAVE_SALDO_DISPONIBLE, valor: String(actual + delta) },
-    update: { valor: String(actual + delta) },
-  });
-}
 
 interface DatosGastoOFuente {
   fuente: FuenteDinero;
@@ -113,7 +88,7 @@ export async function crearGastoVariable(datos: {
     });
   }
 
-  const gasto = await prisma.gastoVariable.create({
+  return prisma.gastoVariable.create({
     data: {
       nombre: datos.nombre,
       cantidad: datos.cantidad,
@@ -126,10 +101,6 @@ export async function crearGastoVariable(datos: {
     },
     include: { categoria: true, ahorroLugar: true, depositoTercero: true, devoluciones: true },
   });
-  if (datos.fuente === 'disponible') {
-    await ajustarSaldoDisponible(-datos.cantidad);
-  }
-  return gasto;
 }
 
 /** Borra un GastoVariable y, si tenía un retiro de ahorro vinculado, lo revierte (reintegra el saldo) en la misma transacción. */
@@ -151,9 +122,6 @@ export async function eliminarGastoVariable(id: number) {
   }
 
   await prisma.gastoVariable.delete({ where: { id } });
-  if (gasto.fuente === 'disponible') {
-    await ajustarSaldoDisponible(gasto.cantidad);
-  }
 }
 
 /** Igual que crearGastoVariable pero para un pago de tarjeta. */
@@ -235,7 +203,126 @@ export async function eliminarPagoTarjeta(id: number) {
   await prisma.pagoTarjeta.delete({ where: { id } });
 }
 
-// --- Materialización de domiciliados en efectivo ---
+// --- Confirmación de domiciliados (gastos en efectivo y ahorros) ---
+//
+// Ni un gasto domiciliado en efectivo ni un ahorro domiciliado se registran
+// solo porque ya llegó su fecha -- eso asumiría que el movimiento ya ocurrió
+// cuando puede que tú lo hagas más tarde, o no lo hagas. Ambos son
+// proyección + confirmación manual: quedan pendientes hasta que confirmas
+// con un checkbox que el cargo/depósito realmente pasó, y eso es lo que crea
+// la fila real. Cada ocurrencia es independiente -- confirmar la de esta
+// quincena no marca las anteriores ni las siguientes.
+
+/**
+ * Marca una ocurrencia de un gasto domiciliado en efectivo como cobrada: crea
+ * el GastoVariable real (fuente="disponible"), fechado exactamente en esa
+ * ocurrencia.
+ */
+export async function confirmarGastoDomiciliado(id: number, fecha: Date) {
+  const gasto = await prisma.gastoDomiciliado.findUnique({ where: { id } });
+  if (!gasto) return null;
+
+  try {
+    return await prisma.gastoVariable.create({
+      data: {
+        nombre: gasto.nombre,
+        cantidad: gasto.cantidad,
+        categoriaId: gasto.categoriaId,
+        fecha,
+        tipoPresupuesto: gasto.tipoPresupuesto,
+        fuente: 'disponible',
+        gastoDomiciliadoOrigenId: gasto.id,
+      },
+      include: { categoria: true, ahorroLugar: true, depositoTercero: true, devoluciones: true },
+    });
+  } catch (error) {
+    // Ya se había confirmado esta misma ocurrencia (ej. doble clic en el
+    // checkbox) -- la restricción única lo bloqueó; regresamos la fila ya
+    // existente en vez de crear otra.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      const existente = await prisma.gastoVariable.findFirst({
+        where: { gastoDomiciliadoOrigenId: id, fecha },
+      });
+      if (existente) return existente;
+    }
+    throw error;
+  }
+}
+
+/** Deshace la confirmación de una ocurrencia específica de un gasto domiciliado en efectivo: borra su GastoVariable real. */
+export async function deshacerGastoDomiciliado(id: number, fecha: Date): Promise<void> {
+  const gasto = await prisma.gastoVariable.findFirst({
+    where: { gastoDomiciliadoOrigenId: id, fecha },
+  });
+  if (!gasto) return;
+  await prisma.gastoVariable.delete({ where: { id: gasto.id } });
+}
+
+/**
+ * Marca una ocurrencia de un ahorro domiciliado como enviada: crea el
+ * MovimientoAhorro real (fechado exactamente en esa ocurrencia) e incrementa
+ * el saldo de esa cuenta de ahorro.
+ */
+export async function confirmarAhorroDomiciliado(id: number, fecha: Date) {
+  const ahorro = await prisma.ahorroDomiciliado.findUnique({ where: { id } });
+  if (!ahorro) return null;
+
+  try {
+    const [movimiento] = await prisma.$transaction([
+      prisma.movimientoAhorro.create({
+        data: {
+          ahorroId: ahorro.ahorroDestinoId,
+          tipo: 'deposito',
+          cantidad: ahorro.cantidad,
+          concepto: `Ahorro domiciliado: ${ahorro.nombre}`,
+          fecha,
+          origen: 'domiciliado',
+          ahorroDomiciliadoOrigenId: ahorro.id,
+        },
+      }),
+      prisma.ahorroLugar.update({
+        where: { id: ahorro.ahorroDestinoId },
+        data: { saldoActual: { increment: ahorro.cantidad } },
+      }),
+      prisma.ahorroDomiciliado.update({ where: { id }, data: { enviadoHasta: fecha } }),
+    ]);
+    return movimiento;
+  } catch (error) {
+    // Ya se había confirmado esta misma ocurrencia (ej. doble clic en el
+    // checkbox) -- la restricción única lo bloqueó antes de tocar los
+    // saldos, así que no hay nada que revertir; solo regresamos la fila ya
+    // existente en vez de crear otra.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      const existente = await prisma.movimientoAhorro.findFirst({
+        where: { ahorroDomiciliadoOrigenId: id, fecha },
+      });
+      if (existente) return existente;
+    }
+    throw error;
+  }
+}
+
+/** Deshace la confirmación de envío de una ocurrencia específica de un ahorro domiciliado: borra su MovimientoAhorro real y revierte el saldo de ahorro. */
+export async function deshacerAhorroDomiciliado(id: number, fecha: Date): Promise<void> {
+  const ahorro = await prisma.ahorroDomiciliado.findUnique({ where: { id } });
+  if (!ahorro) return;
+
+  const movimiento = await prisma.movimientoAhorro.findFirst({
+    where: { ahorroDomiciliadoOrigenId: id, fecha },
+  });
+  if (!movimiento) return;
+
+  await prisma.$transaction([
+    prisma.movimientoAhorro.delete({ where: { id: movimiento.id } }),
+    prisma.ahorroLugar.update({
+      where: { id: ahorro.ahorroDestinoId },
+      data: { saldoActual: { decrement: movimiento.cantidad } },
+    }),
+    prisma.ahorroDomiciliado.update({ where: { id }, data: { enviadoHasta: null } }),
+  ]);
+}
+
+// --- Ingreso acumulado (derivado, sin persistir nada) ---
 
 /** Todos los pares {año, mes} desde `desde` hasta `hasta`, inclusive, en orden. */
 function mesesEntre(desde: Date, hasta: Date): { año: number; mes: number }[] {
@@ -258,151 +345,6 @@ function mesesEntre(desde: Date, hasta: Date): { año: number; mes: number }[] {
 interface Ocurrencia {
   cantidad: number;
   fecha: Date;
-}
-
-/** Ocurrencias de un gasto/ahorro domiciliado estrictamente después de `desde` y hasta `hasta` (inclusive). */
-function ocurrenciasEnRango(
-  item: { fechaCobro?: number | null; frecuencia: string; diasSemana?: string | null; cantidad: number },
-  desde: Date,
-  hasta: Date
-): Ocurrencia[] {
-  const hastaFin = finDelDia(hasta);
-
-  if (item.frecuencia === 'semanal') {
-    return ocurrenciasSemanales(parseDiasSemana(item.diasSemana), item.cantidad, [{ inicio: desde, fin: hasta }]).filter(
-      (oc) => oc.fecha > desde && oc.fecha <= hastaFin
-    );
-  }
-
-  if (item.fechaCobro == null) return [];
-
-  const resultado: Ocurrencia[] = [];
-  for (const { año, mes } of mesesEntre(desde, hasta)) {
-    ocurrenciasDelMes(item.fechaCobro, item.frecuencia, item.cantidad, año, mes, CORTE_1).forEach((oc) => {
-      if (oc.fecha > desde && oc.fecha <= hastaFin) resultado.push(oc);
-    });
-  }
-  return resultado.sort((a, b) => a.fecha.getTime() - b.fecha.getTime());
-}
-
-/**
- * Genera los registros reales (GastoVariable) de los gastos domiciliados en
- * efectivo cuya fecha ya llegó, y avanza su marcador
- * `ultimaOcurrenciaMaterializada`. Idempotente: si ya se materializó hasta
- * hoy, no hace nada. Los gastos domiciliados ligados a una tarjeta
- * (tarjetaId != null) NO se tocan aquí -- esos siguen siendo proyección +
- * checkbox manual ("pagadoAdelantadoHasta"). Los ahorros domiciliados
- * tampoco se tocan aquí -- ver confirmarAhorroDomiciliado: se materializan
- * a mano con un checkbox, no solo porque ya llegó la fecha (regla 8: a
- * veces se envían más tarde, o no se envían).
- */
-export async function materializarDomiciliados(): Promise<void> {
-  const hoy = hoyMexico();
-
-  const gastosCash = await prisma.gastoDomiciliado.findMany({
-    where: { activo: true, tarjetaId: null },
-  });
-
-  for (const g of gastosCash) {
-    const desde = g.ultimaOcurrenciaMaterializada ?? g.fechaCreacion;
-    const pendientes = ocurrenciasEnRango(g, desde, hoy);
-    if (pendientes.length === 0) continue;
-
-    await prisma.$transaction([
-      ...pendientes.map((oc) =>
-        prisma.gastoVariable.create({
-          data: {
-            nombre: g.nombre,
-            cantidad: oc.cantidad,
-            categoriaId: g.categoriaId,
-            fecha: oc.fecha,
-            tipoPresupuesto: g.tipoPresupuesto,
-            fuente: 'disponible',
-            gastoDomiciliadoOrigenId: g.id,
-          },
-        })
-      ),
-      prisma.gastoDomiciliado.update({
-        where: { id: g.id },
-        data: { ultimaOcurrenciaMaterializada: pendientes[pendientes.length - 1].fecha },
-      }),
-    ]);
-  }
-}
-
-/**
- * Marca una ocurrencia de un ahorro domiciliado como enviada: crea el
- * MovimientoAhorro real (fechado exactamente en esa ocurrencia), incrementa
- * el saldo de esa cuenta de ahorro y descuenta el dinero disponible (mismo
- * efecto que una transferencia manual disponible->ahorro). Cada ocurrencia es
- * independiente -- confirmar la de esta semana no marca las anteriores.
- */
-export async function confirmarAhorroDomiciliado(id: number, fecha: Date) {
-  const ahorro = await prisma.ahorroDomiciliado.findUnique({ where: { id } });
-  if (!ahorro) return null;
-
-  let movimiento;
-  try {
-    [movimiento] = await prisma.$transaction([
-      prisma.movimientoAhorro.create({
-        data: {
-          ahorroId: ahorro.ahorroDestinoId,
-          tipo: 'deposito',
-          cantidad: ahorro.cantidad,
-          concepto: `Ahorro domiciliado: ${ahorro.nombre}`,
-          fecha,
-          origen: 'domiciliado',
-          ahorroDomiciliadoOrigenId: ahorro.id,
-        },
-      }),
-      prisma.ahorroLugar.update({
-        where: { id: ahorro.ahorroDestinoId },
-        data: { saldoActual: { increment: ahorro.cantidad } },
-      }),
-      prisma.ahorroDomiciliado.update({ where: { id }, data: { enviadoHasta: fecha } }),
-    ]);
-  } catch (error) {
-    // Ya se había confirmado esta misma ocurrencia (ej. doble clic en el
-    // checkbox) -- la restricción única lo bloqueó antes de tocar los
-    // saldos, así que no hay nada que revertir; solo regresamos la fila ya
-    // existente en vez de crear otra.
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-      const existente = await prisma.movimientoAhorro.findFirst({
-        where: { ahorroDomiciliadoOrigenId: id, fecha },
-      });
-      if (existente) return existente;
-    }
-    throw error;
-  }
-
-  await ajustarSaldoDisponible(-ahorro.cantidad);
-  return movimiento;
-}
-
-/**
- * Deshace la confirmación de envío de una ocurrencia específica de un ahorro
- * domiciliado: borra su MovimientoAhorro real y revierte el saldo de ahorro
- * y el dinero disponible.
- */
-export async function deshacerAhorroDomiciliado(id: number, fecha: Date): Promise<void> {
-  const ahorro = await prisma.ahorroDomiciliado.findUnique({ where: { id } });
-  if (!ahorro) return;
-
-  const movimiento = await prisma.movimientoAhorro.findFirst({
-    where: { ahorroDomiciliadoOrigenId: id, fecha },
-  });
-  if (!movimiento) return;
-
-  await prisma.$transaction([
-    prisma.movimientoAhorro.delete({ where: { id: movimiento.id } }),
-    prisma.ahorroLugar.update({
-      where: { id: ahorro.ahorroDestinoId },
-      data: { saldoActual: { decrement: movimiento.cantidad } },
-    }),
-    prisma.ahorroDomiciliado.update({ where: { id }, data: { enviadoHasta: null } }),
-  ]);
-
-  await ajustarSaldoDisponible(movimiento.cantidad);
 }
 
 /**
@@ -440,26 +382,21 @@ function ocurrenciasIngresoEnRango(
 }
 
 /**
- * Acredita al saldo disponible los ingresos cuya fecha de pago ya llegó
- * desde la última vez que se materializó, y avanza su marcador. Idempotente,
- * igual que materializarDomiciliados.
+ * Cuánto de un Ingreso ya se acreditó a la fecha (todas sus ocurrencias
+ * desde que se creó hasta hoy, inclusive) -- se recalcula de cero cada vez,
+ * no se guarda ningún marcador de "hasta dónde ya se acreditó".
  */
-export async function materializarIngresos(): Promise<void> {
-  const hoy = hoyMexico();
-  const ingresos = await prisma.ingreso.findMany({ where: { activo: true } });
-
-  for (const ing of ingresos) {
-    const desde = ing.ultimaOcurrenciaMaterializada ?? ing.fechaCreacion;
-    const pendientes = ocurrenciasIngresoEnRango(ing, desde, hoy);
-    if (pendientes.length === 0) continue;
-
-    const total = pendientes.reduce((s, oc) => s + oc.cantidad, 0);
-    await ajustarSaldoDisponible(total);
-    await prisma.ingreso.update({
-      where: { id: ing.id },
-      data: { ultimaOcurrenciaMaterializada: pendientes[pendientes.length - 1].fecha },
-    });
-  }
+export function montoIngresoAcumulado(
+  ingresos: { activo: boolean; frecuencia: string; fechaInicio: Date; cantidad: number }[],
+  hoy: Date
+): number {
+  return ingresos
+    .filter((ing) => ing.activo)
+    .reduce((total, ing) => {
+      const desde = new Date(ing.fechaInicio.getTime() - 1);
+      const ocurrencias = ocurrenciasIngresoEnRango(ing, desde, hoy);
+      return total + ocurrencias.reduce((s, oc) => s + oc.cantidad, 0);
+    }, 0);
 }
 
 // --- Depósitos de terceros ---
