@@ -1,5 +1,6 @@
 // src/app/api/ahorros/movimientos/[id]/route.ts
 import { prisma } from '@/lib/prisma';
+import { ajustarSaldoDisponible } from '@/lib/finanzas';
 
 export async function DELETE(
   request: Request,
@@ -29,6 +30,12 @@ export async function DELETE(
         data: { saldoActual: { increment: delta } },
       }),
     ]);
+
+    // Si fue una transferencia manual disponible<->ahorro, revertir también ese lado
+    // (delta es el ajuste del lado ahorro; el lado disponible es el inverso).
+    if (movimiento.origen === 'manual') {
+      await ajustarSaldoDisponible(-delta);
+    }
 
     return Response.json({ success: true });
   } catch (error) {

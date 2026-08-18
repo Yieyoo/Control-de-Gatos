@@ -1,6 +1,6 @@
 // src/app/api/dashboard/route.ts
 import { prisma } from '@/lib/prisma';
-import { materializarDomiciliados, montoUtilizadoDeposito } from '@/lib/finanzas';
+import { materializarDomiciliados, materializarIngresos, montoUtilizadoDeposito, CLAVE_SALDO_DISPONIBLE } from '@/lib/finanzas';
 import { gastoNeto, calcularDeudaTarjeta, calcularEstadoDeposito } from '@/utils/finanzas';
 import {
   calcularProximaFechaMensual,
@@ -47,10 +47,6 @@ type MovimientoAhorro = Prisma.MovimientoAhorroGetPayload<Record<string, never>>
 // Días de pago del usuario: quincenas de 10 a 25 y de 26 al 10 del mes siguiente
 const CORTE_1 = 10;
 const CORTE_2 = 25;
-
-// Clave en Configuracion donde se guarda el saldo disponible real que el
-// usuario mantiene al día a mano (ver comentario junto a dineroDisponible).
-const CLAVE_SALDO_DISPONIBLE = 'saldoDisponibleManual';
 
 interface OcurrenciaTag {
   nombre: string;
@@ -395,6 +391,9 @@ export async function GET() {
     // en efectivo y de ahorro cuya fecha ya llegó. Idempotente -- no hace nada si ya
     // está al día. Los domiciliados de tarjeta no se tocan (siguen siendo checkbox manual).
     await materializarDomiciliados();
+    // Acredita al saldo disponible los ingresos (nómina, etc.) cuya fecha de
+    // pago ya llegó desde la última vez. También idempotente.
+    await materializarIngresos();
 
     const [
       ingresos,

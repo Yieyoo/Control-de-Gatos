@@ -1,5 +1,6 @@
 // src/app/api/ahorros/movimientos/route.ts
 import { prisma } from '@/lib/prisma';
+import { ajustarSaldoDisponible } from '@/lib/finanzas';
 
 export async function GET() {
   try {
@@ -44,6 +45,9 @@ export async function POST(request: Request) {
         data: { saldoActual: { increment: delta } },
       }),
     ]);
+
+    // Transferencia manual disponible<->ahorro: depósito sale del disponible, retiro regresa.
+    await ajustarSaldoDisponible(-delta);
 
     return Response.json(movimiento, { status: 201 });
   } catch (error) {

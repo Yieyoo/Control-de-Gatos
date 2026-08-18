@@ -10,6 +10,7 @@
 import { prisma } from '@/lib/prisma';
 import {
   hoyMexico,
+  fechaUTC,
   finDelDia,
   diaMexico,
   ocurrenciasDelMes,
@@ -19,8 +20,31 @@ import {
 import type { Prisma } from '@prisma/client';
 
 const CORTE_1 = 10;
+const CORTE_2 = 25;
 
 export type FuenteDinero = 'disponible' | 'ahorro' | 'tercero';
+
+// Clave en Configuracion donde se guarda el saldo disponible real: un número
+// que se ajusta solo con tus ingresos y gastos reales (ver ajustarSaldoDisponible
+// y materializarIngresos), y que también puedes corregir a mano desde el
+// Dashboard cuando lo revises contra tu banco.
+export const CLAVE_SALDO_DISPONIBLE = 'saldoDisponibleManual';
+
+/**
+ * Suma (o resta, si delta es negativo) al saldo disponible guardado en
+ * Configuracion. No es perfectamente atómico (lee, calcula, escribe) pero
+ * esta app es de un solo usuario, así que el riesgo de carrera es mínimo.
+ */
+export async function ajustarSaldoDisponible(delta: number): Promise<void> {
+  if (delta === 0) return;
+  const config = await prisma.configuracion.findUnique({ where: { clave: CLAVE_SALDO_DISPONIBLE } });
+  const actual = config ? parseFloat(config.valor) : 0;
+  await prisma.configuracion.upsert({
+    where: { clave: CLAVE_SALDO_DISPONIBLE },
+    create: { clave: CLAVE_SALDO_DISPONIBLE, valor: String(actual + delta) },
+    update: { valor: String(actual + delta) },
+  });
+}
 
 interface DatosGastoOFuente {
   fuente: FuenteDinero;
@@ -90,7 +114,7 @@ export async function crearGastoVariable(datos: {
     });
   }
 
-  return prisma.gastoVariable.create({
+  const gasto = await prisma.gastoVariable.create({
     data: {
       nombre: datos.nombre,
       cantidad: datos.cantidad,
@@ -103,6 +127,10 @@ export async function crearGastoVariable(datos: {
     },
     include: { categoria: true, ahorroLugar: true, depositoTercero: true, devoluciones: true },
   });
+  if (datos.fuente === 'disponible') {
+    await ajustarSaldoDisponible(-datos.cantidad);
+  }
+  return gasto;
 }
 
 /** Borra un GastoVariable y, si tenía un retiro de ahorro vinculado, lo revierte (reintegra el saldo) en la misma transacción. */
@@ -124,6 +152,9 @@ export async function eliminarGastoVariable(id: number) {
   }
 
   await prisma.gastoVariable.delete({ where: { id } });
+  if (gasto.fuente === 'disponible') {
+    await ajustarSaldoDisponible(gasto.cantidad);
+  }
 }
 
 /** Igual que crearGastoVariable pero para un pago de tarjeta. */
@@ -332,6 +363,63 @@ export async function materializarDomiciliados(): Promise<void> {
         data: { ultimaOcurrenciaMaterializada: pendientes[pendientes.length - 1].fecha },
       }),
     ]);
+  }
+}
+
+/**
+ * Ocurrencias de pago de un Ingreso entre `desde` (exclusivo) y `hasta`
+ * (inclusive). A diferencia de los gastos domiciliados, un Ingreso no tiene
+ * un "día de cobro" propio -- se paga en los mismos cortes que ya usa toda
+ * la app para las quincenas (día 10 y 25): quincenal cae en ambos, mensual
+ * solo en el día 10. "único" se acredita una sola vez, en su fechaInicio.
+ */
+function ocurrenciasIngresoEnRango(
+  ingreso: { frecuencia: string; fechaInicio: Date; cantidad: number },
+  desde: Date,
+  hasta: Date
+): Ocurrencia[] {
+  const hastaFin = finDelDia(hasta);
+
+  if (ingreso.frecuencia === 'unico') {
+    const fecha = fechaUTC(
+      ingreso.fechaInicio.getUTCFullYear(),
+      ingreso.fechaInicio.getUTCMonth(),
+      ingreso.fechaInicio.getUTCDate()
+    );
+    return fecha > desde && fecha <= hastaFin ? [{ cantidad: ingreso.cantidad, fecha }] : [];
+  }
+
+  const diasDePago = ingreso.frecuencia === 'quincenal' ? [CORTE_1, CORTE_2] : [CORTE_1];
+  const resultado: Ocurrencia[] = [];
+  for (const { año, mes } of mesesEntre(desde, hasta)) {
+    diasDePago.forEach((dia) => {
+      const fecha = fechaUTC(año, mes, dia);
+      if (fecha > desde && fecha <= hastaFin) resultado.push({ cantidad: ingreso.cantidad, fecha });
+    });
+  }
+  return resultado.sort((a, b) => a.fecha.getTime() - b.fecha.getTime());
+}
+
+/**
+ * Acredita al saldo disponible los ingresos cuya fecha de pago ya llegó
+ * desde la última vez que se materializó, y avanza su marcador. Idempotente,
+ * igual que materializarDomiciliados.
+ */
+export async function materializarIngresos(): Promise<void> {
+  const hoy = hoyMexico();
+  const ingresos = await prisma.ingreso.findMany({ where: { activo: true } });
+
+  for (const ing of ingresos) {
+    const desde = ing.ultimaOcurrenciaMaterializada ?? ing.fechaCreacion;
+    const pendientes = ocurrenciasIngresoEnRango(ing, desde, hoy);
+    if (pendientes.length === 0) continue;
+
+    const total = pendientes.reduce((s, oc) => s + oc.cantidad, 0);
+    await ajustarSaldoDisponible(total);
+    await prisma.ingreso.update({
+      where: { id: ing.id },
+      data: { ultimaOcurrenciaMaterializada: pendientes[pendientes.length - 1].fecha },
+    });
   }
 }
 

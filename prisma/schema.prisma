@@ -34,6 +34,7 @@ model Ingreso {
   cantidad            Float
   frecuencia          String   // "mensual", "quincenal", "unico"
   fechaInicio         DateTime @default(now())
+  ultimaOcurrenciaMaterializada DateTime? // Hasta qué fecha ya se acreditó al saldo disponible
   activo              Boolean  @default(true)
   notas               String?
   fechaCreacion       DateTime @default(now())
