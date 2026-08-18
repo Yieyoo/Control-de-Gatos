@@ -10,6 +10,7 @@ interface ResumenFinancieroProps {
   resumen: IDashboardResumen;
   vista: Vista;
   onCambiarVista: (vista: Vista) => void;
+  onSaldoActualizado: () => void;
 }
 
 const PIN_AHORRO = '1296';
@@ -147,13 +148,36 @@ function DeudaTarjetasExpandible({ tarjetas }: { tarjetas: IDashboardResumen['de
   );
 }
 
-export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFinancieroProps) {
+export function ResumenFinanciero({ resumen, vista, onCambiarVista, onSaldoActualizado }: ResumenFinancieroProps) {
   // Ahorro total empieza oculto siempre que se abre la app; solo se destapa con el PIN.
   const [ocultarAhorro, setOcultarAhorro] = useState(true);
   const [pidiendoPin, setPidiendoPin] = useState(false);
   const [pin, setPin] = useState('');
   const [pinIncorrecto, setPinIncorrecto] = useState(false);
+  const [editandoSaldo, setEditandoSaldo] = useState(false);
+  const [valorSaldo, setValorSaldo] = useState('');
   const p: IResumenPeriodo = resumen.periodos[vista];
+
+  const iniciarEdicionSaldo = () => {
+    setValorSaldo(String(p.dineroDisponible));
+    setEditandoSaldo(true);
+  };
+
+  const handleGuardarSaldo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const resp = await fetch('/api/configuracion/saldoDisponibleManual', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ valor: parseFloat(valorSaldo || '0') }),
+      });
+      if (!resp.ok) throw new Error('Error al actualizar saldo');
+      setEditandoSaldo(false);
+      onSaldoActualizado();
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const abrirPromptPin = () => {
     setPin('');
@@ -251,24 +275,70 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
 
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-xl bg-green-50 p-4">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-lg">💵</span>
-            <p className="text-xs font-medium text-green-800">Dinero disponible</p>
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">💵</span>
+              <p className="text-xs font-medium text-green-800">Dinero disponible</p>
+            </div>
+            {!editandoSaldo && (
+              <button
+                type="button"
+                onClick={iniciarEdicionSaldo}
+                aria-label="Editar dinero disponible"
+                className="text-green-700/60 hover:text-green-700"
+              >
+                ✏️
+              </button>
+            )}
           </div>
-          <p className="text-base sm:text-xl font-bold text-green-700 leading-tight">
-            {formatearMoneda(p.dineroDisponible)}
-          </p>
-          <div className="mt-2 pt-2 border-t border-green-200">
-            <p className="text-xs font-medium text-green-800">Dinero real</p>
-            <p
-              className={`text-sm sm:text-base font-bold leading-tight ${
-                p.dineroReal < 0 ? 'text-red-600' : 'text-green-700'
-              }`}
-            >
-              {formatearMoneda(p.dineroReal)}
-            </p>
-            <p className="text-[11px] text-green-800/60 leading-tight">con pendientes ya liquidados</p>
-          </div>
+
+          {editandoSaldo ? (
+            <form onSubmit={handleGuardarSaldo} className="space-y-1.5">
+              <input
+                type="number"
+                step="0.01"
+                autoFocus
+                value={valorSaldo}
+                onChange={(e) => setValorSaldo(e.target.value)}
+                className="w-full border border-green-300 rounded px-2 py-1.5 text-base font-semibold"
+              />
+              <div className="flex gap-1.5">
+                <button
+                  type="submit"
+                  className="flex-1 bg-green-600 text-white text-sm font-medium py-1 rounded hover:bg-green-700"
+                >
+                  Guardar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditandoSaldo(false)}
+                  className="flex-shrink-0 text-gray-500 hover:text-gray-700 text-sm px-2"
+                >
+                  Cancelar
+                </button>
+              </div>
+              <p className="text-[11px] text-green-800/60 leading-tight">
+                Ponlo igual a tu saldo real de banco cuando lo revises
+              </p>
+            </form>
+          ) : (
+            <>
+              <p className="text-base sm:text-xl font-bold text-green-700 leading-tight">
+                {formatearMoneda(p.dineroDisponible)}
+              </p>
+              <div className="mt-2 pt-2 border-t border-green-200">
+                <p className="text-xs font-medium text-green-800">Dinero real</p>
+                <p
+                  className={`text-sm sm:text-base font-bold leading-tight ${
+                    p.dineroReal < 0 ? 'text-red-600' : 'text-green-700'
+                  }`}
+                >
+                  {formatearMoneda(p.dineroReal)}
+                </p>
+                <p className="text-[11px] text-green-800/60 leading-tight">con pendientes ya liquidados</p>
+              </div>
+            </>
+          )}
         </div>
 
         <div className="rounded-xl bg-blue-50 p-4">

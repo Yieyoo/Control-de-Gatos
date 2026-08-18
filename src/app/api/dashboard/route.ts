@@ -48,6 +48,10 @@ type MovimientoAhorro = Prisma.MovimientoAhorroGetPayload<Record<string, never>>
 const CORTE_1 = 10;
 const CORTE_2 = 25;
 
+// Clave en Configuracion donde se guarda el saldo disponible real que el
+// usuario mantiene al día a mano (ver comentario junto a dineroDisponible).
+const CLAVE_SALDO_DISPONIBLE = 'saldoDisponibleManual';
+
 interface OcurrenciaTag {
   nombre: string;
   cantidad: number;
@@ -94,7 +98,8 @@ function construirPeriodo(
   gastosVariables: GastoVariableConTodo[],
   comprasTarjeta: CompraTarjetaConTodo[],
   pagosTarjeta: PagoTarjeta[],
-  movimientosAhorro: MovimientoAhorro[]
+  movimientosAhorro: MovimientoAhorro[],
+  saldoDisponibleManual: number
 ): IResumenPeriodo {
   const hoyFinDelDia = finDelDia(hoy);
 
@@ -236,12 +241,6 @@ function construirPeriodo(
   const comprasTarjetaEnPeriodo = comprasTarjeta.filter((c) => fechaEnRangos(new Date(c.fecha), rangos));
 
   const movimientosAhorroEnPeriodo = movimientosAhorro.filter((m) => fechaEnRangos(new Date(m.fecha), rangos));
-  // Transferencia manual disponible<->ahorro: depósito = sale de disponible, retiro = regresa a disponible.
-  const transferenciasAhorroManuales = movimientosAhorroEnPeriodo.filter((m) => m.origen === 'manual');
-  const transferenciaAhorroManualNeta = transferenciasAhorroManuales.reduce(
-    (s, m) => s + (m.tipo === 'deposito' ? m.cantidad : -m.cantidad),
-    0
-  );
   // Ahorro domiciliado ya materializado en este periodo (transferencia real disponible->ahorro).
   const ahorroDomiciliadoMaterializadoPeriodo = movimientosAhorroEnPeriodo
     .filter((m) => m.origen === 'domiciliado')
@@ -261,20 +260,15 @@ function construirPeriodo(
   const ahorroDelMesPagado = ahorroDomiciliadoMaterializadoPeriodo;
   const ahorroDelMesPendiente = sumar(ahorroOcurrencias, false);
   const gastosVariablesPeriodo = gastosManualesPropios.reduce((s, g) => s + neto(g), 0);
-  const gastosVariablesDisponiblePeriodo = gastosManualesPropios
-    .filter((g) => g.fuente === 'disponible')
-    .reduce((s, g) => s + neto(g), 0);
 
-  // La tarjeta se lleva completa aparte (ver "Debes en total" en /tarjetas):
-  // ni comprar ni pagarla tocan el disponible, sea cual sea la fuente del pago.
-  const dineroDisponible =
-    ingresosPeriodo -
-    gastosFijosPagado -
-    gastosVariablesDisponiblePeriodo -
-    ahorroDelMesPagado -
-    transferenciaAhorroManualNeta;
+  // "Dinero disponible" ya NO se calcula a partir del ingreso del periodo: ese
+  // cálculo nunca puede igualar tu saldo real de banco porque la app no ve tu
+  // historial completo (intereses, comisiones, movimientos de años previos).
+  // En su lugar es un saldo que tú mantienes al día a mano (igual que tus
+  // cuentas de ahorro), guardado en Configuracion -- ver saldoDisponibleManual.
+  const dineroDisponible = saldoDisponibleManual;
   const dineroComprometido = gastosFijosPendiente + ahorroDelMesPendiente;
-  // "Dinero real": el disponible de hoy, pero imaginando que también se liquidan
+  // "Dinero real": tu saldo real de hoy, pero imaginando que también se liquidan
   // los pendientes de este periodo (gastos fijos y ahorros que aún no llegan). La
   // deuda de tarjeta no se resta aquí porque no necesariamente se paga en esta quincena.
   const dineroReal = dineroDisponible - dineroComprometido;
@@ -414,6 +408,7 @@ export async function GET() {
       pagosTarjeta,
       movimientosAhorro,
       depositosTerceros,
+      configSaldo,
     ] = await Promise.all([
       prisma.ingreso.findMany({ where: { activo: true } }),
       prisma.ahorroLugar.findMany(),
@@ -426,7 +421,10 @@ export async function GET() {
       prisma.pagoTarjeta.findMany(),
       prisma.movimientoAhorro.findMany(),
       prisma.depositoTercero.findMany({ include: { gastosVariables: true, pagosTarjeta: true } }),
+      prisma.configuracion.findUnique({ where: { clave: CLAVE_SALDO_DISPONIBLE } }),
     ]);
+
+    const saldoDisponibleManual = configSaldo ? parseFloat(configSaldo.valor) : 0;
 
     const ahorroTotal = ahorrosLugares.reduce((sum: number, ahorro) => sum + ahorro.saldoActual, 0);
     const dineroTerceroPendiente = depositosTerceros.reduce(
@@ -481,6 +479,7 @@ export async function GET() {
       comprasTarjeta,
       pagosTarjeta,
       movimientosAhorro,
+      saldoDisponibleManual,
     ] as const;
 
     const mes = construirPeriodo('mes', 'Este mes', formatearRango(rangoMes), [rangoMes], false, hoy, ...args);

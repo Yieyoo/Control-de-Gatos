@@ -62,7 +62,12 @@ export default function Home() {
 
   return (
     <div className="space-y-6">
-      <ResumenFinanciero resumen={resumen} vista={vista} onCambiarVista={setVista} />
+      <ResumenFinanciero
+        resumen={resumen}
+        vista={vista}
+        onCambiarVista={setVista}
+        onSaldoActualizado={cargarResumen}
+      />
       <PorcentajeDestino datos={resumen.periodos[vista].porcentajeDestino} />
       {vista !== 'mes' && (
         <DetalleMovimientos
