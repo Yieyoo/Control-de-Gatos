@@ -3,8 +3,9 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import type { IGastoVariable, ICategoria, IAhorroLugar, IDepositoTercero, IFuenteDinero } from '@/types';
+import type { IGastoVariable, ICategoria, IAhorroLugar, IDepositoTercero, IFuenteDinero, ITarjetaCredito } from '@/types';
 import { formatearMoneda, formatearDiaMes } from '@/utils/calculos';
+import { SelectorDiasSemana } from '@/components/SelectorDiasSemana';
 
 const ETIQUETA_FUENTE: Record<IFuenteDinero, string> = {
   disponible: '💵 Disponible',
@@ -26,6 +27,7 @@ function GastosContenido() {
   const [categorias, setCategorias] = useState<ICategoria[]>([]);
   const [ahorroLugares, setAhorroLugares] = useState<IAhorroLugar[]>([]);
   const [depositosTerceros, setDepositosTerceros] = useState<IDepositoTercero[]>([]);
+  const [tarjetas, setTarjetas] = useState<ITarjetaCredito[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mostrarFormulario, setMostrarFormulario] = useState(() => searchParams.get('nuevo') === '1');
@@ -41,6 +43,19 @@ function GastosContenido() {
     depositoTerceroId: '',
   });
 
+  // "¿Es un gasto fijo?" -- si es "sí", en vez de registrar un gasto de una sola
+  // vez (fuente disponible/ahorro/tercero), se crea una regla recurrente
+  // (GastoDomiciliado) que luego aparece en el Dashboard para confirmar cada
+  // vez que de verdad se cobre.
+  const [esGastoFijo, setEsGastoFijo] = useState(false);
+  const [diasSemanaFijo, setDiasSemanaFijo] = useState<number[]>([]);
+  const [formFijo, setFormFijo] = useState({
+    frecuencia: 'mensual' as 'mensual' | 'quincenal' | 'semanal',
+    fechaCobro: '',
+    cuentaPago: '',
+    tarjetaId: '',
+  });
+
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [formEdicion, setFormEdicion] = useState({
     nombre: '',
@@ -54,7 +69,7 @@ function GastosContenido() {
   const [formDevolucion, setFormDevolucion] = useState({ cantidad: '', concepto: '' });
 
   useEffect(() => {
-    Promise.all([cargarGastos(), cargarCategorias(), cargarAhorroLugares(), cargarDepositosTerceros()]);
+    Promise.all([cargarGastos(), cargarCategorias(), cargarAhorroLugares(), cargarDepositosTerceros(), cargarTarjetas()]);
   }, []);
 
   const cargarGastos = async () => {
@@ -99,20 +114,50 @@ function GastosContenido() {
     }
   };
 
+  const cargarTarjetas = async () => {
+    try {
+      const resp = await fetch('/api/tarjetas');
+      if (resp.ok) setTarjetas(await resp.json());
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (esGastoFijo && formFijo.frecuencia === 'semanal' && diasSemanaFijo.length === 0) {
+      setError('Selecciona al menos un día de la semana');
+      return;
+    }
     try {
-      const resp = await fetch('/api/gastos/variables', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          cantidad: parseFloat(formData.cantidad),
-          categoriaId: parseInt(formData.categoriaId),
-          ahorroLugarId: formData.fuente === 'ahorro' ? formData.ahorroLugarId : undefined,
-          depositoTerceroId: formData.fuente === 'tercero' ? formData.depositoTerceroId : undefined,
-        }),
-      });
+      const resp = esGastoFijo
+        ? await fetch('/api/gastos/domiciliados', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              nombre: formData.nombre,
+              cantidad: formData.cantidad,
+              categoriaId: formData.categoriaId,
+              tipoPresupuesto: formData.tipoPresupuesto,
+              notas: formData.notas,
+              frecuencia: formFijo.frecuencia,
+              fechaCobro: formFijo.frecuencia === 'semanal' ? undefined : formFijo.fechaCobro,
+              diasSemana: formFijo.frecuencia === 'semanal' ? diasSemanaFijo.join(',') : undefined,
+              cuentaPago: formFijo.cuentaPago,
+              tarjetaId: formFijo.tarjetaId || undefined,
+            }),
+          })
+        : await fetch('/api/gastos/variables', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ...formData,
+              cantidad: parseFloat(formData.cantidad),
+              categoriaId: parseInt(formData.categoriaId),
+              ahorroLugarId: formData.fuente === 'ahorro' ? formData.ahorroLugarId : undefined,
+              depositoTerceroId: formData.fuente === 'tercero' ? formData.depositoTerceroId : undefined,
+            }),
+          });
 
       if (!resp.ok) {
         const datos = await resp.json().catch(() => null);
@@ -128,6 +173,9 @@ function GastosContenido() {
         ahorroLugarId: '',
         depositoTerceroId: '',
       });
+      setEsGastoFijo(false);
+      setFormFijo({ frecuencia: 'mensual', fechaCobro: '', cuentaPago: '', tarjetaId: '' });
+      setDiasSemanaFijo([]);
       setMostrarFormulario(false);
       cargarGastos();
       cargarAhorroLugares();
@@ -284,57 +332,126 @@ function GastosContenido() {
           </select>
 
           <div>
-            <p className="text-sm text-gray-600 mb-1">¿De dónde sale el dinero?</p>
-            <div className="flex bg-gray-100 rounded-lg p-1 text-sm font-medium w-fit flex-wrap">
-              {(['disponible', 'ahorro', 'tercero'] as const).map((f) => (
+            <p className="text-sm text-gray-600 mb-1">¿Es un gasto fijo (se repite cada mes/quincena/semana)?</p>
+            <div className="flex bg-gray-100 rounded-lg p-1 text-sm font-medium w-fit">
+              {([false, true] as const).map((valor) => (
                 <button
-                  key={f}
+                  key={String(valor)}
                   type="button"
-                  onClick={() => setFormData({ ...formData, fuente: f })}
+                  onClick={() => setEsGastoFijo(valor)}
                   className={`px-3 py-1.5 rounded-md transition-colors ${
-                    formData.fuente === f ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                    esGastoFijo === valor ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
                   }`}
                 >
-                  {ETIQUETA_FUENTE[f]}
+                  {valor ? 'Sí' : 'No'}
                 </button>
               ))}
             </div>
-            {formData.fuente === 'ahorro' && (
-              <select
-                value={formData.ahorroLugarId}
-                onChange={(e) => setFormData({ ...formData, ahorroLugarId: e.target.value })}
-                required
-                className="w-full border border-gray-300 rounded px-3 py-2 mt-2"
-              >
-                <option value="">¿De qué cuenta de ahorro?</option>
-                {ahorroLugares.map((a) => (
-                  <option key={a.id} value={a.id}>{a.nombre} ({formatearMoneda(a.saldoActual)})</option>
-                ))}
-              </select>
-            )}
-            {formData.fuente === 'tercero' && (
-              <select
-                value={formData.depositoTerceroId}
-                onChange={(e) => setFormData({ ...formData, depositoTerceroId: e.target.value })}
-                required
-                className="w-full border border-gray-300 rounded px-3 py-2 mt-2"
-              >
-                <option value="">¿Con qué depósito de tercero?</option>
-                {depositosTerceros
-                  .filter((d) => d.pendiente > 0)
-                  .map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.persona} — {d.concepto} ({formatearMoneda(d.pendiente)} pendiente)
-                    </option>
-                  ))}
-              </select>
-            )}
-            {formData.fuente === 'tercero' && depositosTerceros.filter((d) => d.pendiente > 0).length === 0 && (
-              <p className="text-xs text-amber-600 mt-1">
-                Primero registra un depósito en la sección Terceros.
-              </p>
-            )}
           </div>
+
+          {esGastoFijo ? (
+            <div className="space-y-3 bg-gray-50 rounded-lg p-3">
+              <select
+                value={formFijo.frecuencia}
+                onChange={(e) => setFormFijo({ ...formFijo, frecuencia: e.target.value as typeof formFijo.frecuencia })}
+                className="w-full border border-gray-300 rounded px-3 py-2"
+              >
+                <option value="mensual">Mensual</option>
+                <option value="quincenal">Quincenal</option>
+                <option value="semanal">Semanal (elige los días)</option>
+              </select>
+              {formFijo.frecuencia === 'semanal' ? (
+                <SelectorDiasSemana seleccionados={diasSemanaFijo} onChange={setDiasSemanaFijo} />
+              ) : (
+                <input
+                  type="number"
+                  placeholder="Día de cobro (1-31)"
+                  value={formFijo.fechaCobro}
+                  onChange={(e) => setFormFijo({ ...formFijo, fechaCobro: e.target.value })}
+                  required
+                  min={1}
+                  max={31}
+                  className="w-full border border-gray-300 rounded px-3 py-2"
+                />
+              )}
+              <input
+                type="text"
+                placeholder="Cuenta de pago (ej: Tarjeta BBVA, Efectivo)"
+                value={formFijo.cuentaPago}
+                onChange={(e) => setFormFijo({ ...formFijo, cuentaPago: e.target.value })}
+                required
+                className="w-full border border-gray-300 rounded px-3 py-2"
+              />
+              {tarjetas.length > 0 && (
+                <select
+                  value={formFijo.tarjetaId}
+                  onChange={(e) => setFormFijo({ ...formFijo, tarjetaId: e.target.value })}
+                  className="w-full border border-gray-300 rounded px-3 py-2"
+                >
+                  <option value="">¿Se carga a una tarjeta de crédito? (opcional)</option>
+                  {tarjetas.map((t) => (
+                    <option key={t.id} value={t.id}>{t.nombre}</option>
+                  ))}
+                </select>
+              )}
+              <p className="text-[11px] text-gray-500">
+                Va a aparecer como pendiente cada quincena hasta que marques la palomita de que ya se cobró.
+              </p>
+            </div>
+          ) : (
+            <div>
+              <p className="text-sm text-gray-600 mb-1">¿De dónde sale el dinero?</p>
+              <div className="flex bg-gray-100 rounded-lg p-1 text-sm font-medium w-fit flex-wrap">
+                {(['disponible', 'ahorro', 'tercero'] as const).map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setFormData({ ...formData, fuente: f })}
+                    className={`px-3 py-1.5 rounded-md transition-colors ${
+                      formData.fuente === f ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                    }`}
+                  >
+                    {ETIQUETA_FUENTE[f]}
+                  </button>
+                ))}
+              </div>
+              {formData.fuente === 'ahorro' && (
+                <select
+                  value={formData.ahorroLugarId}
+                  onChange={(e) => setFormData({ ...formData, ahorroLugarId: e.target.value })}
+                  required
+                  className="w-full border border-gray-300 rounded px-3 py-2 mt-2"
+                >
+                  <option value="">¿De qué cuenta de ahorro?</option>
+                  {ahorroLugares.map((a) => (
+                    <option key={a.id} value={a.id}>{a.nombre} ({formatearMoneda(a.saldoActual)})</option>
+                  ))}
+                </select>
+              )}
+              {formData.fuente === 'tercero' && (
+                <select
+                  value={formData.depositoTerceroId}
+                  onChange={(e) => setFormData({ ...formData, depositoTerceroId: e.target.value })}
+                  required
+                  className="w-full border border-gray-300 rounded px-3 py-2 mt-2"
+                >
+                  <option value="">¿Con qué depósito de tercero?</option>
+                  {depositosTerceros
+                    .filter((d) => d.pendiente > 0)
+                    .map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.persona} — {d.concepto} ({formatearMoneda(d.pendiente)} pendiente)
+                      </option>
+                    ))}
+                </select>
+              )}
+              {formData.fuente === 'tercero' && depositosTerceros.filter((d) => d.pendiente > 0).length === 0 && (
+                <p className="text-xs text-amber-600 mt-1">
+                  Primero registra un depósito en la sección Terceros.
+                </p>
+              )}
+            </div>
+          )}
 
           <div>
             <p className="text-sm text-gray-600 mb-1">¿A qué se destina?</p>
@@ -371,7 +488,11 @@ function GastosContenido() {
             </button>
             <button
               type="button"
-              onClick={() => setMostrarFormulario(false)}
+              onClick={() => {
+                setMostrarFormulario(false);
+                setEsGastoFijo(false);
+                setDiasSemanaFijo([]);
+              }}
               className="bg-gray-400 text-white px-4 py-2 rounded hover:bg-gray-500"
             >
               Cancelar

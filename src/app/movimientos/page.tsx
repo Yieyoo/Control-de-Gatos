@@ -4,6 +4,7 @@
 import { useState, useEffect } from 'react';
 import type { IGastoDomiciliado, IAhorroDomiciliado, ICategoria, IAhorroLugar, ITarjetaCredito } from '@/types';
 import { formatearMoneda } from '@/utils/calculos';
+import { SelectorDiasSemana } from '@/components/SelectorDiasSemana';
 
 const etiquetaFrecuencia: Record<string, string> = {
   mensual: 'Mensual',
@@ -12,15 +13,6 @@ const etiquetaFrecuencia: Record<string, string> = {
 };
 
 const NOMBRES_DIAS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-const OPCIONES_DIAS_SEMANA = [
-  { valor: 1, etiqueta: 'Lun' },
-  { valor: 2, etiqueta: 'Mar' },
-  { valor: 3, etiqueta: 'Mié' },
-  { valor: 4, etiqueta: 'Jue' },
-  { valor: 5, etiqueta: 'Vie' },
-  { valor: 6, etiqueta: 'Sáb' },
-  { valor: 0, etiqueta: 'Dom' },
-];
 
 function formatearDiasSemana(diasSemana?: string): string {
   if (!diasSemana) return '';
@@ -33,40 +25,6 @@ function formatearDiasSemana(diasSemana?: string): string {
 function parseDiasSemanaStr(diasSemana?: string): number[] {
   if (!diasSemana) return [];
   return diasSemana.split(',').map((d) => parseInt(d, 10)).filter((d) => !isNaN(d));
-}
-
-function SelectorDiasSemana({
-  seleccionados,
-  onChange,
-}: {
-  seleccionados: number[];
-  onChange: (dias: number[]) => void;
-}) {
-  const alternar = (dia: number) => {
-    onChange(seleccionados.includes(dia) ? seleccionados.filter((d) => d !== dia) : [...seleccionados, dia]);
-  };
-
-  return (
-    <div>
-      <p className="text-sm text-gray-600 mb-1">¿Qué días de la semana?</p>
-      <div className="flex flex-wrap gap-1.5">
-        {OPCIONES_DIAS_SEMANA.map((opcion) => (
-          <button
-            key={opcion.valor}
-            type="button"
-            onClick={() => alternar(opcion.valor)}
-            className={`px-2.5 py-1.5 rounded text-sm font-medium border ${
-              seleccionados.includes(opcion.valor)
-                ? 'bg-blue-600 text-white border-blue-600'
-                : 'bg-white text-gray-600 border-gray-300'
-            }`}
-          >
-            {opcion.etiqueta}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
 }
 
 export default function MovimientosPage() {
