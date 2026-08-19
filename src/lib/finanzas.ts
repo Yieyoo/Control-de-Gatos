@@ -13,6 +13,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
+import type { IPorcentajesMeta } from '@/types';
 
 export type FuenteDinero = 'disponible' | 'ahorro' | 'tercero';
 
@@ -329,4 +330,28 @@ export function montoUtilizadoDeposito(deposito: DepositoConRelaciones): number 
   const gastos = deposito.gastosVariables.reduce((s, g) => s + g.cantidad, 0);
   const pagos = deposito.pagosTarjeta.reduce((s, p) => s + p.cantidad, 0);
   return gastos + pagos;
+}
+
+// --- % destinado a (metas de necesidades/gustos/ahorro) ---
+
+export const CLAVE_PORCENTAJES_DESTINO = 'porcentajes_destino';
+export const PORCENTAJES_DESTINO_DEFECTO: IPorcentajesMeta = { necesidades: 50, gustos: 20, ahorro: 30 };
+
+/** Lee los % que el usuario configuró para "% destinado a" (usa el default si nunca los configuró o el valor guardado es inválido). */
+export async function obtenerPorcentajesDestino(): Promise<IPorcentajesMeta> {
+  const config = await prisma.configuracion.findUnique({ where: { clave: CLAVE_PORCENTAJES_DESTINO } });
+  if (!config) return PORCENTAJES_DESTINO_DEFECTO;
+  try {
+    const valor = JSON.parse(config.valor);
+    if (
+      typeof valor?.necesidades === 'number' &&
+      typeof valor?.gustos === 'number' &&
+      typeof valor?.ahorro === 'number'
+    ) {
+      return valor;
+    }
+  } catch {
+    // JSON inválido -- se usa el default de abajo
+  }
+  return PORCENTAJES_DESTINO_DEFECTO;
 }

@@ -17,6 +17,7 @@ const menuItems = [
   { href: '/historial', label: 'Historial', icono: '📜' },
   { href: '/historial-mensual', label: 'Historial Mensual', icono: '🗓️' },
   { href: '/categorias', label: 'Categorías', icono: '🏷️' },
+  { href: '/porcentajes', label: '% destinado a cada cosa', icono: '⚖️' },
 ];
 
 export function Navbar() {

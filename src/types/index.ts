@@ -235,6 +235,13 @@ export interface IPorcentajeDestino {
   ahorro: IRubroPresupuesto;
 }
 
+/** Los % que el usuario configuró para repartir su ingreso -- deben sumar 100. */
+export interface IPorcentajesMeta {
+  necesidades: number;
+  gustos: number;
+  ahorro: number;
+}
+
 export interface IResumenPeriodo {
   id: 'mes' | 'quincena1' | 'quincena2';
   etiqueta: string;

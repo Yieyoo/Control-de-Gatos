@@ -1,6 +1,7 @@
 // src/app/api/historial-mensual/[año]/[mes]/route.ts
 import { prisma } from '@/lib/prisma';
 import { construirPeriodo } from '@/lib/periodo';
+import { obtenerPorcentajesDestino } from '@/lib/finanzas';
 import { gastoNeto } from '@/utils/finanzas';
 import { hoyMexico, rangoMes, fechaEnRangos, formatearDiaMes } from '@/utils/calculos';
 import type { IMesDetalle, IFuenteDinero } from '@/types';
@@ -32,6 +33,7 @@ export async function GET(
       comprasTarjeta,
       pagosTarjeta,
       movimientosAhorro,
+      metas,
     ] = await Promise.all([
       prisma.ingreso.findMany({ where: { activo: true } }),
       prisma.gastoDomiciliado.findMany({ where: { activo: true }, include: { categoria: true } }),
@@ -41,6 +43,7 @@ export async function GET(
       prisma.compraTarjeta.findMany({ include: { categoria: true, devoluciones: true, tarjeta: true } }),
       prisma.pagoTarjeta.findMany({ include: { tarjeta: true } }),
       prisma.movimientoAhorro.findMany(),
+      obtenerPorcentajesDestino(),
     ]);
 
     const rango = rangoMes(año, mes);
@@ -60,7 +63,8 @@ export async function GET(
       gastosVariables,
       comprasTarjeta,
       pagosTarjeta,
-      movimientosAhorro
+      movimientosAhorro,
+      metas
     );
 
     const comprasTarjetaMes = comprasTarjeta

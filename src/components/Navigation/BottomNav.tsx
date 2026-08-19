@@ -18,6 +18,7 @@ const quickAddItems = [
 const verItems = [
   { href: '/historial', label: 'Historial', icono: '📜' },
   { href: '/categorias', label: 'Categorías', icono: '🏷️' },
+  { href: '/porcentajes', label: 'Cambiar % destinado a cada cosa', icono: '⚖️' },
 ];
 
 function TabLink({ href, label, icono, activo }: { href: string; label: string; icono: string; activo: boolean }) {

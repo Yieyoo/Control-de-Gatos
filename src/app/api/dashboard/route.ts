@@ -1,6 +1,6 @@
 // src/app/api/dashboard/route.ts
 import { prisma } from '@/lib/prisma';
-import { montoUtilizadoDeposito } from '@/lib/finanzas';
+import { montoUtilizadoDeposito, obtenerPorcentajesDestino } from '@/lib/finanzas';
 import { construirPeriodo, CORTE_1, CORTE_2 } from '@/lib/periodo';
 import { gastoNeto, calcularDeudaTarjeta, calcularEstadoDeposito, calcularDineroDisponible } from '@/utils/finanzas';
 import {
@@ -137,6 +137,7 @@ export async function GET() {
       pagosTarjeta,
       movimientosAhorro,
       depositosTerceros,
+      metas,
     ] = await Promise.all([
       prisma.ingreso.findMany({ where: { activo: true } }),
       prisma.ahorroLugar.findMany(),
@@ -149,6 +150,7 @@ export async function GET() {
       prisma.pagoTarjeta.findMany(),
       prisma.movimientoAhorro.findMany(),
       prisma.depositoTercero.findMany({ include: { gastosVariables: true, pagosTarjeta: true } }),
+      obtenerPorcentajesDestino(),
     ]);
 
     const hoy = hoyMexico();
@@ -223,14 +225,14 @@ export async function GET() {
       movimientosAhorro
     );
     const quincena1 = combinarConExtra(
-      construirPeriodo('quincena1', 'la quincena actual', formatearRango(periodoActual), [periodoActual], true, hoy, ...args),
+      construirPeriodo('quincena1', 'la quincena actual', formatearRango(periodoActual), [periodoActual], true, hoy, ...args, metas),
       extraAntesDeQuincena1
     );
     const quincena2 = combinarConExtra(
-      construirPeriodo('quincena2', 'la próxima quincena', formatearRango(periodoProximo), [periodoProximo], true, hoy, ...args),
+      construirPeriodo('quincena2', 'la próxima quincena', formatearRango(periodoProximo), [periodoProximo], true, hoy, ...args, metas),
       quincena1.dineroDisponible
     );
-    const mes = construirPeriodo('mes', 'Este mes', formatearRango(rangoMes), [rangoMes], false, hoy, ...args);
+    const mes = construirPeriodo('mes', 'Este mes', formatearRango(rangoMes), [rangoMes], false, hoy, ...args, metas);
     mes.dineroDisponible = quincena2.dineroDisponible;
     mes.dineroReal = mes.dineroDisponible - mes.dineroComprometido;
     mes.extra = quincena2.extra;

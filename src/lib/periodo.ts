@@ -24,6 +24,7 @@ import type {
   IFuenteDinero,
   IPorcentajeDestino,
   IItemPresupuesto,
+  IPorcentajesMeta,
 } from '@/types';
 import type { Ingreso, Prisma } from '@prisma/client';
 
@@ -60,12 +61,6 @@ export interface CargoTarjetaDomiciliado {
   pagadoAdelantado: boolean;
 }
 
-// Meta de "% destinado a": 50% necesidades, 20% gustos (del ingreso del periodo),
-// y un monto fijo de ahorro por quincena (independiente del ingreso).
-const META_NECESIDADES_PCT = 50;
-const META_GUSTOS_PCT = 20;
-const META_AHORRO_QUINCENAL = 3000;
-
 function clasificarPresupuesto(tipo: string | null | undefined): 'necesidad' | 'gusto' {
   return tipo === 'necesidad' ? 'necesidad' : 'gusto';
 }
@@ -89,7 +84,8 @@ export function construirPeriodo(
   gastosVariables: GastoVariableConTodo[],
   comprasTarjeta: CompraTarjetaConTodo[],
   pagosTarjeta: PagoTarjeta[],
-  movimientosAhorro: MovimientoAhorro[]
+  movimientosAhorro: MovimientoAhorro[],
+  metas: IPorcentajesMeta
 ): IResumenPeriodo {
   const hoyFinDelDia = finDelDia(hoy);
 
@@ -383,30 +379,30 @@ export function construirPeriodo(
   const gustosMonto = itemsGustos.reduce((s, i) => s + i.cantidad, 0);
   const ahorroMonto = ahorroDelMesPagado;
 
-  const metaNecesidadesMonto = (ingresosPeriodo * META_NECESIDADES_PCT) / 100;
-  const metaGustosMonto = (ingresosPeriodo * META_GUSTOS_PCT) / 100;
-  const metaAhorroMonto = esQuincena ? META_AHORRO_QUINCENAL : META_AHORRO_QUINCENAL * 2;
+  const metaNecesidadesMonto = (ingresosPeriodo * metas.necesidades) / 100;
+  const metaGustosMonto = (ingresosPeriodo * metas.gustos) / 100;
+  const metaAhorroMonto = (ingresosPeriodo * metas.ahorro) / 100;
 
   const porcentajeDestino: IPorcentajeDestino = {
     necesidades: {
       monto: necesidadesMonto,
       porcentaje: calcularPorcentaje(necesidadesMonto, ingresosPeriodo),
       metaMonto: metaNecesidadesMonto,
-      metaPorcentaje: META_NECESIDADES_PCT,
+      metaPorcentaje: metas.necesidades,
       items: itemsNecesidades.sort((a, b) => b.cantidad - a.cantidad),
     },
     gustos: {
       monto: gustosMonto,
       porcentaje: calcularPorcentaje(gustosMonto, ingresosPeriodo),
       metaMonto: metaGustosMonto,
-      metaPorcentaje: META_GUSTOS_PCT,
+      metaPorcentaje: metas.gustos,
       items: itemsGustos.sort((a, b) => b.cantidad - a.cantidad),
     },
     ahorro: {
       monto: ahorroMonto,
       porcentaje: calcularPorcentaje(ahorroMonto, ingresosPeriodo),
       metaMonto: metaAhorroMonto,
-      metaPorcentaje: calcularPorcentaje(metaAhorroMonto, ingresosPeriodo),
+      metaPorcentaje: metas.ahorro,
       items: itemsAhorro.sort((a, b) => b.cantidad - a.cantidad),
     },
   };
