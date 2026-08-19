@@ -259,9 +259,41 @@ export interface IMesResumen {
   año: number;
   mes: number;
   etiqueta: string;
+  actual: boolean;
   ingresos: number;
   gastos: number;
   ahorro: number;
+  balance: number;
+}
+
+export interface IHistorialMensualResumen {
+  año: number;
+  añosDisponibles: number[];
+  meses: IMesResumen[];
+  totales: { ingresos: number; gastos: number; ahorro: number; balance: number };
+}
+
+export interface IMesDetalle extends IResumenPeriodo {
+  año: number;
+  mes: number;
+  comprasTarjeta: {
+    id: number;
+    nombre: string;
+    cantidad: number;
+    fecha: string;
+    tarjetaNombre: string;
+    categoriaNombre?: string;
+    categoriaColor?: string;
+    numeroMeses?: number;
+  }[];
+  pagosTarjeta: {
+    id: number;
+    cantidad: number;
+    fecha: string;
+    concepto?: string;
+    tarjetaNombre: string;
+    fuente: IFuenteDinero;
+  }[];
 }
 
 export interface IDashboardResumen {

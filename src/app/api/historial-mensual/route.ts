@@ -7,7 +7,7 @@ import {
   ocurrenciasDeGastoEnRangos,
 } from '@/utils/calculos';
 import { gastoNeto } from '@/utils/finanzas';
-import type { IMesResumen } from '@/types';
+import type { IMesResumen, IHistorialMensualResumen } from '@/types';
 
 const CORTE_1 = 10;
 const MESES = [
@@ -15,8 +15,13 @@ const MESES = [
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ];
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const hoy = hoyMexico();
+    const añoSolicitado = parseInt(searchParams.get('año') ?? '', 10);
+    const año = Number.isInteger(añoSolicitado) ? añoSolicitado : hoy.getUTCFullYear();
+
     const [ingresos, gastosFijos, gastosDomiciliados, gastosVariables, comprasTarjeta, movimientosAhorro] =
       await Promise.all([
         prisma.ingreso.findMany({ where: { activo: true } }),
@@ -30,15 +35,29 @@ export async function GET() {
         prisma.movimientoAhorro.findMany(),
       ]);
 
-    const hoy = hoyMexico();
     const añoActual = hoy.getUTCFullYear();
     const mesActual = hoy.getUTCMonth();
 
+    // Antes de esta fecha no hay datos reales que valga la pena comparar -- los
+    // ingresos/gastos fijos son reglas recurrentes que, si se proyectaran hacia
+    // atrás, inventarían meses con montos que en realidad nunca se registraron
+    // (p. ej. si el usuario acaba de dar de alta su ingreso, no existió "antes").
+    // Se usa la fecha de inicio más antigua entre los ingresos activos como
+    // frontera; si no hay ninguno, no se filtra nada.
+    const inicioReal = ingresos.length > 0
+      ? new Date(Math.min(...ingresos.map((i) => new Date(i.fechaInicio).getTime())))
+      : null;
+
+    const añosDisponibles: number[] = [];
+    const primerAño = inicioReal ? inicioReal.getUTCFullYear() : añoActual;
+    for (let a = añoActual; a >= primerAño; a--) añosDisponibles.push(a);
+
     const meses: IMesResumen[] = [];
 
-    // De enero del año en curso hasta el mes actual, más reciente primero.
-    for (let mes = mesActual; mes >= 0; mes--) {
-      const rango = rangoMes(añoActual, mes);
+    const mesFinal = año === añoActual ? mesActual : 11;
+    for (let mes = mesFinal; mes >= 0; mes--) {
+      const rango = rangoMes(año, mes);
+      if (inicioReal && rango.fin < inicioReal) continue;
 
       const ingresosMes = ingresos.reduce((sum, ing) => {
         if (ing.frecuencia === 'quincenal') return sum + ing.cantidad * 2;
@@ -82,17 +101,34 @@ export async function GET() {
         .filter((m) => m.tipo === 'retiro' && fechaEnRangos(new Date(m.fecha), [rango]))
         .reduce((s, m) => s + m.cantidad, 0);
 
+      const gastosTotalMes = gastosFijosMes + gastosDomMes + gastosVariablesMes + comprasTarjetaMes;
+      const ahorroMes = depositosMes - retirosMes;
+
       meses.push({
-        año: añoActual,
+        año,
         mes,
-        etiqueta: `${MESES[mes]} ${añoActual}`,
+        etiqueta: `${MESES[mes]} ${año}`,
+        actual: año === añoActual && mes === mesActual,
         ingresos: ingresosMes,
-        gastos: gastosFijosMes + gastosDomMes + gastosVariablesMes + comprasTarjetaMes,
-        ahorro: depositosMes - retirosMes,
+        gastos: gastosTotalMes,
+        ahorro: ahorroMes,
+        balance: ingresosMes - gastosTotalMes - ahorroMes,
       });
     }
 
-    return Response.json(meses);
+    const totales = meses.reduce(
+      (acc, m) => ({
+        ingresos: acc.ingresos + m.ingresos,
+        gastos: acc.gastos + m.gastos,
+        ahorro: acc.ahorro + m.ahorro,
+        balance: acc.balance + m.balance,
+      }),
+      { ingresos: 0, gastos: 0, ahorro: 0, balance: 0 }
+    );
+
+    const resumen: IHistorialMensualResumen = { año, añosDisponibles, meses, totales };
+
+    return Response.json(resumen);
   } catch (error) {
     console.error('Error en historial mensual:', error);
     return Response.json({ error: 'Error al calcular el historial mensual' }, { status: 500 });
