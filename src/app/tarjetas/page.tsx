@@ -1,7 +1,8 @@
 // src/app/tarjetas/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import type {
   ITarjetaCredito,
   ICompraTarjeta,
@@ -30,6 +31,15 @@ const ETIQUETA_FUENTE: Record<IFuenteDinero, string> = {
 };
 
 export default function TarjetasPage() {
+  return (
+    <Suspense fallback={<div>Cargando...</div>}>
+      <TarjetasContenido />
+    </Suspense>
+  );
+}
+
+function TarjetasContenido() {
+  const searchParams = useSearchParams();
   const [tarjetas, setTarjetas] = useState<ITarjetaCredito[]>([]);
   const [compras, setCompras] = useState<ICompraTarjeta[]>([]);
   const [pagos, setPagos] = useState<IPagoTarjeta[]>([]);
@@ -91,6 +101,13 @@ export default function TarjetasPage() {
     cargarAhorroLugares();
     cargarDepositosTerceros();
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get('nuevo') === '1' && tarjetas.length > 0 && formCompraAbierto === null) {
+      setFormCompraAbierto(tarjetas[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tarjetas, searchParams]);
 
   const cargarAhorroLugares = async () => {
     try {

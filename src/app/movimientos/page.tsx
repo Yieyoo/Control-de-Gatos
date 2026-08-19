@@ -1,7 +1,8 @@
 // src/app/movimientos/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import type { IGastoDomiciliado, IAhorroDomiciliado, ICategoria, IAhorroLugar, ITarjetaCredito } from '@/types';
 import { formatearMoneda } from '@/utils/calculos';
 import { SelectorDiasSemana } from '@/components/SelectorDiasSemana';
@@ -28,6 +29,15 @@ function parseDiasSemanaStr(diasSemana?: string): number[] {
 }
 
 export default function MovimientosPage() {
+  return (
+    <Suspense fallback={<div>Cargando...</div>}>
+      <MovimientosContenido />
+    </Suspense>
+  );
+}
+
+function MovimientosContenido() {
+  const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
 
   // Gastos domiciliados
@@ -35,7 +45,7 @@ export default function MovimientosPage() {
   const [categorias, setCategorias] = useState<ICategoria[]>([]);
   const [tarjetas, setTarjetas] = useState<ITarjetaCredito[]>([]);
   const [cargandoGastos, setCargandoGastos] = useState(true);
-  const [mostrarFormGasto, setMostrarFormGasto] = useState(false);
+  const [mostrarFormGasto, setMostrarFormGasto] = useState(() => searchParams.get('nuevo') === '1');
   const [diasSemanaGasto, setDiasSemanaGasto] = useState<number[]>([]);
   const [formGasto, setFormGasto] = useState({
     nombre: '',

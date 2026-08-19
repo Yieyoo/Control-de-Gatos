@@ -10,15 +10,12 @@ const quickAddItems = [
   { href: '/ingresos?nuevo=1', label: 'Registrar ingreso', icono: '💰' },
   { href: '/gastos?nuevo=1', label: 'Registrar gasto', icono: '💸' },
   { href: '/ahorros?nuevo=1', label: 'Registrar ahorro', icono: '🏦' },
+  { href: '/tarjetas?nuevo=1', label: 'Registrar compra con tarjeta de crédito', icono: '💳' },
+  { href: '/movimientos?nuevo=1', label: 'Agregar movimiento programado', icono: '⏰' },
+  { href: '/terceros?nuevo=1', label: 'Registrar dinero de terceros', icono: '🤝' },
 ];
 
 const verItems = [
-  { href: '/ingresos', label: 'Ingresos', icono: '📈' },
-  { href: '/gastos', label: 'Gastos', icono: '💸' },
-  { href: '/ahorros', label: 'Ahorros', icono: '🏦' },
-  { href: '/tarjetas', label: 'Tarjeta de Crédito', icono: '💳' },
-  { href: '/terceros', label: 'Dinero de Terceros', icono: '🤝' },
-  { href: '/movimientos', label: 'Movimientos Programados', icono: '⏰' },
   { href: '/historial', label: 'Historial', icono: '📜' },
   { href: '/categorias', label: 'Categorías', icono: '🏷️' },
 ];
