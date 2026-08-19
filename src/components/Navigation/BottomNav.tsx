@@ -10,7 +10,6 @@ const quickAddItems = [
   { href: '/ingresos?nuevo=1', label: 'Registrar ingreso', icono: '💰' },
   { href: '/gastos?nuevo=1', label: 'Registrar gasto', icono: '💸' },
   { href: '/ahorros?nuevo=1', label: 'Registrar ahorro', icono: '🏦' },
-  { href: '/tarjetas', label: 'Compra con tarjeta', icono: '💳' },
 ];
 
 const verItems = [
