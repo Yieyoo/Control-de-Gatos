@@ -38,14 +38,17 @@ function DeudaTarjetasExpandible({
   tarjetas: IDashboardResumen['deudaTarjetas'];
   vista: Vista;
 }) {
-  const [expandido, setExpandido] = useState(false);
   const [cargado, setCargado] = useState(false);
+  const [expandido, setExpandido] = useState(false);
   const [compras, setCompras] = useState<ICompraTarjeta[]>([]);
   const [pagos, setPagos] = useState<IPagoTarjeta[]>([]);
   const [gastosDomiciliados, setGastosDomiciliados] = useState<IGastoDomiciliado[]>([]);
 
+  // Se carga siempre (no solo al expandir) porque el total de arriba también
+  // depende de la quincena que se esté viendo -- necesita los cargos
+  // domiciliados de una vez para calcularlo bien, esté o no expandido.
   useEffect(() => {
-    if (!expandido || cargado) return;
+    if (cargado) return;
     Promise.all([
       fetch('/api/tarjetas/compras').then((r) => (r.ok ? r.json() : [])),
       fetch('/api/tarjetas/pagos').then((r) => (r.ok ? r.json() : [])),
@@ -56,23 +59,78 @@ function DeudaTarjetasExpandible({
       setGastosDomiciliados(g);
       setCargado(true);
     });
-  }, [expandido, cargado]);
+  }, [cargado]);
 
   if (tarjetas.length === 0) return null;
 
-  const total = tarjetas.reduce((s, t) => s + t.debe, 0);
   const hoy = hoyMexico();
   // En "Próxima" solo interesa lo que falta pagar (rojo); en "Actual" y "Mes"
   // se ve el panorama completo (lo pagado en gris + lo pendiente en rojo).
   const soloPendientes = vista === 'quincena2';
-  // Los cargos domiciliados de tarjeta (Claude, Plan Telcel, etc.) se listan
+  // Los cargos domiciliados de tarjeta (Claude, Plan Telcel, etc.) se cuentan
   // según la quincena que se esté viendo, no según el ciclo de corte de la
-  // tarjeta -- así uno que cobra el día 28 solo aparece por primera vez en la
-  // quincena donde realmente cae, no antes.
+  // tarjeta -- así uno que cobra el día 28 solo suma a la deuda (y aparece en
+  // la lista) en la quincena donde realmente cae, no antes.
   const periodoActual = periodoQuincenaActual(hoy, CORTE_1, CORTE_2);
   const periodoProximo = periodoQuincenaSiguiente(periodoActual, CORTE_1, CORTE_2);
   const rangosCargos: RangoFechas[] =
     vista === 'quincena1' ? [periodoActual] : vista === 'quincena2' ? [periodoProximo] : [periodoActual, periodoProximo];
+
+  // Comprado/pagado siempre cuentan todo el historial (las compras y los pagos
+  // no dependen de qué quincena se esté viendo); solo los cargos domiciliados
+  // pendientes se acotan a `rangosCargos`. Se calcula una sola vez por tarjeta
+  // y de ahí sale tanto "debes $X" (arriba y en cada tarjeta) como la lista.
+  const detalleTarjetas = cargado
+    ? tarjetas.map((t) => {
+        const comprasBase = compras
+          .filter((c) => c.tarjetaId === t.id)
+          .map((c) => {
+            const montoPagado = pagos
+              .filter((p) => p.compraTarjetaId === c.id)
+              .reduce((s, p) => s + p.cantidad, 0);
+            const neto = c.cantidad - (c.devoluciones ?? []).reduce((s, d) => s + d.cantidad, 0);
+            const pagada = montoPagado >= neto - 0.01;
+            const saldoPendiente = Math.max(0, neto - montoPagado);
+            return { compra: c, montoPagado, neto, pagada, saldoPendiente };
+          });
+        const cargosBase: CargoDomiciliadoResumen[] = gastosDomiciliados
+          .filter((g) => g.activo && g.tarjetaId === t.id)
+          .map((g) => {
+            const ocurrencias = ocurrenciasDeGastoEnRangos(g, rangosCargos, CORTE_1);
+            const fechaMasReciente = ocurrencias.reduce<Date | null>(
+              (max, oc) => (!max || oc.fecha > max ? oc.fecha : max),
+              null
+            );
+            const monto = ocurrencias.reduce((s, oc) => s + oc.cantidad, 0);
+            const pagadoAdelantado = !!(
+              g.pagadoAdelantadoHasta &&
+              fechaMasReciente &&
+              new Date(g.pagadoAdelantadoHasta) >= fechaMasReciente
+            );
+            return { nombre: g.nombre, monto, fecha: fechaMasReciente, pagadoAdelantado };
+          })
+          .filter((c) => c.fecha !== null);
+
+        const comprado = comprasBase.reduce((s, c) => s + c.neto, 0);
+        const pagado = pagos.filter((p) => p.tarjetaId === t.id).reduce((s, p) => s + p.cantidad, 0);
+        const cargosPendientes = cargosBase.filter((c) => !c.pagadoAdelantado).reduce((s, c) => s + c.monto, 0);
+        const debeVista = comprado - pagado + cargosPendientes;
+
+        return {
+          tarjeta: t,
+          debeVista,
+          comprasTarjeta: comprasBase.filter((c) => !soloPendientes || !c.pagada),
+          cargosDomiciliados: cargosBase.filter((c) => !soloPendientes || !c.pagadoAdelantado),
+        };
+      })
+    : null;
+
+  // Mientras carga, se usa el total del servidor (ciclo de corte de la
+  // tarjeta) como aproximación; en cuanto carga, se reemplaza por el de la
+  // quincena que se está viendo.
+  const total = detalleTarjetas
+    ? detalleTarjetas.reduce((s, d) => s + d.debeVista, 0)
+    : tarjetas.reduce((s, t) => s + t.debe, 0);
 
   return (
     <div className="mt-4 pt-3 border-t border-gray-100">
@@ -92,41 +150,10 @@ function DeudaTarjetasExpandible({
 
       {expandido && (
         <div className="mt-3 space-y-4">
-          {!cargado ? (
+          {!detalleTarjetas ? (
             <p className="text-xs text-gray-400">Cargando...</p>
           ) : (
-            tarjetas.map((t) => {
-              const comprasTarjeta = compras
-                .filter((c) => c.tarjetaId === t.id)
-                .map((c) => {
-                  const montoPagado = pagos
-                    .filter((p) => p.compraTarjetaId === c.id)
-                    .reduce((s, p) => s + p.cantidad, 0);
-                  const neto = c.cantidad - (c.devoluciones ?? []).reduce((s, d) => s + d.cantidad, 0);
-                  const pagada = montoPagado >= neto - 0.01;
-                  const saldoPendiente = Math.max(0, neto - montoPagado);
-                  return { compra: c, montoPagado, neto, pagada, saldoPendiente };
-                })
-                .filter((c) => !soloPendientes || !c.pagada);
-              const cargosDomiciliados: CargoDomiciliadoResumen[] = gastosDomiciliados
-                .filter((g) => g.activo && g.tarjetaId === t.id)
-                .map((g) => {
-                  const ocurrencias = ocurrenciasDeGastoEnRangos(g, rangosCargos, CORTE_1);
-                  const fechaMasReciente = ocurrencias.reduce<Date | null>(
-                    (max, oc) => (!max || oc.fecha > max ? oc.fecha : max),
-                    null
-                  );
-                  const monto = ocurrencias.reduce((s, oc) => s + oc.cantidad, 0);
-                  const pagadoAdelantado = !!(
-                    g.pagadoAdelantadoHasta &&
-                    fechaMasReciente &&
-                    new Date(g.pagadoAdelantadoHasta) >= fechaMasReciente
-                  );
-                  return { nombre: g.nombre, monto, fecha: fechaMasReciente, pagadoAdelantado };
-                })
-                .filter((c) => c.fecha !== null)
-                .filter((c) => !soloPendientes || !c.pagadoAdelantado);
-
+            detalleTarjetas.map(({ tarjeta: t, debeVista, comprasTarjeta, cargosDomiciliados }) => {
               if (comprasTarjeta.length === 0 && cargosDomiciliados.length === 0) {
                 return null;
               }
@@ -134,7 +161,7 @@ function DeudaTarjetasExpandible({
               return (
                 <div key={t.id}>
                   <p className="text-xs font-semibold text-gray-500 mb-1.5">
-                    {t.nombre} · debes {formatearMoneda(t.debe)}
+                    {t.nombre} · debes {formatearMoneda(debeVista)}
                   </p>
                   <ul className="space-y-1">
                     {comprasTarjeta.map(({ compra: c, montoPagado, neto, pagada, saldoPendiente }) => (
