@@ -2,7 +2,7 @@
 import { prisma } from '@/lib/prisma';
 import { montoUtilizadoDeposito } from '@/lib/finanzas';
 import { construirPeriodo, CORTE_1, CORTE_2 } from '@/lib/periodo';
-import { gastoNeto, calcularDeudaTarjeta, calcularEstadoDeposito } from '@/utils/finanzas';
+import { gastoNeto, calcularDeudaTarjeta, calcularEstadoDeposito, calcularDineroDisponible } from '@/utils/finanzas';
 import {
   calcularProximaFechaMensual,
   calcularProximaFechaDesdeInicio,
@@ -25,11 +25,102 @@ import type {
   IProximoMovimiento,
   IDeudaTarjeta,
   IAhorroLugar,
+  IFuenteDinero,
+  IResumenPeriodo,
 } from '@/types';
+import type { Ingreso } from '@prisma/client';
 
 /** Cantidad neta de un gasto/compra ya registrado, restando sus devoluciones. */
 function neto(item: { cantidad: number; devoluciones: { cantidad: number }[] }): number {
   return gastoNeto(item.cantidad, item.devoluciones);
+}
+
+/**
+ * Cuántas quincenas completas ya "cerraron" entre el inicio del tracking (la
+ * fecha de inicio del ingreso más antiguo) y el inicio de un periodo dado, sin
+ * incluirlo -- Ingreso no tiene un día de pago propio, así que su monto se
+ * prorratea por quincena completa (igual que en construirPeriodo). Si
+ * `inicioReal` cae a la mitad de una quincena, esa quincena parcial no cuenta
+ * (mejor subestimar el sobrante que inventar ingreso de antes de que
+ * existiera el registro).
+ */
+function contarQuincenasAntes(inicioReal: Date, inicioPeriodo: Date): number {
+  let cursor = periodoQuincenaActual(inicioReal, CORTE_1, CORTE_2);
+  if (cursor.inicio < inicioReal) cursor = periodoQuincenaSiguiente(cursor, CORTE_1, CORTE_2);
+  let n = 0;
+  while (cursor.inicio < inicioPeriodo && n < 120) {
+    n++;
+    cursor = periodoQuincenaSiguiente(cursor, CORTE_1, CORTE_2);
+  }
+  return n;
+}
+
+/**
+ * Lo que sobra de todas las quincenas ya cerradas antes de que empiece
+ * `periodoActual` -- el punto de partida ("extra") de la quincena actual (ver
+ * combinarConExtra). Se deriva de las filas reales (nunca se guarda), igual
+ * que el resto de "Dinero disponible".
+ */
+function calcularExtraAntesDe(
+  periodoActual: RangoFechas,
+  ingresos: Ingreso[],
+  gastosVariables: { cantidad: number; fuente: string; fecha: Date; devoluciones: { cantidad: number }[] }[],
+  pagosTarjeta: { cantidad: number; fuente: string; fecha: Date }[],
+  movimientosAhorro: { cantidad: number; tipo: string; origen: string; fecha: Date }[]
+): number {
+  const activos = ingresos.filter((i) => i.activo);
+  if (activos.length === 0) return 0;
+
+  const inicioReal = new Date(Math.min(...activos.map((i) => new Date(i.fechaInicio).getTime())));
+  if (inicioReal >= periodoActual.inicio) return 0;
+
+  const numQuincenas = contarQuincenasAntes(inicioReal, periodoActual.inicio);
+  const rangoAntes: RangoFechas = { inicio: inicioReal, fin: new Date(periodoActual.inicio.getTime() - 1) };
+
+  const ingresoAntes = activos.reduce((sum, ing) => {
+    if (ing.frecuencia === 'quincenal') return sum + ing.cantidad * numQuincenas;
+    if (ing.frecuencia === 'mensual') return sum + (ing.cantidad / 2) * numQuincenas;
+    if (ing.frecuencia === 'unico') {
+      return fechaEnRangos(new Date(ing.fechaInicio), [rangoAntes]) ? sum + ing.cantidad : sum;
+    }
+    return sum;
+  }, 0);
+
+  const antes = (fecha: Date) => fecha >= inicioReal && fecha < periodoActual.inicio;
+
+  return calcularDineroDisponible({
+    ingresoAcumulado: ingresoAntes,
+    gastosVariables: gastosVariables
+      .filter((g) => g.fuente !== 'tercero' && antes(new Date(g.fecha)))
+      .map((g) => ({ cantidad: g.cantidad, fuente: g.fuente as IFuenteDinero, devoluciones: g.devoluciones })),
+    pagosTarjeta: pagosTarjeta
+      .filter((p) => antes(new Date(p.fecha)))
+      .map((p) => ({ cantidad: p.cantidad, fuente: p.fuente as IFuenteDinero })),
+    movimientosAhorro: movimientosAhorro
+      .filter((m) => antes(new Date(m.fecha)))
+      .map((m) => ({
+        cantidad: m.cantidad,
+        tipo: m.tipo as 'deposito' | 'retiro',
+        origen: m.origen as 'manual' | 'domiciliado' | 'pago_gasto' | 'pago_tarjeta',
+      })),
+  });
+}
+
+/**
+ * Aplica el sobrante de periodos anteriores ("extra") a un periodo ya
+ * calculado: el extra se gasta primero (regla elegida por el usuario) -- se
+ * va agotando con cada gasto de este periodo antes de tocar su propio
+ * ingreso, y solo cuando se agota empieza a bajar el ingreso del periodo. El
+ * total (dineroDisponible) es el mismo sin importar el orden; `extra` es solo
+ * cuánto de ese total sigue siendo sobrante sin tocar, para mostrarlo aparte.
+ */
+function combinarConExtra(periodo: IResumenPeriodo, extraInicial: number): IResumenPeriodo {
+  const extraClamped = Math.max(0, extraInicial);
+  const gastadoEnPeriodo = periodo.ingresos - periodo.dineroDisponible;
+  const extra = Math.min(extraClamped, Math.max(0, extraClamped - gastadoEnPeriodo));
+  const dineroDisponible = periodo.dineroDisponible + extraClamped;
+  const dineroReal = dineroDisponible - periodo.dineroComprometido;
+  return { ...periodo, dineroDisponible, dineroReal, extra };
 }
 
 export async function GET() {
@@ -116,31 +207,33 @@ export async function GET() {
       movimientosAhorro,
     ] as const;
 
-    // Cada quincena tiene su propio arranque (calcula su "Dinero disponible" a
-    // partir de SU ingreso y SUS movimientos reales, ver construirPeriodo). El
-    // mes no tiene un cálculo propio para ese número -- es la suma de las dos
-    // quincenas, así que se calculan primero y luego se usan para "Mes".
-    const quincena1 = construirPeriodo(
-      'quincena1',
-      'la quincena actual',
-      formatearRango(periodoActual),
-      [periodoActual],
-      true,
-      hoy,
-      ...args
+    // Cada quincena calcula primero su "Dinero disponible" propio (SU ingreso
+    // menos SUS movimientos reales, ver construirPeriodo) y luego se le suma
+    // el sobrante ("extra") de la quincena anterior -- se va gastando primero
+    // ese extra antes de tocar el ingreso propio (ver combinarConExtra). El
+    // sobrante de la quincena actual es, a su vez, el "extra" de la próxima:
+    // por eso se encadena quincena1 -> quincena2. "Mes" no tiene un cálculo
+    // propio para este número -- es el mismo total ya encadenado de la
+    // próxima quincena (que ya incluye todo lo de la actual).
+    const extraAntesDeQuincena1 = calcularExtraAntesDe(
+      periodoActual,
+      ingresos,
+      gastosVariables,
+      pagosTarjeta,
+      movimientosAhorro
     );
-    const quincena2 = construirPeriodo(
-      'quincena2',
-      'la próxima quincena',
-      formatearRango(periodoProximo),
-      [periodoProximo],
-      true,
-      hoy,
-      ...args
+    const quincena1 = combinarConExtra(
+      construirPeriodo('quincena1', 'la quincena actual', formatearRango(periodoActual), [periodoActual], true, hoy, ...args),
+      extraAntesDeQuincena1
+    );
+    const quincena2 = combinarConExtra(
+      construirPeriodo('quincena2', 'la próxima quincena', formatearRango(periodoProximo), [periodoProximo], true, hoy, ...args),
+      quincena1.dineroDisponible
     );
     const mes = construirPeriodo('mes', 'Este mes', formatearRango(rangoMes), [rangoMes], false, hoy, ...args);
-    mes.dineroDisponible = quincena1.dineroDisponible + quincena2.dineroDisponible;
+    mes.dineroDisponible = quincena2.dineroDisponible;
     mes.dineroReal = mes.dineroDisponible - mes.dineroComprometido;
+    mes.extra = quincena2.extra;
 
     // Gastos por categoría del mes (fijos + domiciliados de tarjeta (proyección) +
     // reales del mes: variables manuales/confirmados + compras de tarjeta).

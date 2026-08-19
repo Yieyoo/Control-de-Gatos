@@ -334,13 +334,23 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
           </p>
           <div className="mt-2 pt-2 border-t border-green-200">
             <p className="text-xs font-medium text-green-800">Dinero real</p>
-            <p
-              className={`text-sm sm:text-base font-bold leading-tight ${
-                p.dineroReal < 0 ? 'text-red-600' : 'text-green-700'
-              }`}
-            >
-              {formatearMoneda(p.dineroReal)}
-            </p>
+            <div className="flex items-baseline gap-1.5 flex-wrap">
+              <p
+                className={`text-sm sm:text-base font-bold leading-tight ${
+                  p.dineroReal < 0 ? 'text-red-600' : 'text-green-700'
+                }`}
+              >
+                {formatearMoneda(p.dineroReal)}
+              </p>
+              {!!p.extra && p.extra > 0 && (
+                <span
+                  className="text-[11px] font-semibold text-emerald-600"
+                  title="Sobrante de la quincena anterior que todavía no gastas"
+                >
+                  +{formatearMoneda(p.extra)} extra
+                </span>
+              )}
+            </div>
             <p className="text-[11px] text-green-800/60 leading-tight">con pendientes ya liquidados</p>
           </div>
         </div>

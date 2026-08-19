@@ -251,6 +251,8 @@ export interface IResumenPeriodo {
   /** Gastos fijos + ahorro programado que todavía falta que ocurra en este periodo (regla 12: "dinero comprometido"). */
   dineroComprometido: number;
   dineroReal: number;
+  /** Cuánto de "Dinero disponible" es sobrante de quincenas anteriores que todavía no se gasta (ver src/app/api/dashboard/route.ts). Solo lo calcula el Dashboard -- el detalle de un mes pasado en Historial Mensual no lo trae. */
+  extra?: number;
   porcentajeDestino: IPorcentajeDestino;
   movimientos: IMovimientoPeriodo[];
 }
