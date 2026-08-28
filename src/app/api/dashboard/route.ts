@@ -36,19 +36,24 @@ function neto(item: { cantidad: number; devoluciones: { cantidad: number }[] }):
 }
 
 /**
- * Cuántas quincenas completas ya "cerraron" entre el inicio del tracking (la
- * fecha de inicio del ingreso más antiguo) y el inicio de un periodo dado, sin
- * incluirlo -- Ingreso no tiene un día de pago propio, así que su monto se
- * prorratea por quincena completa (igual que en construirPeriodo). Si
- * `inicioReal` cae a la mitad de una quincena, esa quincena parcial no cuenta
- * (mejor subestimar el sobrante que inventar ingreso de antes de que
- * existiera el registro).
+ * Cuántas quincenas completas ya "cerraron" (terminaron del todo) entre el
+ * inicio del tracking (la fecha de inicio del ingreso más antiguo) y el
+ * inicio de un periodo dado -- Ingreso no tiene un día de pago propio, así
+ * que su monto se prorratea por quincena completa (igual que en
+ * construirPeriodo). Se compara el FIN de cada quincena (no su inicio)
+ * contra `inicioPeriodo`: cuando `inicioPeriodo` es el 1º de un mes de
+ * calendario (no un corte de quincena), una quincena puede empezar antes
+ * pero terminar después de esa fecha (ej. la quincena 25 ago-9 sep cruza a
+ * septiembre) -- esa quincena todavía no "cerró" antes del mes, así que no
+ * cuenta. Si `inicioReal` cae a la mitad de una quincena, esa quincena
+ * parcial tampoco cuenta (mejor subestimar el sobrante que inventar ingreso
+ * de antes de que existiera el registro).
  */
 function contarQuincenasAntes(inicioReal: Date, inicioPeriodo: Date): number {
   let cursor = periodoQuincenaActual(inicioReal, CORTE_1, CORTE_2);
   if (cursor.inicio < inicioReal) cursor = periodoQuincenaSiguiente(cursor, CORTE_1, CORTE_2);
   let n = 0;
-  while (cursor.inicio < inicioPeriodo && n < 120) {
+  while (cursor.fin < inicioPeriodo && n < 120) {
     n++;
     cursor = periodoQuincenaSiguiente(cursor, CORTE_1, CORTE_2);
   }
@@ -56,13 +61,13 @@ function contarQuincenasAntes(inicioReal: Date, inicioPeriodo: Date): number {
 }
 
 /**
- * Lo que sobra de todas las quincenas ya cerradas antes de que empiece
- * `periodoActual` -- el punto de partida ("extra") de la quincena actual (ver
+ * Lo que sobra de todo lo anterior a que empiece `periodo` (una quincena o el
+ * mes de calendario) -- el punto de partida ("extra") de ese periodo (ver
  * combinarConExtra). Se deriva de las filas reales (nunca se guarda), igual
  * que el resto de "Dinero disponible".
  */
 function calcularExtraAntesDe(
-  periodoActual: RangoFechas,
+  periodo: RangoFechas,
   ingresos: Ingreso[],
   gastosVariables: { cantidad: number; fuente: string; fecha: Date; devoluciones: { cantidad: number }[] }[],
   pagosTarjeta: { cantidad: number; fuente: string; fecha: Date }[],
@@ -72,10 +77,10 @@ function calcularExtraAntesDe(
   if (activos.length === 0) return 0;
 
   const inicioReal = new Date(Math.min(...activos.map((i) => new Date(i.fechaInicio).getTime())));
-  if (inicioReal >= periodoActual.inicio) return 0;
+  if (inicioReal >= periodo.inicio) return 0;
 
-  const numQuincenas = contarQuincenasAntes(inicioReal, periodoActual.inicio);
-  const rangoAntes: RangoFechas = { inicio: inicioReal, fin: new Date(periodoActual.inicio.getTime() - 1) };
+  const numQuincenas = contarQuincenasAntes(inicioReal, periodo.inicio);
+  const rangoAntes: RangoFechas = { inicio: inicioReal, fin: new Date(periodo.inicio.getTime() - 1) };
 
   const ingresoAntes = activos.reduce((sum, ing) => {
     if (ing.frecuencia === 'quincenal') return sum + ing.cantidad * numQuincenas;
@@ -86,7 +91,7 @@ function calcularExtraAntesDe(
     return sum;
   }, 0);
 
-  const antes = (fecha: Date) => fecha >= inicioReal && fecha < periodoActual.inicio;
+  const antes = (fecha: Date) => fecha >= inicioReal && fecha < periodo.inicio;
 
   return calcularDineroDisponible({
     ingresoAcumulado: ingresoAntes,
@@ -209,14 +214,17 @@ export async function GET() {
       movimientosAhorro,
     ] as const;
 
-    // Cada quincena calcula primero su "Dinero disponible" propio (SU ingreso
-    // menos SUS movimientos reales, ver construirPeriodo) y luego se le suma
-    // el sobrante ("extra") de la quincena anterior -- se va gastando primero
-    // ese extra antes de tocar el ingreso propio (ver combinarConExtra). El
-    // sobrante de la quincena actual es, a su vez, el "extra" de la próxima:
-    // por eso se encadena quincena1 -> quincena2. "Mes" no tiene un cálculo
-    // propio para este número -- es el mismo total ya encadenado de la
-    // próxima quincena (que ya incluye todo lo de la actual).
+    // Cada periodo (quincena1, quincena2, y también "mes") calcula primero su
+    // "Dinero disponible" propio (SU ingreso menos SUS movimientos reales
+    // dentro de SU propia ventana de fechas, ver construirPeriodo) y luego se
+    // le suma el sobrante ("extra") acumulado antes de que ese periodo
+    // empezara -- se va gastando primero ese extra antes de tocar el ingreso
+    // propio (ver combinarConExtra). Para quincena1/quincena2 ese extra se
+    // encadena (lo que sobra de quincena1 es el extra de quincena2); "Mes"
+    // usa su propio extra, acumulado desde antes del día 1 del mes, para que
+    // Dinero disponible/real de "Mes" quede acotado al mismo calendario (1 al
+    // último día) que Gastos fijos/variables/ahorro de esa misma tarjeta, en
+    // vez de reflejar fechas de la quincena próxima que ya no son "este mes".
     const extraAntesDeQuincena1 = calcularExtraAntesDe(
       periodoActual,
       ingresos,
@@ -232,10 +240,11 @@ export async function GET() {
       construirPeriodo('quincena2', 'la próxima quincena', formatearRango(periodoProximo), [periodoProximo], true, hoy, ...args, metas),
       quincena1.dineroDisponible
     );
-    const mes = construirPeriodo('mes', 'Este mes', formatearRango(rangoMes), [rangoMes], false, hoy, ...args, metas);
-    mes.dineroDisponible = quincena2.dineroDisponible;
-    mes.dineroReal = mes.dineroDisponible - mes.dineroComprometido;
-    mes.extra = quincena2.extra;
+    const extraAntesDelMes = calcularExtraAntesDe(rangoMes, ingresos, gastosVariables, pagosTarjeta, movimientosAhorro);
+    const mes = combinarConExtra(
+      construirPeriodo('mes', 'Este mes', formatearRango(rangoMes), [rangoMes], false, hoy, ...args, metas),
+      extraAntesDelMes
+    );
 
     // Gastos por categoría del mes (fijos + domiciliados de tarjeta (proyección) +
     // reales del mes: variables manuales/confirmados + compras de tarjeta).

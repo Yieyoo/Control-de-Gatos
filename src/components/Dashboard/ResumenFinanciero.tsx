@@ -7,6 +7,7 @@ import {
   hoyMexico,
   periodoQuincenaActual,
   periodoQuincenaSiguiente,
+  rangoMesActual,
   ocurrenciasDeGastoEnRangos,
   type RangoFechas,
 } from '@/utils/calculos';
@@ -82,13 +83,17 @@ function DeudaTarjetasExpandible({
   // se ve el panorama completo (lo pagado en gris + lo pendiente en rojo).
   const soloPendientes = vista === 'quincena2';
   // Los cargos domiciliados de tarjeta (Claude, Plan Telcel, etc.) se cuentan
-  // según la quincena que se esté viendo, no según el ciclo de corte de la
-  // tarjeta -- así uno que cobra el día 28 solo suma a la deuda (y aparece en
-  // la lista) en la quincena donde realmente cae, no antes.
+  // según la quincena/mes que se esté viendo, no según el ciclo de corte de
+  // la tarjeta -- así uno que cobra el día 28 solo suma a la deuda (y aparece
+  // en la lista) en el periodo donde realmente cae, no antes. "Mes" usa el
+  // calendario completo (1 al último día), igual que Dinero disponible/real
+  // y Gastos fijos de esa misma tarjeta -- no la suma de las dos quincenas,
+  // que se sale del mes de calendario.
   const periodoActual = periodoQuincenaActual(hoy, CORTE_1, CORTE_2);
   const periodoProximo = periodoQuincenaSiguiente(periodoActual, CORTE_1, CORTE_2);
+  const rangoMes = rangoMesActual(hoy);
   const rangosCargos: RangoFechas[] =
-    vista === 'quincena1' ? [periodoActual] : vista === 'quincena2' ? [periodoProximo] : [periodoActual, periodoProximo];
+    vista === 'quincena1' ? [periodoActual] : vista === 'quincena2' ? [periodoProximo] : [rangoMes];
 
   // Comprado/pagado siempre cuentan todo el historial (las compras y los pagos
   // no dependen de qué quincena se esté viendo); solo los cargos domiciliados
