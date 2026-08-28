@@ -7,6 +7,7 @@ import { useParams } from 'next/navigation';
 import { formatearMoneda } from '@/utils/calculos';
 import type { IMesDetalle } from '@/types';
 import { DetalleMovimientos } from '@/components/Dashboard/DetalleMovimientos';
+import { ArrowLeft, TrendingUp, FileText, ShoppingCart, PiggyBank, CreditCard } from 'lucide-react';
 
 export default function DetalleMesPage() {
   return (
@@ -55,8 +56,8 @@ function DetalleMesContenido() {
   return (
     <div className="space-y-5">
       <div>
-        <Link href={`/historial-mensual?año=${detalle.año}`} className="text-sm text-blue-600 hover:text-blue-800">
-          ← Volver al historial
+        <Link href={`/historial-mensual?año=${detalle.año}`} className="text-sm text-blue-600 hover:text-blue-800 inline-flex items-center gap-1">
+          <ArrowLeft className="w-4 h-4" strokeWidth={1.75} /> Volver al historial
         </Link>
         <h1 className="text-3xl font-bold mt-2">{detalle.etiqueta}</h1>
         <p className="text-gray-600 mt-1">{detalle.rangoTexto}</p>
@@ -64,22 +65,30 @@ function DetalleMesContenido() {
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div>
-          <p className="text-xs text-gray-500">📈 Ingresos</p>
+          <p className="text-xs text-gray-500 flex items-center gap-1">
+            <TrendingUp className="w-3.5 h-3.5" strokeWidth={1.75} /> Ingresos
+          </p>
           <p className="text-base sm:text-lg font-bold text-gray-900">{formatearMoneda(detalle.ingresos)}</p>
         </div>
         <div>
-          <p className="text-xs text-gray-500">📄 Gastos fijos</p>
+          <p className="text-xs text-gray-500 flex items-center gap-1">
+            <FileText className="w-3.5 h-3.5" strokeWidth={1.75} /> Gastos fijos
+          </p>
           <p className="text-base sm:text-lg font-bold text-gray-900">{formatearMoneda(detalle.gastosFijos)}</p>
           {detalle.gastosFijosPendiente > 0 && (
             <p className="text-[11px] text-amber-600">+{formatearMoneda(detalle.gastosFijosPendiente)} pendiente</p>
           )}
         </div>
         <div>
-          <p className="text-xs text-gray-500">🛒 Gastos variables</p>
+          <p className="text-xs text-gray-500 flex items-center gap-1">
+            <ShoppingCart className="w-3.5 h-3.5" strokeWidth={1.75} /> Gastos variables
+          </p>
           <p className="text-base sm:text-lg font-bold text-gray-900">{formatearMoneda(detalle.gastosVariables)}</p>
         </div>
         <div>
-          <p className="text-xs text-gray-500">🐷 Ahorro</p>
+          <p className="text-xs text-gray-500 flex items-center gap-1">
+            <PiggyBank className="w-3.5 h-3.5" strokeWidth={1.75} /> Ahorro
+          </p>
           <p className="text-base sm:text-lg font-bold text-gray-900">{formatearMoneda(detalle.ahorroDelMes)}</p>
           {detalle.ahorroDelMesPendiente > 0 && (
             <p className="text-[11px] text-amber-600">+{formatearMoneda(detalle.ahorroDelMesPendiente)} pendiente</p>
@@ -91,7 +100,9 @@ function DetalleMesContenido() {
 
       {(detalle.comprasTarjeta.length > 0 || detalle.pagosTarjeta.length > 0) && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <h2 className="text-lg font-bold text-gray-900 mb-1">💳 Tarjeta de crédito</h2>
+          <h2 className="text-lg font-bold text-gray-900 mb-1 flex items-center gap-2">
+            <CreditCard className="w-5 h-5" strokeWidth={1.75} /> Tarjeta de crédito
+          </h2>
           <p className="text-xs text-gray-500 mb-4">Compras y pagos de tarjeta registrados en este mes.</p>
 
           <div className="space-y-5">

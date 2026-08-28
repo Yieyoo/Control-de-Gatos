@@ -5,6 +5,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { IDepositoTercero } from '@/types';
 import { formatearMoneda, formatearDiaMes } from '@/utils/calculos';
+import { Handshake, Trash2 } from 'lucide-react';
 
 const ETIQUETA_ESTADO: Record<IDepositoTercero['estado'], { texto: string; clase: string }> = {
   pendiente: { texto: 'Pendiente', clase: 'bg-amber-100 text-amber-800' },
@@ -89,7 +90,9 @@ function TercerosContenido() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">🤝 Dinero de Terceros</h1>
+        <h1 className="text-3xl font-bold flex items-center gap-2">
+          <Handshake className="w-7 h-7" strokeWidth={1.75} /> Dinero de Terceros
+        </h1>
         <p className="text-gray-600 mt-1">Dinero que alguien más te depositó para pagar algo específico</p>
       </div>
 
@@ -201,8 +204,8 @@ function TercerosContenido() {
                     <p className="font-bold text-gray-900">{formatearMoneda(d.cantidad)}</p>
                     <p className="text-xs text-gray-500">Usado: {formatearMoneda(d.montoUtilizado)}</p>
                     <p className="text-xs font-semibold text-amber-600">Pendiente: {formatearMoneda(d.pendiente)}</p>
-                    <button onClick={() => handleEliminar(d.id)} className="text-red-600 hover:text-red-800 text-sm mt-1">
-                      🗑️ Eliminar
+                    <button onClick={() => handleEliminar(d.id)} className="text-red-600 hover:text-red-800 text-sm mt-1 inline-flex items-center gap-1">
+                      <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} /> Eliminar
                     </button>
                   </div>
                 </div>

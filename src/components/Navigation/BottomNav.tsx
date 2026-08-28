@@ -5,23 +5,48 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cerrarSesion } from '@/lib/cerrarSesion';
+import {
+  Home,
+  Wallet,
+  Receipt,
+  Landmark,
+  CreditCard,
+  Clock,
+  Handshake,
+  History,
+  Tag,
+  Scale,
+  CalendarDays,
+  LogOut,
+  type LucideIcon,
+} from 'lucide-react';
 
-const quickAddItems = [
-  { href: '/ingresos?nuevo=1', label: 'Registrar ingreso', icono: '💰' },
-  { href: '/gastos?nuevo=1', label: 'Registrar gasto', icono: '💸' },
-  { href: '/ahorros?nuevo=1', label: 'Registrar ahorro', icono: '🏦' },
-  { href: '/tarjetas?nuevo=1', label: 'Registrar compra con tarjeta de crédito', icono: '💳' },
-  { href: '/movimientos?nuevo=1', label: 'Agregar movimiento programado', icono: '⏰' },
-  { href: '/terceros?nuevo=1', label: 'Registrar dinero de terceros', icono: '🤝' },
+const quickAddItems: { href: string; label: string; icono: LucideIcon }[] = [
+  { href: '/ingresos?nuevo=1', label: 'Registrar ingreso', icono: Wallet },
+  { href: '/gastos?nuevo=1', label: 'Registrar gasto', icono: Receipt },
+  { href: '/ahorros?nuevo=1', label: 'Registrar ahorro', icono: Landmark },
+  { href: '/tarjetas?nuevo=1', label: 'Registrar compra con tarjeta de crédito', icono: CreditCard },
+  { href: '/movimientos?nuevo=1', label: 'Agregar movimiento programado', icono: Clock },
+  { href: '/terceros?nuevo=1', label: 'Registrar dinero de terceros', icono: Handshake },
 ];
 
-const verItems = [
-  { href: '/historial', label: 'Historial', icono: '📜' },
-  { href: '/categorias', label: 'Categorías', icono: '🏷️' },
-  { href: '/porcentajes', label: 'Cambiar % destinado a cada cosa', icono: '⚖️' },
+const verItems: { href: string; label: string; icono: LucideIcon }[] = [
+  { href: '/historial', label: 'Historial', icono: History },
+  { href: '/categorias', label: 'Categorías', icono: Tag },
+  { href: '/porcentajes', label: 'Cambiar % destinado a cada cosa', icono: Scale },
 ];
 
-function TabLink({ href, label, icono, activo }: { href: string; label: string; icono: string; activo: boolean }) {
+function TabLink({
+  href,
+  label,
+  icono: Icono,
+  activo,
+}: {
+  href: string;
+  label: string;
+  icono: LucideIcon;
+  activo: boolean;
+}) {
   return (
     <Link
       href={href}
@@ -29,7 +54,7 @@ function TabLink({ href, label, icono, activo }: { href: string; label: string; 
         activo ? 'text-blue-600' : 'text-gray-500'
       }`}
     >
-      <span className="text-xl leading-none">{icono}</span>
+      <Icono className="w-5 h-5" strokeWidth={2} />
       {label}
     </Link>
   );
@@ -62,7 +87,7 @@ export function BottomNav() {
     <>
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-20 bg-white border-t border-gray-200 pb-[max(env(safe-area-inset-bottom),0.75rem)]">
         <div className="flex items-center">
-          <TabLink href="/" label="Inicio" icono="🏠" activo={pathname === '/'} />
+          <TabLink href="/" label="Inicio" icono={Home} activo={pathname === '/'} />
 
           <div className="flex-1 flex justify-center">
             <button
@@ -78,7 +103,7 @@ export function BottomNav() {
           <TabLink
             href="/historial-mensual"
             label="Meses"
-            icono="🗓️"
+            icono={CalendarDays}
             activo={pathname === '/historial-mensual'}
           />
         </div>
@@ -94,7 +119,7 @@ export function BottomNav() {
               onClick={() => setMenuAbierto(false)}
               className="flex items-center gap-3 px-2 py-3 rounded-lg hover:bg-gray-50 text-gray-800 font-medium"
             >
-              <span className="text-xl">{item.icono}</span>
+              <item.icono className="w-5 h-5 text-gray-500" strokeWidth={1.75} />
               {item.label}
             </Link>
           ))}
@@ -107,7 +132,7 @@ export function BottomNav() {
               onClick={() => setMenuAbierto(false)}
               className="flex items-center gap-3 px-2 py-3 rounded-lg hover:bg-gray-50 text-gray-800 font-medium"
             >
-              <span className="text-xl">{item.icono}</span>
+              <item.icono className="w-5 h-5 text-gray-500" strokeWidth={1.75} />
               {item.label}
             </Link>
           ))}
@@ -118,7 +143,7 @@ export function BottomNav() {
               onClick={cerrarSesion}
               className="w-full flex items-center gap-3 px-2 py-3 rounded-lg hover:bg-red-50 text-red-600 font-medium"
             >
-              <span className="text-xl">🚪</span>
+              <LogOut className="w-5 h-5" strokeWidth={1.75} />
               Cerrar sesión
             </button>
           </div>

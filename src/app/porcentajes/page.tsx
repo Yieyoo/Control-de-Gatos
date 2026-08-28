@@ -4,13 +4,14 @@
 import { useEffect, useState } from 'react';
 import { formatearMoneda } from '@/utils/calculos';
 import type { IIngreso, IPorcentajesMeta } from '@/types';
+import { Scale, Home, Gamepad2, PiggyBank, Check, type LucideIcon } from 'lucide-react';
 
 const DEFECTO: IPorcentajesMeta = { necesidades: 50, gustos: 20, ahorro: 30 };
 
-const RUBROS: { clave: keyof IPorcentajesMeta; etiqueta: string; icono: string; textoColor: string }[] = [
-  { clave: 'necesidades', etiqueta: 'Necesidades', icono: '🏠', textoColor: 'text-blue-700' },
-  { clave: 'gustos', etiqueta: 'Gustos', icono: '🎮', textoColor: 'text-purple-700' },
-  { clave: 'ahorro', etiqueta: 'Ahorro', icono: '🐷', textoColor: 'text-green-700' },
+const RUBROS: { clave: keyof IPorcentajesMeta; etiqueta: string; icono: LucideIcon; textoColor: string }[] = [
+  { clave: 'necesidades', etiqueta: 'Necesidades', icono: Home, textoColor: 'text-blue-700' },
+  { clave: 'gustos', etiqueta: 'Gustos', icono: Gamepad2, textoColor: 'text-purple-700' },
+  { clave: 'ahorro', etiqueta: 'Ahorro', icono: PiggyBank, textoColor: 'text-green-700' },
 ];
 
 export default function PorcentajesPage() {
@@ -89,7 +90,9 @@ export default function PorcentajesPage() {
   return (
     <div className="space-y-6 max-w-lg">
       <div>
-        <h1 className="text-3xl font-bold">⚖️ % destinado a cada cosa</h1>
+        <h1 className="text-3xl font-bold flex items-center gap-2">
+          <Scale className="w-7 h-7" strokeWidth={1.75} /> % destinado a cada cosa
+        </h1>
         <p className="text-gray-600 mt-1">
           Define qué porcentaje de tu ingreso quieres destinar a necesidades, gustos y ahorro. Esto es lo que se
           compara contra tu meta en el Dashboard.
@@ -101,7 +104,9 @@ export default function PorcentajesPage() {
       <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-5">
         {RUBROS.map((r) => (
           <div key={r.clave} className="flex items-center gap-3">
-            <span className="text-xl w-8 flex-shrink-0 text-center">{r.icono}</span>
+            <span className="w-8 h-8 flex-shrink-0 rounded-lg bg-gray-100 flex items-center justify-center">
+              <r.icono className={`w-4 h-4 ${r.textoColor}`} strokeWidth={1.75} />
+            </span>
             <span className="flex-1 text-sm font-medium text-gray-700">{r.etiqueta}</span>
             <div className="flex items-center gap-1 flex-shrink-0">
               <input
@@ -135,7 +140,11 @@ export default function PorcentajesPage() {
         >
           {guardando ? 'Guardando...' : 'Guardar'}
         </button>
-        {guardado && <p className="text-sm text-green-600 text-center">✓ Guardado</p>}
+        {guardado && (
+          <p className="text-sm text-green-600 text-center flex items-center justify-center gap-1">
+            <Check className="w-4 h-4" strokeWidth={2} /> Guardado
+          </p>
+        )}
       </div>
 
       {ingresoQuincenal > 0 && (
@@ -153,8 +162,8 @@ export default function PorcentajesPage() {
               <div className="grid grid-cols-3 gap-3">
                 {RUBROS.map((r) => (
                   <div key={r.clave} className="text-center">
-                    <p className="text-xs text-gray-500">
-                      {r.icono} {r.etiqueta}
+                    <p className="text-xs text-gray-500 flex items-center justify-center gap-1">
+                      <r.icono className="w-3.5 h-3.5" strokeWidth={1.75} /> {r.etiqueta}
                     </p>
                     <p className={`text-base font-bold mt-0.5 ${r.textoColor}`}>
                       {formatearMoneda((ingreso * valores[r.clave]) / 100)}

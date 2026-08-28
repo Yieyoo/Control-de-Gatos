@@ -6,11 +6,12 @@ import { useSearchParams } from 'next/navigation';
 import type { IGastoVariable, ICategoria, IAhorroLugar, IDepositoTercero, IFuenteDinero, ITarjetaCredito } from '@/types';
 import { formatearMoneda, formatearDiaMes } from '@/utils/calculos';
 import { SelectorDiasSemana } from '@/components/SelectorDiasSemana';
+import { Receipt, Pencil, Trash2, Repeat, Undo2 } from 'lucide-react';
 
 const ETIQUETA_FUENTE: Record<IFuenteDinero, string> = {
-  disponible: '💵 Disponible',
-  ahorro: '🏦 Ahorro',
-  tercero: '🤝 Tercero',
+  disponible: 'Disponible',
+  ahorro: 'Ahorro',
+  tercero: 'Tercero',
 };
 
 export default function GastosPage() {
@@ -269,7 +270,9 @@ function GastosContenido() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">💸 Gastos Variables</h1>
+        <h1 className="text-3xl font-bold flex items-center gap-2">
+          <Receipt className="w-7 h-7" strokeWidth={1.75} /> Gastos Variables
+        </h1>
         <p className="text-gray-600 mt-1">Registra tus gastos conforme ocurren</p>
       </div>
 
@@ -588,7 +591,12 @@ function GastosContenido() {
                     {gasto.notas && ` • ${gasto.notas}`}
                     {' • '}
                     {ETIQUETA_FUENTE[gasto.fuente]}
-                    {gasto.gastoDomiciliadoOrigenId != null && ' • 🔁 automático'}
+                    {gasto.gastoDomiciliadoOrigenId != null && (
+                      <span className="inline-flex items-center gap-0.5">
+                        {' • '}
+                        <Repeat className="w-3 h-3" strokeWidth={1.75} /> automático
+                      </span>
+                    )}
                   </p>
                 </div>
                 <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
@@ -599,10 +607,10 @@ function GastosContenido() {
                     )}
                   </div>
                   <button onClick={() => iniciarEdicion(gasto)} className="text-blue-600 hover:text-blue-800">
-                    ✏️
+                    <Pencil className="w-4 h-4" strokeWidth={1.75} />
                   </button>
                   <button onClick={() => handleEliminar(gasto.id)} className="text-red-600 hover:text-red-800">
-                    🗑️
+                    <Trash2 className="w-4 h-4" strokeWidth={1.75} />
                   </button>
                 </div>
               </div>
@@ -610,8 +618,9 @@ function GastosContenido() {
               {(gasto.devoluciones?.length ?? 0) > 0 && (
                 <ul className="text-xs text-gray-500 space-y-0.5">
                   {gasto.devoluciones!.map((d) => (
-                    <li key={d.id}>
-                      ↩️ Devolución {formatearMoneda(d.cantidad)} · {formatearDiaMes(new Date(d.fecha))}
+                    <li key={d.id} className="inline-flex items-center gap-1">
+                      <Undo2 className="w-3 h-3 flex-shrink-0" strokeWidth={1.75} />
+                      Devolución {formatearMoneda(d.cantidad)} · {formatearDiaMes(new Date(d.fecha))}
                       {d.concepto && ` · ${d.concepto}`}
                     </li>
                   ))}
@@ -653,9 +662,9 @@ function GastosContenido() {
               ) : (
                 <button
                   onClick={() => setFormDevolucionAbierto(gasto.id)}
-                  className="text-xs text-blue-600 hover:text-blue-800"
+                  className="text-xs text-blue-600 hover:text-blue-800 inline-flex items-center gap-1"
                 >
-                  ↩️ Registrar devolución
+                  <Undo2 className="w-3.5 h-3.5" strokeWidth={1.75} /> Registrar devolución
                 </button>
               )}
             </div>

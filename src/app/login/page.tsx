@@ -2,6 +2,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Wallet } from 'lucide-react';
 
 export default function LoginPage() {
   const [password, setPassword] = useState('');
@@ -36,7 +37,9 @@ export default function LoginPage() {
         className="w-full max-w-sm bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4"
       >
         <div className="text-center mb-2">
-          <p className="text-3xl mb-2">💵</p>
+          <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center mx-auto mb-3">
+            <Wallet className="w-6 h-6" strokeWidth={1.75} />
+          </div>
           <h1 className="text-xl font-bold text-gray-900">Control de Gastos</h1>
           <p className="text-sm text-gray-500 mt-1">Ingresa tu contraseña para continuar</p>
         </div>

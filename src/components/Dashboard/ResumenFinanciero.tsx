@@ -11,6 +11,20 @@ import {
   type RangoFechas,
 } from '@/utils/calculos';
 import type { IDashboardResumen, IResumenPeriodo, ICompraTarjeta, IPagoTarjeta, IGastoDomiciliado } from '@/types';
+import {
+  CreditCard,
+  ChevronUp,
+  ChevronDown,
+  TrendingUp,
+  PiggyBank,
+  FileText,
+  ShoppingCart,
+  Banknote,
+  Landmark,
+  Eye,
+  EyeOff,
+  Check,
+} from 'lucide-react';
 
 type Vista = 'mes' | 'quincena1' | 'quincena2';
 
@@ -140,11 +154,15 @@ function DeudaTarjetasExpandible({
         className="w-full flex items-center justify-between"
       >
         <span className="flex items-center gap-2 text-sm font-medium text-gray-700">
-          <span className="text-lg">💳</span> Deuda de tarjetas
+          <CreditCard className="w-4 h-4 text-gray-500" strokeWidth={1.75} /> Deuda de tarjetas
         </span>
         <span className="flex items-center gap-2">
           <span className="font-bold text-red-600">{formatearMoneda(total)}</span>
-          <span className="text-gray-400 text-xs">{expandido ? '▲' : '▼'}</span>
+          {expandido ? (
+            <ChevronUp className="w-4 h-4 text-gray-400" strokeWidth={2} />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-gray-400" strokeWidth={2} />
+          )}
         </span>
       </button>
 
@@ -257,28 +275,28 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
     {
       titulo: 'Ingresos',
       cantidad: p.ingresos,
-      badge: 'bg-blue-100',
-      icono: '📈',
+      badge: 'bg-blue-100 text-blue-700',
+      icono: TrendingUp,
     },
     {
       titulo: 'Ahorro',
       cantidad: p.ahorroDelMes,
       subtitulo: p.ahorroDelMesPendiente > 0 ? `+${formatearMoneda(p.ahorroDelMesPendiente)} pendiente` : undefined,
-      badge: 'bg-violet-100',
-      icono: '🐷',
+      badge: 'bg-violet-100 text-violet-700',
+      icono: PiggyBank,
     },
     {
       titulo: 'Gastos fijos',
       cantidad: p.gastosFijos,
       subtitulo: p.gastosFijosPendiente > 0 ? `+${formatearMoneda(p.gastosFijosPendiente)} pendiente` : undefined,
-      badge: 'bg-orange-100',
-      icono: '📄',
+      badge: 'bg-orange-100 text-orange-700',
+      icono: FileText,
     },
     {
       titulo: 'Gastos variables',
       cantidad: p.gastosVariables,
-      badge: 'bg-pink-100',
-      icono: '🛒',
+      badge: 'bg-pink-100 text-pink-700',
+      icono: ShoppingCart,
     },
   ];
 
@@ -306,8 +324,8 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
       <div className="grid grid-cols-2 gap-4 mb-5">
         {tarjetas.map((tarjeta) => (
           <div key={tarjeta.titulo} className="flex items-start gap-3">
-            <div className={`w-10 h-10 rounded-xl ${tarjeta.badge} flex items-center justify-center text-lg flex-shrink-0`}>
-              {tarjeta.icono}
+            <div className={`w-10 h-10 rounded-xl ${tarjeta.badge} flex items-center justify-center flex-shrink-0`}>
+              <tarjeta.icono className="w-5 h-5" strokeWidth={1.75} />
             </div>
             <div className="min-w-0">
               <p className="text-xs text-gray-500 leading-tight">{tarjeta.titulo}</p>
@@ -325,7 +343,7 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-xl bg-green-50 p-4">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-lg">💵</span>
+            <Banknote className="w-5 h-5 text-green-700" strokeWidth={1.75} />
             <p className="text-xs font-medium text-green-800">Dinero disponible</p>
           </div>
 
@@ -358,7 +376,7 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
         <div className="rounded-xl bg-blue-50 p-4">
           <div className="flex items-center justify-between gap-2 mb-1">
             <div className="flex items-center gap-2">
-              <span className="text-lg">🏛️</span>
+              <Landmark className="w-5 h-5 text-blue-700" strokeWidth={1.75} />
               <p className="text-xs font-medium text-blue-800">Ahorro e inversión</p>
             </div>
             <button
@@ -367,7 +385,11 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
               aria-label={ocultarAhorro ? 'Mostrar ahorro' : 'Ocultar ahorro'}
               className="text-blue-700/60 hover:text-blue-700"
             >
-              {ocultarAhorro ? '🙈' : '👁️'}
+              {ocultarAhorro ? (
+                <EyeOff className="w-4 h-4" strokeWidth={1.75} />
+              ) : (
+                <Eye className="w-4 h-4" strokeWidth={1.75} />
+              )}
             </button>
           </div>
 
@@ -390,9 +412,9 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
                 />
                 <button
                   type="submit"
-                  className="flex-shrink-0 bg-blue-600 text-white text-sm font-medium px-2.5 rounded hover:bg-blue-700"
+                  className="flex-shrink-0 bg-blue-600 text-white text-sm font-medium px-2.5 rounded hover:bg-blue-700 flex items-center justify-center"
                 >
-                  ✓
+                  <Check className="w-4 h-4" strokeWidth={2.5} />
                 </button>
               </div>
               {pinIncorrecto && <p className="text-[11px] text-red-600 mt-1">PIN incorrecto</p>}

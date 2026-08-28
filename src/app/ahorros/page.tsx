@@ -5,6 +5,19 @@ import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { IAhorroLugar, IMovimientoAhorro } from '@/types';
 import { formatearMoneda, formatearDiaMes } from '@/utils/calculos';
+import {
+  Landmark,
+  TrendingUp,
+  Banknote,
+  Briefcase,
+  Pencil,
+  Trash2,
+  Plus,
+  Minus,
+  Repeat,
+  Receipt,
+  type LucideIcon,
+} from 'lucide-react';
 
 export default function AhorrosPage() {
   return (
@@ -165,17 +178,19 @@ function AhorrosContenido() {
   if (cargando) return <div>Cargando...</div>;
 
   const totalAhorros = ahorros.reduce((sum, a) => sum + a.saldoActual, 0);
-  const tipoIconos: Record<string, string> = {
-    cuenta_ahorro: '🏦',
-    inversion: '📈',
-    efectivo: '💵',
-    otra: '💼',
+  const tipoIconos: Record<string, LucideIcon> = {
+    cuenta_ahorro: Landmark,
+    inversion: TrendingUp,
+    efectivo: Banknote,
+    otra: Briefcase,
   };
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">🏦 Mis Ahorros</h1>
+        <h1 className="text-3xl font-bold flex items-center gap-2">
+          <Landmark className="w-7 h-7" strokeWidth={1.75} /> Mis Ahorros
+        </h1>
         <p className="text-gray-600 mt-1">Administra tus cuentas y lugares de ahorro</p>
       </div>
 
@@ -325,7 +340,10 @@ function AhorrosContenido() {
               <div className="flex justify-between items-start mb-4">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-3xl">{tipoIconos[ahorro.tipo] || '💼'}</span>
+                    {(() => {
+                      const Icono = tipoIconos[ahorro.tipo] || Briefcase;
+                      return <Icono className="w-7 h-7 text-blue-600" strokeWidth={1.5} />;
+                    })()}
                     <p className="font-semibold text-lg">{ahorro.nombre}</p>
                   </div>
                   <p className="text-sm text-gray-600 mt-1">{ahorro.tipo}</p>
@@ -336,13 +354,13 @@ function AhorrosContenido() {
                     className="text-blue-600 hover:text-blue-800"
                     aria-label={`Editar ${ahorro.nombre}`}
                   >
-                    ✏️
+                    <Pencil className="w-4 h-4" strokeWidth={1.75} />
                   </button>
                   <button
                     onClick={() => handleEliminar(ahorro.id)}
                     className="text-red-600 hover:text-red-800"
                   >
-                    🗑️
+                    <Trash2 className="w-4 h-4" strokeWidth={1.75} />
                   </button>
                 </div>
               </div>
@@ -359,9 +377,9 @@ function AhorrosContenido() {
                 {formMovAbierto !== ahorro.id ? (
                   <button
                     onClick={() => setFormMovAbierto(ahorro.id)}
-                    className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                    className="text-blue-600 hover:text-blue-800 text-sm font-medium inline-flex items-center gap-1"
                   >
-                    ➕ Registrar movimiento
+                    <Plus className="w-4 h-4" strokeWidth={2} /> Registrar movimiento
                   </button>
                 ) : (
                   <form
@@ -419,10 +437,17 @@ function AhorrosContenido() {
                         const puedeBorrar = m.origen !== 'pago_gasto' && m.origen !== 'pago_tarjeta';
                         return (
                           <div key={m.id} className="flex items-center justify-between gap-2 text-sm">
-                            <span className="min-w-0 flex-1 truncate text-gray-700">
-                              {m.tipo === 'deposito' ? '➕' : '➖'} {m.concepto}
-                              {m.origen === 'domiciliado' && ' · 🔁'}
-                              {(m.origen === 'pago_gasto' || m.origen === 'pago_tarjeta') && ' · 💸'}
+                            <span className="min-w-0 flex-1 truncate text-gray-700 inline-flex items-center gap-1">
+                              {m.tipo === 'deposito' ? (
+                                <Plus className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={2} />
+                              ) : (
+                                <Minus className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={2} />
+                              )}
+                              <span className="truncate">{m.concepto}</span>
+                              {m.origen === 'domiciliado' && <Repeat className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" strokeWidth={1.75} />}
+                              {(m.origen === 'pago_gasto' || m.origen === 'pago_tarjeta') && (
+                                <Receipt className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" strokeWidth={1.75} />
+                              )}
                             </span>
                             <span className="text-xs text-gray-400 flex-shrink-0">
                               {formatearDiaMes(new Date(m.fecha))}
@@ -441,7 +466,7 @@ function AhorrosContenido() {
                                 className="text-gray-400 hover:text-red-600 flex-shrink-0"
                                 aria-label="Eliminar movimiento"
                               >
-                                🗑️
+                                <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
                               </button>
                             ) : (
                               <span className="w-4 flex-shrink-0" title="Bórralo desde el gasto o pago que lo generó" />

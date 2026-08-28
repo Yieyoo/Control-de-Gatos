@@ -3,6 +3,7 @@
 
 import { formatearMoneda } from '@/utils/calculos';
 import type { IMesResumen } from '@/types';
+import { TrendingUp, X } from 'lucide-react';
 
 interface GraficaAnualModalProps {
   año: number;
@@ -34,9 +35,11 @@ export function GraficaAnualModal({ año, meses, onClose }: GraficaAnualModalPro
       <button type="button" aria-label="Cerrar" onClick={onClose} className="absolute inset-0 bg-black/40" />
       <div className="relative bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl p-5 max-h-[85vh] overflow-y-auto shadow-lg">
         <div className="flex items-center justify-between mb-1">
-          <h2 className="text-lg font-bold text-gray-900">📈 Gráfica anual {año}</h2>
-          <button type="button" onClick={onClose} aria-label="Cerrar" className="text-gray-400 hover:text-gray-600 text-xl leading-none px-1">
-            ×
+          <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <TrendingUp className="w-5 h-5" strokeWidth={1.75} /> Gráfica anual {año}
+          </h2>
+          <button type="button" onClick={onClose} aria-label="Cerrar" className="text-gray-400 hover:text-gray-600 px-1">
+            <X className="w-5 h-5" strokeWidth={2} />
           </button>
         </div>
 

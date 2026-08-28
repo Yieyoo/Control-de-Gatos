@@ -5,19 +5,34 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cerrarSesion } from '@/lib/cerrarSesion';
 import { formatearDiaMes, hoyMexico } from '@/utils/calculos';
+import {
+  Wallet,
+  LayoutDashboard,
+  TrendingUp,
+  Landmark,
+  Receipt,
+  CreditCard,
+  Handshake,
+  Clock,
+  History,
+  CalendarDays,
+  Tag,
+  Scale,
+  type LucideIcon,
+} from 'lucide-react';
 
-const menuItems = [
-  { href: '/', label: 'Dashboard', icono: '📊' },
-  { href: '/ingresos', label: 'Ingresos', icono: '📈' },
-  { href: '/ahorros', label: 'Ahorros', icono: '🏦' },
-  { href: '/gastos', label: 'Gastos', icono: '💸' },
-  { href: '/tarjetas', label: 'Tarjeta de Crédito', icono: '💳' },
-  { href: '/terceros', label: 'Dinero de Terceros', icono: '🤝' },
-  { href: '/movimientos', label: 'Movimientos Programados', icono: '⏰' },
-  { href: '/historial', label: 'Historial', icono: '📜' },
-  { href: '/historial-mensual', label: 'Historial Mensual', icono: '🗓️' },
-  { href: '/categorias', label: 'Categorías', icono: '🏷️' },
-  { href: '/porcentajes', label: '% destinado a cada cosa', icono: '⚖️' },
+const menuItems: { href: string; label: string; icono: LucideIcon }[] = [
+  { href: '/', label: 'Dashboard', icono: LayoutDashboard },
+  { href: '/ingresos', label: 'Ingresos', icono: TrendingUp },
+  { href: '/ahorros', label: 'Ahorros', icono: Landmark },
+  { href: '/gastos', label: 'Gastos', icono: Receipt },
+  { href: '/tarjetas', label: 'Tarjeta de Crédito', icono: CreditCard },
+  { href: '/terceros', label: 'Dinero de Terceros', icono: Handshake },
+  { href: '/movimientos', label: 'Movimientos Programados', icono: Clock },
+  { href: '/historial', label: 'Historial', icono: History },
+  { href: '/historial-mensual', label: 'Historial Mensual', icono: CalendarDays },
+  { href: '/categorias', label: 'Categorías', icono: Tag },
+  { href: '/porcentajes', label: '% destinado a cada cosa', icono: Scale },
 ];
 
 export function Navbar() {
@@ -32,7 +47,7 @@ export function Navbar() {
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex items-center justify-between h-14">
           <Link href="/" className="flex items-center gap-2 min-w-0">
-            <span className="text-lg flex-shrink-0">📊</span>
+            <Wallet className="w-5 h-5 flex-shrink-0 text-white" strokeWidth={1.75} />
             <span className="text-base font-semibold text-white truncate">Control de Gastos</span>
           </Link>
 
@@ -49,11 +64,11 @@ export function Navbar() {
                 key={item.href}
                 href={item.href}
                 className={`
-                  px-3 py-1.5 rounded-md text-sm font-medium transition-colors
+                  flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors
                   ${isActive ? 'bg-white/15 text-white' : 'text-white/60 hover:bg-white/10 hover:text-white'}
                 `}
               >
-                <span className="mr-1">{item.icono}</span>
+                <item.icono className="w-4 h-4" strokeWidth={1.75} />
                 {item.label}
               </Link>
             );

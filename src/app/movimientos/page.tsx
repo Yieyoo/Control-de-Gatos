@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import type { IGastoDomiciliado, IAhorroDomiciliado, ICategoria, IAhorroLugar, ITarjetaCredito } from '@/types';
 import { formatearMoneda } from '@/utils/calculos';
 import { SelectorDiasSemana } from '@/components/SelectorDiasSemana';
+import { CreditCard, Pencil, Trash2, Landmark, Clock } from 'lucide-react';
 
 const etiquetaFrecuencia: Record<string, string> = {
   mensual: 'Mensual',
@@ -291,7 +292,9 @@ function MovimientosContenido() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">⏰ Movimientos Programados</h1>
+        <h1 className="text-3xl font-bold flex items-center gap-2">
+          <Clock className="w-7 h-7" strokeWidth={1.75} /> Movimientos Programados
+        </h1>
         <p className="text-gray-600 mt-1">Gestiona tus gastos y ahorros automáticos</p>
       </div>
 
@@ -302,7 +305,9 @@ function MovimientosContenido() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Gastos Domiciliados */}
         <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
-          <h2 className="text-xl font-bold">💳 Gastos Domiciliados</h2>
+          <h2 className="text-xl font-bold flex items-center gap-2">
+            <CreditCard className="w-5 h-5" strokeWidth={1.75} /> Gastos Domiciliados
+          </h2>
 
           {!mostrarFormGasto && (
             <button
@@ -546,16 +551,21 @@ function MovimientosContenido() {
                         {g.frecuencia === 'semanal'
                           ? formatearDiasSemana(g.diasSemana)
                           : `Día ${g.fechaCobro} • ${etiquetaFrecuencia[g.frecuencia]}`}
-                        {g.tarjeta && ` • 💳 ${g.tarjeta.nombre}`}
+                        {g.tarjeta && (
+                          <span className="inline-flex items-center gap-0.5">
+                            {' • '}
+                            <CreditCard className="w-3 h-3" strokeWidth={1.75} /> {g.tarjeta.nombre}
+                          </span>
+                        )}
                       </p>
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0">
                       <p className="font-bold text-red-600 whitespace-nowrap">{formatearMoneda(g.cantidad)}</p>
                       <button onClick={() => iniciarEdicionGasto(g)} className="text-blue-600 hover:text-blue-800">
-                        ✏️
+                        <Pencil className="w-4 h-4" strokeWidth={1.75} />
                       </button>
                       <button onClick={() => handleEliminarGasto(g.id)} className="text-red-600 hover:text-red-800">
-                        🗑️
+                        <Trash2 className="w-4 h-4" strokeWidth={1.75} />
                       </button>
                     </div>
                   </div>
@@ -567,7 +577,9 @@ function MovimientosContenido() {
 
         {/* Ahorros Domiciliados */}
         <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
-          <h2 className="text-xl font-bold">💰 Ahorros Domiciliados</h2>
+          <h2 className="text-xl font-bold flex items-center gap-2">
+            <Landmark className="w-5 h-5" strokeWidth={1.75} /> Ahorros Domiciliados
+          </h2>
 
           {ahorroLugares.length === 0 ? (
             <div className="bg-yellow-50 border border-yellow-200 rounded p-4 text-yellow-800 text-sm">
@@ -687,7 +699,7 @@ function MovimientosContenido() {
                     <div className="flex items-center gap-3 flex-shrink-0">
                       <p className="font-bold text-blue-600 whitespace-nowrap">{formatearMoneda(a.cantidad)}</p>
                       <button onClick={() => handleEliminarAhorro(a.id)} className="text-red-600 hover:text-red-800">
-                        🗑️
+                        <Trash2 className="w-4 h-4" strokeWidth={1.75} />
                       </button>
                     </div>
                   </div>

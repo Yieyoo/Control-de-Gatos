@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { formatearMoneda } from '@/utils/calculos';
 import type { IMovimientoPeriodo } from '@/types';
+import { CreditCard } from 'lucide-react';
 
 interface DetalleMovimientosProps {
   etiqueta: string;
@@ -73,9 +74,13 @@ export function DetalleMovimientos({ etiqueta, movimientos, onActualizar }: Deta
                         className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                         style={{ backgroundColor: m.categoriaColor ?? '#e34948' }}
                       />
-                      <span className={`flex-1 min-w-0 truncate text-sm ${m.pagado ? 'text-gray-400' : 'text-gray-900'}`}>
-                        {m.nombre}
-                        {m.credito && ' 💳'}
+                      <span
+                        className={`flex-1 min-w-0 truncate text-sm inline-flex items-center gap-1 ${
+                          m.pagado ? 'text-gray-400' : 'text-gray-900'
+                        }`}
+                      >
+                        <span className="truncate">{m.nombre}</span>
+                        {m.credito && <CreditCard className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={1.75} />}
                       </span>
                       <span className="text-xs text-gray-400 flex-shrink-0">{formatearFecha(m.fecha)}</span>
                       <span

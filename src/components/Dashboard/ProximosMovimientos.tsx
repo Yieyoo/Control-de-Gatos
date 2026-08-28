@@ -2,6 +2,7 @@
 
 import { formatearMoneda } from '@/utils/calculos';
 import type { IProximoMovimiento } from '@/types';
+import { PiggyBank, Repeat } from 'lucide-react';
 
 interface ProximosMovimientosProps {
   movimientos: IProximoMovimiento[];
@@ -45,10 +46,14 @@ export function ProximosMovimientos({ movimientos }: ProximosMovimientosProps) {
             return (
               <li key={mov.id} className="py-3 first:pt-0 last:pb-0 flex items-center gap-3">
                 <div
-                  className="w-9 h-9 rounded-full flex items-center justify-center text-base flex-shrink-0"
+                  className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
                   style={{ backgroundColor: esAhorro ? '#dbeafe' : (mov.categoriaColor ? `${mov.categoriaColor}22` : '#fee2e2') }}
                 >
-                  {esAhorro ? '🐷' : '🔁'}
+                  {esAhorro ? (
+                    <PiggyBank className="w-4 h-4 text-blue-700" strokeWidth={1.75} />
+                  ) : (
+                    <Repeat className="w-4 h-4 text-red-600" strokeWidth={1.75} />
+                  )}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="font-medium text-gray-900 truncate">{mov.nombre}</p>

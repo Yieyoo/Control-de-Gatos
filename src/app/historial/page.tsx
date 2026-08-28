@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react';
 import type { IMovimientoAhorro, IPagoTarjeta, IGastoVariable, ICompraTarjeta } from '@/types';
 import { formatearMoneda, formatearDiaMes } from '@/utils/calculos';
+import { History } from 'lucide-react';
 
 type Filtro = 'todos' | 'gastos' | 'ahorros' | 'tarjeta';
 
@@ -19,9 +20,9 @@ interface ItemHistorial {
 }
 
 const ETIQUETA_FUENTE: Record<string, string> = {
-  disponible: '💵 disponible',
-  ahorro: '🏦 ahorro',
-  tercero: '🤝 tercero',
+  disponible: 'disponible',
+  ahorro: 'ahorro',
+  tercero: 'tercero',
 };
 
 export default function HistorialPage() {
@@ -60,7 +61,7 @@ export default function HistorialPage() {
         id: `ahorro-${m.id}`,
         fecha: m.fecha,
         titulo: m.concepto,
-        subtitulo: `${m.tipo === 'deposito' ? 'Depósito' : 'Retiro'} • ${m.ahorro?.nombre ?? 'Ahorro'}${m.origen === 'domiciliado' ? ' • 🔁 automático' : ''}`,
+        subtitulo: `${m.tipo === 'deposito' ? 'Depósito' : 'Retiro'} • ${m.ahorro?.nombre ?? 'Ahorro'}${m.origen === 'domiciliado' ? ' • automático' : ''}`,
         cantidad: m.cantidad,
         signo: (m.tipo === 'deposito' ? '+' : '-') as '+' | '-',
         color: m.tipo === 'deposito' ? 'text-green-600' : 'text-red-600',
@@ -82,7 +83,7 @@ export default function HistorialPage() {
         id: `gasto-${g.id}`,
         fecha: g.fecha as unknown as string,
         titulo: g.nombre,
-        subtitulo: `Gasto • ${g.categoria?.nombre ?? 'Sin categoría'} • ${ETIQUETA_FUENTE[g.fuente] ?? g.fuente}${g.gastoDomiciliadoOrigenId != null ? ' • 🔁 automático' : ''}`,
+        subtitulo: `Gasto • ${g.categoria?.nombre ?? 'Sin categoría'} • ${ETIQUETA_FUENTE[g.fuente] ?? g.fuente}${g.gastoDomiciliadoOrigenId != null ? ' • automático' : ''}`,
         cantidad: netoDe(g),
         signo: '-' as const,
         color: 'text-red-600',
@@ -105,7 +106,9 @@ export default function HistorialPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">📜 Historial de Movimientos</h1>
+        <h1 className="text-3xl font-bold flex items-center gap-2">
+          <History className="w-7 h-7" strokeWidth={1.75} /> Historial de Movimientos
+        </h1>
         <p className="text-gray-600 mt-1">Todo lo que has gastado, ahorrado y pagado</p>
       </div>
 

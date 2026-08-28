@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { formatearMoneda } from '@/utils/calculos';
 import type { IPorcentajeDestino, IRubroPresupuesto } from '@/types';
+import { Home, Gamepad2, TrendingUp, PieChart, X, type LucideIcon } from 'lucide-react';
 
 interface PorcentajeDestinoProps {
   datos: IPorcentajeDestino;
@@ -10,7 +11,7 @@ interface PorcentajeDestinoProps {
 
 const RUBROS: {
   clave: keyof IPorcentajeDestino;
-  icono: string;
+  icono: LucideIcon;
   titulo: string;
   colorTexto: string;
   colorBarra: string;
@@ -19,7 +20,7 @@ const RUBROS: {
 }[] = [
   {
     clave: 'necesidades',
-    icono: '🏠',
+    icono: Home,
     titulo: 'Necesidades y gastos fijos',
     colorTexto: 'text-blue-700',
     colorBarra: 'bg-blue-500',
@@ -28,7 +29,7 @@ const RUBROS: {
   },
   {
     clave: 'gustos',
-    icono: '🎮',
+    icono: Gamepad2,
     titulo: 'Gustos y gastos personales',
     colorTexto: 'text-violet-700',
     colorBarra: 'bg-violet-500',
@@ -37,7 +38,7 @@ const RUBROS: {
   },
   {
     clave: 'ahorro',
-    icono: '📈',
+    icono: TrendingUp,
     titulo: 'Ahorro e inversión',
     colorTexto: 'text-green-700',
     colorBarra: 'bg-green-500',
@@ -58,11 +59,11 @@ export function PorcentajeDestino({ datos }: PorcentajeDestinoProps) {
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
       <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2 mb-4">
-        <span>🥧</span> % destinado a
+        <PieChart className="w-5 h-5 text-gray-700" strokeWidth={1.75} /> % destinado a
       </h2>
 
       <div className="grid grid-cols-3 gap-2">
-        {RUBROS.map(({ clave, icono, titulo, colorTexto, colorBarra, colorFondoIcono, favorable }) => {
+        {RUBROS.map(({ clave, icono: Icono, titulo, colorTexto, colorBarra, colorFondoIcono, favorable }) => {
           const rubro = datos[clave];
           const sobreLaMeta = estaSobreLaMeta(rubro, favorable);
           const anchoBarra = Math.min(rubro.porcentaje, 100);
@@ -75,8 +76,8 @@ export function PorcentajeDestino({ datos }: PorcentajeDestinoProps) {
               className="text-left space-y-1.5 rounded-lg p-1 -m-1 active:bg-gray-50"
             >
               <div className="flex items-center gap-1">
-                <span className={`w-5 h-5 rounded-md ${colorFondoIcono} flex items-center justify-center text-[10px] flex-shrink-0`}>
-                  {icono}
+                <span className={`w-5 h-5 rounded-md ${colorFondoIcono} flex items-center justify-center flex-shrink-0`}>
+                  <Icono className={`w-3 h-3 ${colorTexto}`} strokeWidth={2} />
                 </span>
                 <p className={`text-[11px] font-semibold leading-tight ${colorTexto}`}>
                   {Math.round(rubro.metaPorcentaje)}% — {formatearMoneda(rubro.metaMonto)}
@@ -115,7 +116,7 @@ export function PorcentajeDestino({ datos }: PorcentajeDestinoProps) {
             <div className="flex items-start justify-between gap-3 mb-1 flex-shrink-0">
               <div>
                 <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                  <span>{rubroInfo.icono}</span> {rubroInfo.titulo}
+                  <rubroInfo.icono className="w-5 h-5 text-gray-700" strokeWidth={1.75} /> {rubroInfo.titulo}
                 </h3>
                 <p className="text-sm text-gray-500 mt-0.5">
                   {formatearMoneda(rubroDatos.monto)} de {formatearMoneda(rubroDatos.metaMonto)} meta
@@ -125,9 +126,9 @@ export function PorcentajeDestino({ datos }: PorcentajeDestinoProps) {
                 type="button"
                 onClick={() => setRubroAbierto(null)}
                 aria-label="Cerrar"
-                className="text-gray-400 hover:text-gray-600 text-xl leading-none flex-shrink-0"
+                className="text-gray-400 hover:text-gray-600 flex-shrink-0"
               >
-                ✕
+                <X className="w-5 h-5" strokeWidth={2} />
               </button>
             </div>
 

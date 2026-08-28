@@ -5,6 +5,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { IIngreso } from '@/types';
 import { formatearMoneda } from '@/utils/calculos';
+import { TrendingUp, Trash2 } from 'lucide-react';
 
 export default function IngresosPage() {
   return (
@@ -96,7 +97,9 @@ function IngresosContenido() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">📈 Ingresos</h1>
+        <h1 className="text-3xl font-bold flex items-center gap-2">
+          <TrendingUp className="w-7 h-7" strokeWidth={1.75} /> Ingresos
+        </h1>
         <p className="text-gray-600 mt-1">Administra tus ingresos personales</p>
       </div>
 
@@ -213,7 +216,7 @@ function IngresosContenido() {
                 onClick={() => handleEliminar(ingreso.id)}
                 className="text-red-600 hover:text-red-800"
               >
-                🗑️
+                <Trash2 className="w-4 h-4" strokeWidth={1.75} />
               </button>
             </div>
           </div>

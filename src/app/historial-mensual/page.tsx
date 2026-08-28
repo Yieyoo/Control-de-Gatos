@@ -7,6 +7,7 @@ import { useSearchParams } from 'next/navigation';
 import { formatearMoneda } from '@/utils/calculos';
 import type { IHistorialMensualResumen } from '@/types';
 import { GraficaAnualModal } from '@/components/HistorialMensual/GraficaAnualModal';
+import { CalendarDays, Calendar, ChevronDown, ArrowDown, ArrowUp, PiggyBank, TrendingUp } from 'lucide-react';
 
 export default function HistorialMensualPage() {
   return (
@@ -65,24 +66,27 @@ function HistorialMensualContenido() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-3xl font-bold">🗓️ Historial Mensual</h1>
+        <h1 className="text-3xl font-bold flex items-center gap-2">
+          <CalendarDays className="w-7 h-7" strokeWidth={1.75} /> Historial Mensual
+        </h1>
         <p className="text-gray-600 mt-1">Compara ingresos, gastos y ahorro mes a mes durante el año</p>
       </div>
 
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="relative">
+          <Calendar className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" strokeWidth={1.75} />
           <select
             value={año ?? datos.año}
             onChange={(e) => setAño(parseInt(e.target.value, 10))}
-            className="appearance-none bg-white border border-gray-200 rounded-full pl-4 pr-9 py-2 text-sm font-semibold text-gray-800 shadow-sm cursor-pointer"
+            className="appearance-none bg-white border border-gray-200 rounded-full pl-9 pr-9 py-2 text-sm font-semibold text-gray-800 shadow-sm cursor-pointer"
           >
             {añosDisponibles.map((a) => (
               <option key={a} value={a}>
-                📅 {a}
+                {a}
               </option>
             ))}
           </select>
-          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">▾</span>
+          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" strokeWidth={1.75} />
         </div>
 
         <button
@@ -91,7 +95,7 @@ function HistorialMensualContenido() {
           disabled={meses.length === 0}
           className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-full px-4 py-2 text-sm font-semibold text-blue-600 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          📈 Ver gráfica anual
+          <TrendingUp className="w-4 h-4" strokeWidth={1.75} /> Ver gráfica anual
         </button>
       </div>
 
@@ -103,22 +107,22 @@ function HistorialMensualContenido() {
         <>
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 grid grid-cols-3 gap-3 text-center">
             <div>
-              <div className="w-9 h-9 rounded-full bg-green-100 text-green-600 flex items-center justify-center mx-auto mb-1.5 text-base">
-                ↓
+              <div className="w-9 h-9 rounded-full bg-green-100 text-green-600 flex items-center justify-center mx-auto mb-1.5">
+                <ArrowDown className="w-4 h-4" strokeWidth={2} />
               </div>
               <p className="text-xs text-gray-500">Ingresos totales</p>
               <p className="text-sm sm:text-base font-bold text-green-700 mt-0.5">{formatearMoneda(totales.ingresos)}</p>
             </div>
             <div>
-              <div className="w-9 h-9 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-1.5 text-base">
-                ↑
+              <div className="w-9 h-9 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-1.5">
+                <ArrowUp className="w-4 h-4" strokeWidth={2} />
               </div>
               <p className="text-xs text-gray-500">Gastos totales</p>
               <p className="text-sm sm:text-base font-bold text-red-700 mt-0.5">{formatearMoneda(totales.gastos)}</p>
             </div>
             <div>
-              <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-1.5 text-base">
-                🐷
+              <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mx-auto mb-1.5">
+                <PiggyBank className="w-4 h-4" strokeWidth={1.75} />
               </div>
               <p className="text-xs text-gray-500">Ahorro total</p>
               <p className="text-sm sm:text-base font-bold text-blue-700 mt-0.5">{formatearMoneda(totales.ahorro)}</p>
@@ -173,7 +177,7 @@ function HistorialMensualContenido() {
           <div className="bg-green-50 border border-green-100 rounded-2xl p-4 flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-9 h-9 rounded-full bg-green-600 text-white flex items-center justify-center flex-shrink-0">
-                📈
+                <TrendingUp className="w-4 h-4" strokeWidth={1.75} />
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-green-900">Balance acumulado del año</p>

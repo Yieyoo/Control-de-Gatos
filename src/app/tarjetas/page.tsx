@@ -21,13 +21,14 @@ import {
   cicloTarjetaAnterior,
   ocurrenciasDeGastoEnRangos,
 } from '@/utils/calculos';
+import { CreditCard, Trash2, Pencil, CheckCircle2, Wallet, Undo2 } from 'lucide-react';
 
 const CORTE_1 = 10;
 
 const ETIQUETA_FUENTE: Record<IFuenteDinero, string> = {
-  disponible: '💵 Disponible',
-  ahorro: '🏦 Ahorro',
-  tercero: '🤝 Tercero',
+  disponible: 'Disponible',
+  ahorro: 'Ahorro',
+  tercero: 'Tercero',
 };
 
 export default function TarjetasPage() {
@@ -414,7 +415,9 @@ function TarjetasContenido() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">💳 Tarjeta de Crédito</h1>
+        <h1 className="text-3xl font-bold flex items-center gap-2">
+          <CreditCard className="w-7 h-7" strokeWidth={1.75} /> Tarjeta de Crédito
+        </h1>
         <p className="text-gray-600 mt-1">Tus compras y el corte de cada tarjeta</p>
       </div>
 
@@ -474,7 +477,7 @@ function TarjetasContenido() {
                 <p className="text-xs text-gray-500">Corta el día {tarjeta.diaCorte} de cada mes</p>
               </div>
               <button onClick={() => handleEliminarTarjeta(tarjeta.id)} className="text-red-600 hover:text-red-800">
-                🗑️
+                <Trash2 className="w-4 h-4" strokeWidth={1.75} />
               </button>
             </div>
 
@@ -728,10 +731,10 @@ function TarjetasContenido() {
                               )}
                             </div>
                             <button onClick={() => iniciarEdicionCompra(c)} className="text-blue-600 hover:text-blue-800">
-                              ✏️
+                              <Pencil className="w-4 h-4" strokeWidth={1.75} />
                             </button>
                             <button onClick={() => handleEliminarCompra(c.id)} className="text-red-600 hover:text-red-800">
-                              🗑️
+                              <Trash2 className="w-4 h-4" strokeWidth={1.75} />
                             </button>
                           </div>
                         </div>
@@ -769,8 +772,8 @@ function TarjetasContenido() {
                             </button>
                           </form>
                         ) : (
-                          <button onClick={() => setFormDevolucionAbierto(c.id)} className="text-xs text-blue-600 hover:text-blue-800">
-                            ↩️ Registrar devolución
+                          <button onClick={() => setFormDevolucionAbierto(c.id)} className="text-xs text-blue-600 hover:text-blue-800 inline-flex items-center gap-1">
+                            <Undo2 className="w-3.5 h-3.5" strokeWidth={1.75} /> Registrar devolución
                           </button>
                         )}
 
@@ -793,19 +796,23 @@ function TarjetasContenido() {
                                       pagada ? handleQuitarPagosCompra(c) : abrirPagoCompra(c, saldoPendiente)
                                     }
                                   />
-                                  {pagada
-                                    ? '✅ Pagada'
-                                    : montoPagado > 0
-                                    ? `Pagado ${formatearMoneda(montoPagado)} de ${formatearMoneda(neto)}`
-                                    : 'Sin pagar'}
+                                  {pagada ? (
+                                    <span className="inline-flex items-center gap-1">
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-green-600" strokeWidth={1.75} /> Pagada
+                                    </span>
+                                  ) : montoPagado > 0 ? (
+                                    `Pagado ${formatearMoneda(montoPagado)} de ${formatearMoneda(neto)}`
+                                  ) : (
+                                    'Sin pagar'
+                                  )}
                                 </label>
                                 {!pagada && (
                                   <button
                                     type="button"
                                     onClick={() => abrirPagoCompra(c, 0)}
-                                    className="text-xs text-blue-600 hover:text-blue-800"
+                                    className="text-xs text-blue-600 hover:text-blue-800 inline-flex items-center gap-1"
                                   >
-                                    💰 Pagar una parte
+                                    <Wallet className="w-3.5 h-3.5" strokeWidth={1.75} /> Pagar una parte
                                   </button>
                                 )}
                               </div>
@@ -1018,7 +1025,7 @@ function TarjetasContenido() {
                         <div className="flex items-center gap-3 flex-shrink-0">
                           <p className="font-bold text-green-600 whitespace-nowrap">{formatearMoneda(p.cantidad)}</p>
                           <button onClick={() => handleEliminarPago(p.id)} className="text-red-600 hover:text-red-800">
-                            🗑️
+                            <Trash2 className="w-4 h-4" strokeWidth={1.75} />
                           </button>
                         </div>
                       </div>

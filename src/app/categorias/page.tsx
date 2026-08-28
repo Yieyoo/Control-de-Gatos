@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import type { ICategoria } from '@/types';
+import { Tag, Pin, Sparkles } from 'lucide-react';
 
 function SelectorTipoPresupuesto({
   categoria,
@@ -100,7 +101,9 @@ export default function CategoriasPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">🏷️ Categorías</h1>
+        <h1 className="text-3xl font-bold flex items-center gap-2">
+          <Tag className="w-7 h-7" strokeWidth={1.75} /> Categorías
+        </h1>
         <p className="text-gray-600 mt-1">Organiza tus gastos por categoría</p>
       </div>
 
@@ -172,7 +175,9 @@ export default function CategoriasPage() {
       {/* Categorías del Sistema */}
       {sistematicas.length > 0 && (
         <div>
-          <h2 className="text-xl font-bold mb-3">📌 Categorías Predeterminadas</h2>
+          <h2 className="text-xl font-bold mb-3 flex items-center gap-2">
+            <Pin className="w-5 h-5" strokeWidth={1.75} /> Categorías Predeterminadas
+          </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {sistematicas.map((cat) => (
               <div
@@ -191,7 +196,9 @@ export default function CategoriasPage() {
       {/* Categorías Personalizadas */}
       {personalizadas.length > 0 && (
         <div>
-          <h2 className="text-xl font-bold mb-3">✨ Tus Categorías</h2>
+          <h2 className="text-xl font-bold mb-3 flex items-center gap-2">
+            <Sparkles className="w-5 h-5" strokeWidth={1.75} /> Tus Categorías
+          </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {personalizadas.map((cat) => (
               <div
