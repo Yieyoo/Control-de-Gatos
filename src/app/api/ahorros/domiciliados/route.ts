@@ -17,7 +17,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { nombre, cantidad, frecuencia, diasSemana, ahorroDestinoId, notas } = body;
+    const { nombre, cantidad, frecuencia, diasSemana, ahorroDestinoId, obligatorio, notas } = body;
 
     if (!nombre || !cantidad || !frecuencia || !ahorroDestinoId) {
       return Response.json(
@@ -36,6 +36,7 @@ export async function POST(request: Request) {
         frecuencia,
         diasSemana: frecuencia === 'semanal' ? diasSemana : null,
         ahorroDestinoId: parseInt(ahorroDestinoId),
+        obligatorio: obligatorio ?? true,
         notas,
       },
       include: { ahorroDestino: true },

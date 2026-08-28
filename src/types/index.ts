@@ -60,6 +60,8 @@ export interface IAhorroDomiciliado {
   ultimaOcurrenciaMaterializada?: string;
   /** Hasta qué fecha de ocurrencia ya se marcó "ya lo envié" (crea el movimiento real y descuenta disponible). */
   enviadoHasta?: string;
+  /** Si es false, no cuenta como "dinero comprometido" -- se puede dejar de ahorrar sin que afecte Dinero real (ej. VOO). Default true. */
+  obligatorio: boolean;
   activo: boolean;
   notas?: string;
 }
@@ -212,6 +214,8 @@ export interface IMovimientoPeriodo {
   ahorroDomiciliadoId?: number;
   /** Solo en tipo="gasto" domiciliado en efectivo (no "credito"): id del GastoDomiciliado, para poder marcar/desmarcar "ya se cobró" con un checkbox. */
   gastoDomiciliadoId?: number;
+  /** Solo en tipo="ahorro": si es false, es opcional -- no cuenta como compromiso pendiente ni baja Dinero real si no se hace. */
+  obligatorio?: boolean;
 }
 
 export interface IItemPresupuesto {

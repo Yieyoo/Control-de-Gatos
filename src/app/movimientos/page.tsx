@@ -82,6 +82,7 @@ function MovimientosContenido() {
     cantidad: '',
     frecuencia: 'mensual' as 'mensual' | 'quincenal' | 'semanal',
     ahorroDestinoId: '',
+    obligatorio: true,
   });
 
   useEffect(() => {
@@ -253,7 +254,7 @@ function MovimientosContenido() {
         }),
       });
       if (!resp.ok) throw new Error('Error al crear ahorro domiciliado');
-      setFormAhorro({ nombre: '', cantidad: '', frecuencia: 'mensual', ahorroDestinoId: '' });
+      setFormAhorro({ nombre: '', cantidad: '', frecuencia: 'mensual', ahorroDestinoId: '', obligatorio: true });
       setDiasSemanaAhorro([]);
       setMostrarFormAhorro(false);
       cargarAhorrosDom();
@@ -267,6 +268,20 @@ function MovimientosContenido() {
     try {
       const resp = await fetch(`/api/ahorros/domiciliados/${id}`, { method: 'DELETE' });
       if (!resp.ok) throw new Error('Error al eliminar');
+      cargarAhorrosDom();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error desconocido');
+    }
+  };
+
+  const handleToggleObligatorioAhorro = async (a: IAhorroDomiciliado) => {
+    try {
+      const resp = await fetch(`/api/ahorros/domiciliados/${a.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ obligatorio: !a.obligatorio }),
+      });
+      if (!resp.ok) throw new Error('Error al actualizar');
       cargarAhorrosDom();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
@@ -611,6 +626,21 @@ function MovimientosContenido() {
                       <option key={lugar.id} value={lugar.id}>{lugar.nombre}</option>
                     ))}
                   </select>
+                  <label className="flex items-start gap-2 text-sm text-gray-700 bg-white border border-gray-200 rounded p-3">
+                    <input
+                      type="checkbox"
+                      checked={formAhorro.obligatorio}
+                      onChange={(e) => setFormAhorro({ ...formAhorro, obligatorio: e.target.checked })}
+                      className="w-4 h-4 mt-0.5"
+                    />
+                    <span>
+                      ¿Es obligatorio?
+                      <span className="block text-xs text-gray-500">
+                        Si lo desmarcas (ej. una inversión opcional como VOO), sigue apareciendo para confirmarlo si
+                        quieres, pero no cuenta como compromiso pendiente ni baja tu Dinero real si no lo haces.
+                      </span>
+                    </span>
+                  </label>
                   <div className="flex gap-2">
                     <button type="submit" className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
                       Guardar
@@ -638,20 +668,38 @@ function MovimientosContenido() {
           ) : (
             <div className="space-y-2">
               {ahorrosDom.map((a) => (
-                <div key={a.id} className="flex items-center justify-between gap-3 border border-gray-200 rounded-lg p-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold truncate">{a.nombre}</p>
-                    <p className="text-xs text-gray-500 truncate">
-                      → {a.ahorroDestino?.nombre} •{' '}
-                      {a.frecuencia === 'semanal' ? formatearDiasSemana(a.diasSemana) : etiquetaFrecuencia[a.frecuencia]}
-                    </p>
+                <div key={a.id} className="border border-gray-200 rounded-lg p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold truncate">
+                        {a.nombre}
+                        {!a.obligatorio && (
+                          <span className="ml-1.5 text-[10px] font-semibold text-amber-700 bg-amber-100 rounded-full px-1.5 py-0.5 align-middle">
+                            Opcional
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-gray-500 truncate">
+                        → {a.ahorroDestino?.nombre} •{' '}
+                        {a.frecuencia === 'semanal' ? formatearDiasSemana(a.diasSemana) : etiquetaFrecuencia[a.frecuencia]}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <p className="font-bold text-blue-600 whitespace-nowrap">{formatearMoneda(a.cantidad)}</p>
+                      <button onClick={() => handleEliminarAhorro(a.id)} className="text-red-600 hover:text-red-800">
+                        🗑️
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <p className="font-bold text-blue-600 whitespace-nowrap">{formatearMoneda(a.cantidad)}</p>
-                    <button onClick={() => handleEliminarAhorro(a.id)} className="text-red-600 hover:text-red-800">
-                      🗑️
-                    </button>
-                  </div>
+                  <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={a.obligatorio}
+                      onChange={() => handleToggleObligatorioAhorro(a)}
+                      className="w-3.5 h-3.5"
+                    />
+                    Obligatorio (cuenta como compromiso pendiente y baja tu Dinero real si no lo confirmas)
+                  </label>
                 </div>
               ))}
             </div>

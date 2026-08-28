@@ -52,6 +52,8 @@ interface OcurrenciaTag {
   ahorroDomiciliadoId?: number;
   /** Solo en ocurrencias tipo="gasto" que vienen de un GastoDomiciliado en efectivo pendiente: su id, para poder confirmarlas. */
   gastoDomiciliadoId?: number;
+  /** Solo en ocurrencias tipo="ahorro": si es false, no cuenta como "dinero comprometido" -- se puede dejar de ahorrar sin que afecte Dinero real (ver ahorroDelMesPendiente). */
+  obligatorio?: boolean;
 }
 
 export interface CargoTarjetaDomiciliado {
@@ -205,6 +207,7 @@ export function construirPeriodo(
               fecha: oc.fecha,
               tipo: 'ahorro',
               ahorroDomiciliadoId: a.id,
+              obligatorio: a.obligatorio,
             });
           }
         });
@@ -249,6 +252,7 @@ export function construirPeriodo(
             fecha: oc.fecha,
             tipo: 'ahorro',
             ahorroDomiciliadoId: a.id,
+            obligatorio: a.obligatorio,
           });
         }
       });
@@ -314,8 +318,13 @@ export function construirPeriodo(
   // Todas las ocurrencias de ahorro que quedan en `ahorroOcurrencias` son, por
   // construcción, las que aún no se marcaron como enviadas (ver el filtro
   // `!estaEnviado` más arriba) -- no hay que separarlas por fecha, porque aquí
-  // "pendiente" no depende de si ya pasó la fecha.
-  const ahorroDelMesPendiente = ahorroOcurrencias.reduce((s, oc) => s + oc.cantidad, 0);
+  // "pendiente" no depende de si ya pasó la fecha. Solo las obligatorias
+  // cuentan como "dinero comprometido" -- un ahorro marcado como opcional
+  // (ej. VOO) sigue apareciendo en el detalle para confirmarlo si se quiere,
+  // pero no obliga a apartarle dinero ni baja "Dinero real" si no se hace.
+  const ahorroDelMesPendiente = ahorroOcurrencias
+    .filter((oc) => oc.obligatorio !== false)
+    .reduce((s, oc) => s + oc.cantidad, 0);
   const gastosVariablesPeriodo = gastosManualesPropios.reduce((s, g) => s + neto(g), 0);
 
   // "Dinero disponible" de ESTE periodo: el ingreso de esta quincena/mes menos
@@ -421,6 +430,7 @@ export function construirPeriodo(
       categoriaColor: oc.categoriaColor,
       ahorroDomiciliadoId: oc.ahorroDomiciliadoId,
       gastoDomiciliadoId: oc.gastoDomiciliadoId,
+      obligatorio: oc.tipo === 'ahorro' ? oc.obligatorio !== false : undefined,
     })),
     ...movimientosAhorroEnPeriodo
       .filter((m) => m.origen === 'domiciliado')

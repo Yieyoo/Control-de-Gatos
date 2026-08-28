@@ -116,6 +116,11 @@ export function DetalleMovimientos({ etiqueta, movimientos, onActualizar }: Deta
                       />
                       <span className={`flex-1 min-w-0 truncate text-sm ${m.pagado ? 'text-gray-400' : 'text-gray-900'}`}>
                         {m.nombre}
+                        {m.obligatorio === false && (
+                          <span className="ml-1.5 text-[10px] font-semibold text-amber-700 bg-amber-100 rounded-full px-1.5 py-0.5 align-middle">
+                            Opcional
+                          </span>
+                        )}
                       </span>
                       <span className="text-xs text-gray-400 flex-shrink-0">{formatearFecha(m.fecha)}</span>
                       <span

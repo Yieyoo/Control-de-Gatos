@@ -134,6 +134,7 @@ model AhorroDomiciliado {
   fechaInicio         DateTime @default(now())
   ultimaOcurrenciaMaterializada DateTime? // Ya no se usa para generar movimientos automáticamente (ver enviadoHasta); se conserva por compatibilidad con datos existentes.
   enviadoHasta        DateTime? // Hasta qué fecha de ocurrencia ya marcaste "ya lo envié" -- crea el MovimientoAhorro real y descuenta dinero disponible.
+  obligatorio         Boolean  @default(true) // Si es false, no cuenta como "dinero comprometido" (ej. VOO): se puede confirmar si se quiere, pero no baja Dinero real si no se hace.
   activo              Boolean  @default(true)
   notas               String?
   fechaCreacion       DateTime @default(now())
