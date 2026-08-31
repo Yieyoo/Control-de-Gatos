@@ -293,7 +293,7 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
       subtitulo: p.ahorroDelMesPendiente > 0 ? `+${formatearMoneda(p.ahorroDelMesPendiente)} pendiente` : undefined,
       badge: 'bg-violet-100 text-violet-700',
       icono: PiggyBank,
-      sensible: true,
+      sensible: false,
     },
     {
       titulo: 'Gastos fijos',
@@ -320,8 +320,8 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
           <button
             type="button"
             onClick={ocultarSensibles ? abrirPromptPin : ocultarDeNuevo}
-            aria-label={ocultarSensibles ? 'Mostrar ingresos y ahorro' : 'Ocultar ingresos y ahorro'}
-            title={ocultarSensibles ? 'Mostrar ingresos y ahorro' : 'Ocultar ingresos y ahorro'}
+            aria-label={ocultarSensibles ? 'Mostrar ingresos y ahorro e inversión' : 'Ocultar ingresos y ahorro e inversión'}
+            title={ocultarSensibles ? 'Mostrar ingresos y ahorro e inversión' : 'Ocultar ingresos y ahorro e inversión'}
             className="text-gray-400 hover:text-gray-600"
           >
             {ocultarSensibles ? (
@@ -353,7 +353,7 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
               type="password"
               inputMode="numeric"
               autoFocus
-              placeholder="PIN para ver ingresos y ahorro"
+              placeholder="PIN para ver ingresos y ahorro e inversión"
               value={pin}
               onChange={(e) => {
                 setPin(e.target.value);
