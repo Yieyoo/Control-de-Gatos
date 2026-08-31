@@ -25,6 +25,7 @@ import {
   Eye,
   EyeOff,
   Check,
+  X,
 } from 'lucide-react';
 
 type Vista = 'mes' | 'quincena1' | 'quincena2';
@@ -244,8 +245,10 @@ function DeudaTarjetasExpandible({
 }
 
 export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFinancieroProps) {
-  // Ahorro total empieza oculto siempre que se abre la app; solo se destapa con el PIN.
-  const [ocultarAhorro, setOcultarAhorro] = useState(true);
+  // Ingresos y ahorro empiezan ocultos siempre que se abre la app; un solo
+  // ojo junto a "Resumen" los destapa a todos (Ingresos, Ahorro del periodo y
+  // Ahorro e inversión) de una vez, protegido con el mismo PIN.
+  const [ocultarSensibles, setOcultarSensibles] = useState(true);
   const [pidiendoPin, setPidiendoPin] = useState(false);
   const [pin, setPin] = useState('');
   const [pinIncorrecto, setPinIncorrecto] = useState(false);
@@ -258,7 +261,7 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
   };
 
   const ocultarDeNuevo = () => {
-    setOcultarAhorro(true);
+    setOcultarSensibles(true);
     setPidiendoPin(false);
     setPin('');
   };
@@ -266,7 +269,7 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
   const handleSubmitPin = (e: React.FormEvent) => {
     e.preventDefault();
     if (pin === PIN_AHORRO) {
-      setOcultarAhorro(false);
+      setOcultarSensibles(false);
       setPidiendoPin(false);
       setPin('');
       setPinIncorrecto(false);
@@ -282,6 +285,7 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
       cantidad: p.ingresos,
       badge: 'bg-blue-100 text-blue-700',
       icono: TrendingUp,
+      sensible: true,
     },
     {
       titulo: 'Ahorro',
@@ -289,6 +293,7 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
       subtitulo: p.ahorroDelMesPendiente > 0 ? `+${formatearMoneda(p.ahorroDelMesPendiente)} pendiente` : undefined,
       badge: 'bg-violet-100 text-violet-700',
       icono: PiggyBank,
+      sensible: true,
     },
     {
       titulo: 'Gastos fijos',
@@ -296,19 +301,36 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
       subtitulo: p.gastosFijosPendiente > 0 ? `+${formatearMoneda(p.gastosFijosPendiente)} pendiente` : undefined,
       badge: 'bg-orange-100 text-orange-700',
       icono: FileText,
+      sensible: false,
     },
     {
       titulo: 'Gastos variables',
       cantidad: p.gastosVariables,
       badge: 'bg-pink-100 text-pink-700',
       icono: ShoppingCart,
+      sensible: false,
     },
   ];
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
       <div className="flex items-center justify-between gap-3 mb-1">
-        <h2 className="text-lg font-bold text-gray-900">Resumen</h2>
+        <div className="flex items-center gap-1.5">
+          <h2 className="text-lg font-bold text-gray-900">Resumen</h2>
+          <button
+            type="button"
+            onClick={ocultarSensibles ? abrirPromptPin : ocultarDeNuevo}
+            aria-label={ocultarSensibles ? 'Mostrar ingresos y ahorro' : 'Ocultar ingresos y ahorro'}
+            title={ocultarSensibles ? 'Mostrar ingresos y ahorro' : 'Ocultar ingresos y ahorro'}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            {ocultarSensibles ? (
+              <EyeOff className="w-4 h-4" strokeWidth={1.75} />
+            ) : (
+              <Eye className="w-4 h-4" strokeWidth={1.75} />
+            )}
+          </button>
+        </div>
         <div className="flex bg-gray-100 rounded-lg p-0.5 text-xs font-medium flex-shrink-0">
           {(['quincena1', 'quincena2', 'mes'] as const).map((opcion) => (
             <button
@@ -324,25 +346,64 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
         </div>
       </div>
 
+      {pidiendoPin && (
+        <form onSubmit={handleSubmitPin} className="mb-3">
+          <div className="flex gap-1.5">
+            <input
+              type="password"
+              inputMode="numeric"
+              autoFocus
+              placeholder="PIN para ver ingresos y ahorro"
+              value={pin}
+              onChange={(e) => {
+                setPin(e.target.value);
+                setPinIncorrecto(false);
+              }}
+              className={`min-w-0 flex-1 border rounded px-2 py-1.5 text-sm ${
+                pinIncorrecto ? 'border-red-400' : 'border-gray-300'
+              }`}
+            />
+            <button
+              type="submit"
+              className="flex-shrink-0 bg-blue-600 text-white text-sm font-medium px-2.5 rounded hover:bg-blue-700 flex items-center justify-center"
+            >
+              <Check className="w-4 h-4" strokeWidth={2.5} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setPidiendoPin(false)}
+              aria-label="Cancelar"
+              className="flex-shrink-0 text-gray-400 hover:text-gray-600 px-1"
+            >
+              <X className="w-4 h-4" strokeWidth={1.75} />
+            </button>
+          </div>
+          {pinIncorrecto && <p className="text-[11px] text-red-600 mt-1">PIN incorrecto</p>}
+        </form>
+      )}
+
       <p className="text-xs text-gray-500 mb-4">{p.rangoTexto}</p>
 
       <div className="grid grid-cols-2 gap-4 mb-5">
-        {tarjetas.map((tarjeta) => (
-          <div key={tarjeta.titulo} className="flex items-start gap-3">
-            <div className={`w-10 h-10 rounded-xl ${tarjeta.badge} flex items-center justify-center flex-shrink-0`}>
-              <tarjeta.icono className="w-5 h-5" strokeWidth={1.75} />
+        {tarjetas.map((tarjeta) => {
+          const oculto = tarjeta.sensible && ocultarSensibles;
+          return (
+            <div key={tarjeta.titulo} className="flex items-start gap-3">
+              <div className={`w-10 h-10 rounded-xl ${tarjeta.badge} flex items-center justify-center flex-shrink-0`}>
+                <tarjeta.icono className="w-5 h-5" strokeWidth={1.75} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs text-gray-500 leading-tight">{tarjeta.titulo}</p>
+                <p className="text-sm sm:text-lg font-bold text-gray-900 leading-tight">
+                  {oculto ? '•••••' : formatearMoneda(tarjeta.cantidad)}
+                </p>
+                {tarjeta.subtitulo && (
+                  <p className="text-xs text-amber-600 leading-tight">{oculto ? '••••' : tarjeta.subtitulo}</p>
+                )}
+              </div>
             </div>
-            <div className="min-w-0">
-              <p className="text-xs text-gray-500 leading-tight">{tarjeta.titulo}</p>
-              <p className="text-sm sm:text-lg font-bold text-gray-900 leading-tight">
-                {formatearMoneda(tarjeta.cantidad)}
-              </p>
-              {tarjeta.subtitulo && (
-                <p className="text-xs text-amber-600 leading-tight">{tarjeta.subtitulo}</p>
-              )}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -379,69 +440,25 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
         </div>
 
         <div className="rounded-xl bg-blue-50 p-4">
-          <div className="flex items-center justify-between gap-2 mb-1">
-            <div className="flex items-center gap-2">
-              <Landmark className="w-5 h-5 text-blue-700" strokeWidth={1.75} />
-              <p className="text-xs font-medium text-blue-800">Ahorro e inversión</p>
-            </div>
-            <button
-              type="button"
-              onClick={ocultarAhorro ? abrirPromptPin : ocultarDeNuevo}
-              aria-label={ocultarAhorro ? 'Mostrar ahorro' : 'Ocultar ahorro'}
-              className="text-blue-700/60 hover:text-blue-700"
-            >
-              {ocultarAhorro ? (
-                <EyeOff className="w-4 h-4" strokeWidth={1.75} />
-              ) : (
-                <Eye className="w-4 h-4" strokeWidth={1.75} />
-              )}
-            </button>
+          <div className="flex items-center gap-2 mb-1">
+            <Landmark className="w-5 h-5 text-blue-700" strokeWidth={1.75} />
+            <p className="text-xs font-medium text-blue-800">Ahorro e inversión</p>
           </div>
 
-          {pidiendoPin ? (
-            <form onSubmit={handleSubmitPin} className="mt-1">
-              <div className="flex gap-1.5">
-                <input
-                  type="password"
-                  inputMode="numeric"
-                  autoFocus
-                  placeholder="PIN"
-                  value={pin}
-                  onChange={(e) => {
-                    setPin(e.target.value);
-                    setPinIncorrecto(false);
-                  }}
-                  className={`min-w-0 flex-1 border rounded px-2 py-1 text-sm ${
-                    pinIncorrecto ? 'border-red-400' : 'border-blue-300'
-                  }`}
-                />
-                <button
-                  type="submit"
-                  className="flex-shrink-0 bg-blue-600 text-white text-sm font-medium px-2.5 rounded hover:bg-blue-700 flex items-center justify-center"
-                >
-                  <Check className="w-4 h-4" strokeWidth={2.5} />
-                </button>
-              </div>
-              {pinIncorrecto && <p className="text-[11px] text-red-600 mt-1">PIN incorrecto</p>}
-            </form>
-          ) : (
-            <>
-              <p className="text-base sm:text-xl font-bold text-blue-700 leading-tight">
-                {ocultarAhorro ? '•••••••' : formatearMoneda(resumen.ahorroTotal)}
-              </p>
-              {resumen.ahorrosLugares.length > 0 && (
-                <div className="mt-2 pt-2 border-t border-blue-200 space-y-0.5">
-                  {resumen.ahorrosLugares.map((ahorro) => (
-                    <div key={ahorro.id} className="flex items-center justify-between gap-2">
-                      <span className="text-[11px] text-blue-800/70 truncate">{ahorro.nombre}</span>
-                      <span className="text-[11px] font-semibold text-blue-800 flex-shrink-0">
-                        {ocultarAhorro ? '•••' : formatearMoneda(ahorro.saldoActual)}
-                      </span>
-                    </div>
-                  ))}
+          <p className="text-base sm:text-xl font-bold text-blue-700 leading-tight">
+            {ocultarSensibles ? '•••••••' : formatearMoneda(resumen.ahorroTotal)}
+          </p>
+          {resumen.ahorrosLugares.length > 0 && (
+            <div className="mt-2 pt-2 border-t border-blue-200 space-y-0.5">
+              {resumen.ahorrosLugares.map((ahorro) => (
+                <div key={ahorro.id} className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] text-blue-800/70 truncate">{ahorro.nombre}</span>
+                  <span className="text-[11px] font-semibold text-blue-800 flex-shrink-0">
+                    {ocultarSensibles ? '•••' : formatearMoneda(ahorro.saldoActual)}
+                  </span>
                 </div>
-              )}
-            </>
+              ))}
+            </div>
           )}
         </div>
       </div>
