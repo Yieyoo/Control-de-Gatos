@@ -7,7 +7,7 @@ import { useParams } from 'next/navigation';
 import { formatearMoneda } from '@/utils/calculos';
 import type { IMesDetalle } from '@/types';
 import { DetalleMovimientos } from '@/components/Dashboard/DetalleMovimientos';
-import { ArrowLeft, TrendingUp, FileText, ShoppingCart, PiggyBank, CreditCard } from 'lucide-react';
+import { ArrowLeft, TrendingUp, FileText, ShoppingCart, PiggyBank, CreditCard, Banknote } from 'lucide-react';
 
 export default function DetalleMesPage() {
   return (
@@ -94,6 +94,20 @@ function DetalleMesContenido() {
             <p className="text-[11px] text-amber-600">+{formatearMoneda(detalle.ahorroDelMesPendiente)} pendiente</p>
           )}
         </div>
+      </div>
+
+      <div className="rounded-xl bg-green-50 p-4 border border-green-100">
+        <div className="flex items-center gap-2 mb-1">
+          <Banknote className="w-5 h-5 text-green-700" strokeWidth={1.75} />
+          <p className="text-xs font-medium text-green-800">Sobrante del mes</p>
+        </div>
+        <p className={`text-xl font-bold leading-tight ${detalle.dineroReal < 0 ? 'text-red-600' : 'text-green-700'}`}>
+          {formatearMoneda(detalle.dineroReal)}
+        </p>
+        <p className="text-[11px] text-green-800/60 leading-tight mt-1">
+          Ingresos menos todo lo que de verdad salió de tu bolsillo (gastos, pagos de tarjeta y ahorro, sea
+          domiciliado o manual) — lo que hace que las sumas de arriba cuadren con tus ingresos.
+        </p>
       </div>
 
       <DetalleMovimientos etiqueta={detalle.etiqueta} movimientos={detalle.movimientos} onActualizar={cargar} />
