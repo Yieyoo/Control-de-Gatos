@@ -11,7 +11,7 @@ import {
   ocurrenciasDeGastoEnRangos,
   type RangoFechas,
 } from '@/utils/calculos';
-import type { IDashboardResumen, IResumenPeriodo, ICompraTarjeta, IPagoTarjeta, IGastoDomiciliado } from '@/types';
+import type { IDashboardResumen, IResumenPeriodo, ICompraTarjeta, IPagoTarjeta, IGastoDomiciliado, IMovimientoPeriodo } from '@/types';
 import {
   CreditCard,
   ChevronUp,
@@ -244,6 +244,8 @@ function DeudaTarjetasExpandible({
   );
 }
 
+type TileClave = 'ingresos' | 'ahorro' | 'gastosFijos' | 'gastosVariables';
+
 export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFinancieroProps) {
   // Ingresos y ahorro empiezan ocultos siempre que se abre la app; un solo
   // ojo junto a "Resumen" los destapa a todos (Ingresos, Ahorro del periodo y
@@ -252,7 +254,19 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
   const [pidiendoPin, setPidiendoPin] = useState(false);
   const [pin, setPin] = useState('');
   const [pinIncorrecto, setPinIncorrecto] = useState(false);
+  const [tileAbierto, setTileAbierto] = useState<TileClave | null>(null);
   const p: IResumenPeriodo = resumen.periodos[vista];
+
+  // Mismo desglose que ya arma `movimientos` para el periodo, solo separado
+  // por qué tile lo cuenta -- gastos fijos son domiciliados (efectivo o
+  // tarjeta); gastos variables es todo lo demás manual, uno-a-la-vez.
+  const gastosFijosItems = p.movimientos.filter(
+    (m) => m.tipo === 'gasto' && (m.gastoDomiciliadoId != null || m.credito)
+  );
+  const gastosVariablesItems = p.movimientos.filter(
+    (m) => m.tipo === 'gasto' && m.gastoDomiciliadoId == null && !m.credito
+  );
+  const ahorroItems = p.movimientos.filter((m) => m.tipo === 'ahorro');
 
   const abrirPromptPin = () => {
     setPin('');
@@ -281,6 +295,7 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
 
   const tarjetas = [
     {
+      clave: 'ingresos' as TileClave,
       titulo: 'Ingresos',
       cantidad: p.ingresos,
       badge: 'bg-blue-100 text-blue-700',
@@ -288,6 +303,7 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
       sensible: true,
     },
     {
+      clave: 'ahorro' as TileClave,
       titulo: 'Ahorro',
       cantidad: p.ahorroDelMes,
       subtitulo: p.ahorroDelMesPendiente > 0 ? `+${formatearMoneda(p.ahorroDelMesPendiente)} pendiente` : undefined,
@@ -296,6 +312,7 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
       sensible: false,
     },
     {
+      clave: 'gastosFijos' as TileClave,
       titulo: 'Gastos fijos',
       cantidad: p.gastosFijos,
       subtitulo: p.gastosFijosPendiente > 0 ? `+${formatearMoneda(p.gastosFijosPendiente)} pendiente` : undefined,
@@ -304,6 +321,7 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
       sensible: false,
     },
     {
+      clave: 'gastosVariables' as TileClave,
       titulo: 'Gastos variables',
       cantidad: p.gastosVariables,
       badge: 'bg-pink-100 text-pink-700',
@@ -388,7 +406,13 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
         {tarjetas.map((tarjeta) => {
           const oculto = tarjeta.sensible && ocultarSensibles;
           return (
-            <div key={tarjeta.titulo} className="flex items-start gap-3">
+            <button
+              key={tarjeta.titulo}
+              type="button"
+              onClick={() => !oculto && setTileAbierto(tarjeta.clave)}
+              disabled={oculto}
+              className="flex items-start gap-3 text-left rounded-lg p-1 -m-1 active:bg-gray-50 disabled:active:bg-transparent"
+            >
               <div className={`w-10 h-10 rounded-xl ${tarjeta.badge} flex items-center justify-center flex-shrink-0`}>
                 <tarjeta.icono className="w-5 h-5" strokeWidth={1.75} />
               </div>
@@ -401,7 +425,7 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
                   <p className="text-xs text-amber-600 leading-tight">{oculto ? '••••' : tarjeta.subtitulo}</p>
                 )}
               </div>
-            </div>
+            </button>
           );
         })}
       </div>
@@ -464,6 +488,102 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
       </div>
 
       <DeudaTarjetasExpandible tarjetas={resumen.deudaTarjetas} vista={vista} />
+
+      {tileAbierto && (
+        <div className="fixed inset-0 z-30" role="dialog" aria-modal="true">
+          <button
+            type="button"
+            aria-label="Cerrar"
+            onClick={() => setTileAbierto(null)}
+            className="absolute inset-0 bg-black/40"
+          />
+          <div className="absolute bottom-0 left-0 right-0 max-h-[75vh] flex flex-col bg-white rounded-t-2xl p-5 pb-6 shadow-lg">
+            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4 flex-shrink-0" />
+            {(() => {
+              const tarjeta = tarjetas.find((t) => t.clave === tileAbierto)!;
+              const items =
+                tileAbierto === 'ingresos'
+                  ? p.ingresosDetalle
+                  : tileAbierto === 'ahorro'
+                    ? ahorroItems
+                    : tileAbierto === 'gastosFijos'
+                      ? gastosFijosItems
+                      : gastosVariablesItems;
+
+              return (
+                <>
+                  <div className="flex items-start justify-between gap-3 mb-1 flex-shrink-0">
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                        <tarjeta.icono className="w-5 h-5 text-gray-700" strokeWidth={1.75} /> {tarjeta.titulo}
+                      </h3>
+                      <p className="text-sm text-gray-500 mt-0.5">{formatearMoneda(tarjeta.cantidad)}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setTileAbierto(null)}
+                      aria-label="Cerrar"
+                      className="text-gray-400 hover:text-gray-600 flex-shrink-0"
+                    >
+                      <X className="w-5 h-5" strokeWidth={2} />
+                    </button>
+                  </div>
+
+                  <div className="overflow-y-auto mt-3 -mx-1 px-1">
+                    {items.length === 0 ? (
+                      <p className="text-sm text-gray-500 py-4">Nada registrado aquí en este periodo.</p>
+                    ) : tileAbierto === 'ingresos' ? (
+                      <ul className="divide-y divide-gray-100">
+                        {(items as { nombre: string; cantidad: number }[]).map((item, i) => (
+                          <li key={i} className="py-2.5 flex items-center gap-3">
+                            <p className="min-w-0 flex-1 text-sm text-gray-900 truncate">{item.nombre}</p>
+                            <p className="text-sm font-semibold text-gray-900 flex-shrink-0 tabular-nums">
+                              {formatearMoneda(item.cantidad)}
+                            </p>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <ul className="divide-y divide-gray-100">
+                        {(items as IMovimientoPeriodo[]).map((m, i) => (
+                          <li key={i} className="py-2.5 flex items-center gap-3">
+                            {tileAbierto !== 'ahorro' && (
+                              <span
+                                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                                style={{ backgroundColor: m.categoriaColor ?? '#e34948' }}
+                              />
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <p className={`text-sm truncate ${m.pagado ? 'text-gray-400' : 'text-gray-900'}`}>
+                                {m.nombre}
+                                {m.obligatorio === false && (
+                                  <span className="ml-1.5 text-[10px] font-semibold text-amber-700 bg-amber-100 rounded-full px-1.5 py-0.5 align-middle">
+                                    Opcional
+                                  </span>
+                                )}
+                              </p>
+                              <p className="text-xs text-gray-400">
+                                {formatearDiaMes(new Date(m.fecha))} · {m.pagado ? 'confirmado' : 'pendiente'}
+                              </p>
+                            </div>
+                            <p
+                              className={`text-sm font-semibold flex-shrink-0 tabular-nums ${
+                                m.pagado ? 'text-gray-400' : tileAbierto === 'ahorro' ? 'text-blue-600' : 'text-red-600'
+                              }`}
+                            >
+                              {formatearMoneda(m.cantidad)}
+                            </p>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

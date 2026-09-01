@@ -253,6 +253,7 @@ export interface IResumenPeriodo {
   fin: string;
   rangoTexto: string;
   ingresos: number;
+  ingresosDetalle: { nombre: string; cantidad: number }[];
   gastosFijos: number;
   gastosFijosPendiente: number;
   gastosVariables: number;

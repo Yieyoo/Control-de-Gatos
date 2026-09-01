@@ -96,14 +96,15 @@ export function construirPeriodo(
   // del mensual); el mes completo ve el doble del quincenal (dos quincenas) y el
   // mensual completo. Es el ingreso "de esta quincena" -- el punto de partida de
   // "Dinero disponible" de este periodo específico (ver más abajo).
+  const ingresosDetalle: { nombre: string; cantidad: number }[] = [];
   const ingresosPeriodo = ingresos.reduce((sum, ing) => {
     if (!ing.activo) return sum;
-    if (ing.frecuencia === 'quincenal') return sum + (esQuincena ? ing.cantidad : ing.cantidad * 2);
-    if (ing.frecuencia === 'mensual') return sum + (esQuincena ? ing.cantidad / 2 : ing.cantidad);
-    if (ing.frecuencia === 'unico') {
-      return fechaEnRangos(new Date(ing.fechaInicio), rangos) ? sum + ing.cantidad : sum;
-    }
-    return sum;
+    let monto = 0;
+    if (ing.frecuencia === 'quincenal') monto = esQuincena ? ing.cantidad : ing.cantidad * 2;
+    else if (ing.frecuencia === 'mensual') monto = esQuincena ? ing.cantidad / 2 : ing.cantidad;
+    else if (ing.frecuencia === 'unico') monto = fechaEnRangos(new Date(ing.fechaInicio), rangos) ? ing.cantidad : 0;
+    if (monto > 0) ingresosDetalle.push({ nombre: ing.nombre, cantidad: monto });
+    return sum + monto;
   }, 0);
 
   // Ocurrencias de gastos/ahorros fijos dentro de este periodo específico. Un
@@ -476,6 +477,7 @@ export function construirPeriodo(
     fin: rangos[rangos.length - 1].fin.toISOString(),
     rangoTexto,
     ingresos: ingresosPeriodo,
+    ingresosDetalle,
     gastosFijos: gastosFijosPagado,
     gastosFijosPendiente,
     gastosVariables: gastosVariablesPeriodo,
