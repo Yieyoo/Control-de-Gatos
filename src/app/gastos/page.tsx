@@ -3,6 +3,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import type {
   IGastoVariable,
   ICategoria,
@@ -15,7 +16,7 @@ import type {
 } from '@/types';
 import { formatearMoneda, formatearDiaMes } from '@/utils/calculos';
 import { SelectorDiasSemana } from '@/components/SelectorDiasSemana';
-import { Receipt, Pencil, Trash2, Repeat, Undo2, CreditCard } from 'lucide-react';
+import { Receipt, Pencil, Trash2, Repeat, Undo2 } from 'lucide-react';
 
 const ETIQUETA_FUENTE: Record<IFuenteDinero, string> = {
   disponible: 'Disponible',
@@ -55,6 +56,7 @@ function GastosContenido() {
     depositoTerceroId: '',
     tarjetaId: '',
     compraTarjetaId: '',
+    fecha: '',
   });
 
   // "¿Es un pago a tu tarjeta de crédito?" -- en vez de un GastoVariable
@@ -83,6 +85,7 @@ function GastosContenido() {
     categoriaId: '',
     notas: '',
     tipoPresupuesto: 'gusto' as 'necesidad' | 'gusto',
+    fecha: '',
   });
 
   const [formDevolucionAbierto, setFormDevolucionAbierto] = useState<number | null>(null);
@@ -205,6 +208,7 @@ function GastosContenido() {
                 ahorroLugarId: formData.fuente === 'ahorro' ? formData.ahorroLugarId : undefined,
                 depositoTerceroId: formData.fuente === 'tercero' ? formData.depositoTerceroId : undefined,
                 compraTarjetaId: formData.compraTarjetaId || undefined,
+                fecha: formData.fecha || undefined,
               }),
             })
           : await fetch('/api/gastos/variables', {
@@ -234,6 +238,7 @@ function GastosContenido() {
         depositoTerceroId: '',
         tarjetaId: '',
         compraTarjetaId: '',
+        fecha: '',
       });
       setEsGastoFijo(false);
       setEsPagoTarjeta(false);
@@ -278,6 +283,7 @@ function GastosContenido() {
       categoriaId: String(gasto.categoriaId),
       notas: gasto.notas || '',
       tipoPresupuesto: gasto.tipoPresupuesto ?? gasto.categoria?.tipoPresupuesto ?? 'gusto',
+      fecha: new Date(gasto.fecha).toISOString().slice(0, 10),
     });
   };
 
@@ -375,34 +381,38 @@ function GastosContenido() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
         {/* Columna 1: lo que has comprado con tarjeta de crédito */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold flex items-center gap-2">
-              <CreditCard className="w-5 h-5" strokeWidth={1.75} /> Compras con tarjeta
-            </h2>
-            <span className="text-sm font-semibold text-red-600">
-              {formatearMoneda(comprasConSaldo.reduce((s, c) => s + c.saldoPendiente, 0))} pendiente
-            </span>
+        <div className="bg-white border border-gray-200 rounded-lg p-3 space-y-3 min-w-0">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h2 className="text-sm font-bold truncate">Gastos con tarjeta</h2>
+              <p className="text-[11px] text-gray-500">Compras hechas con tarjeta de crédito</p>
+            </div>
+            <div className="text-right flex-shrink-0">
+              <p className="text-[10px] text-gray-500 leading-tight">Pendiente por pagar</p>
+              <p className="text-sm font-bold text-red-600 leading-tight">
+                {formatearMoneda(comprasConSaldo.reduce((s, c) => s + c.saldoPendiente, 0))}
+              </p>
+            </div>
           </div>
           {comprasConSaldo.length === 0 ? (
-            <p className="text-sm text-gray-500">Todavía no registras ninguna compra con tarjeta.</p>
+            <p className="text-xs text-gray-500">Todavía no registras ninguna compra con tarjeta.</p>
           ) : (
-            <ul className="bg-white border border-gray-200 rounded-lg divide-y divide-gray-100">
+            <ul className="divide-y divide-gray-100 -mx-3">
               {comprasConSaldo.map((c) => (
-                <li key={c.id} className="p-3 flex items-center gap-3">
+                <li key={c.id} className="px-3 py-2 flex items-center gap-2">
                   <div className="min-w-0 flex-1">
-                    <p className={`text-sm truncate ${c.pagada ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+                    <p className={`text-xs truncate ${c.pagada ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
                       {c.nombre}
                     </p>
-                    <p className="text-xs text-gray-400">
+                    <p className="text-[10px] text-gray-400 truncate">
                       {formatearDiaMes(new Date(c.fecha))} · {c.tarjeta?.nombre}
                       {!c.pagada && c.montoPagado > 0 && ` · abonado ${formatearMoneda(c.montoPagado)}`}
                     </p>
                   </div>
                   <span
-                    className={`text-sm font-semibold flex-shrink-0 tabular-nums ${
+                    className={`text-xs font-semibold flex-shrink-0 tabular-nums ${
                       c.pagada ? 'text-gray-400' : 'text-red-600'
                     }`}
                   >
@@ -412,7 +422,7 @@ function GastosContenido() {
                     <button
                       type="button"
                       onClick={() => abrirPagoDesdeColumna(c)}
-                      className="flex-shrink-0 text-xs font-medium text-blue-600 hover:text-blue-800 border border-blue-200 rounded px-2 py-1"
+                      className="flex-shrink-0 text-[11px] font-medium text-blue-600 hover:text-blue-800 border border-blue-200 rounded px-1.5 py-0.5"
                     >
                       Pagar
                     </button>
@@ -421,28 +431,38 @@ function GastosContenido() {
               ))}
             </ul>
           )}
-          <p className="text-[11px] text-gray-400">
-            Para registrar una compra nueva ve a Tarjetas -- aquí solo se listan para que no se te olvide pagarlas.
-          </p>
+          <Link
+            href="/tarjetas?nuevo=1"
+            className="block text-center bg-violet-50 text-violet-700 text-xs font-medium py-2 rounded hover:bg-violet-100"
+          >
+            + Compra con tarjeta
+          </Link>
+          <p className="text-[10px] text-gray-400">Esto no afecta tu disponible hasta que lo pagues.</p>
         </div>
 
         {/* Columna 2: gastos de siempre (efectivo, ahorro, tercero, y pagos a tarjeta) */}
-        <div className="space-y-6">
-      {/* Resumen */}
-      <div className="bg-white border border-gray-200 rounded-lg p-6">
-        <p className="text-gray-600">Total de gastos este mes</p>
-        <p className="text-3xl font-bold text-red-600">{formatearMoneda(total)}</p>
-      </div>
+        <div className="bg-white border border-gray-200 rounded-lg p-3 space-y-3 min-w-0">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h2 className="text-sm font-bold truncate">Gastos generales</h2>
+              <p className="text-[11px] text-gray-500">Efectivo, débito, transferencia, etc.</p>
+            </div>
+            <div className="text-right flex-shrink-0">
+              <p className="text-[10px] text-gray-500 leading-tight">Gastado este mes</p>
+              <p className="text-sm font-bold text-red-600 leading-tight">{formatearMoneda(total)}</p>
+            </div>
+          </div>
 
       {/* Botón agregar */}
       {!mostrarFormulario && (
         <button
           onClick={() => setMostrarFormulario(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+          className="w-full bg-blue-50 text-blue-700 text-xs font-medium py-2 rounded hover:bg-blue-100"
         >
-          + Agregar Gasto
+          + Agregar gasto
         </button>
       )}
+      <p className="text-[10px] text-gray-400">Estos gastos sí afectan tu disponible de inmediato.</p>
 
       {/* Formulario */}
       {mostrarFormulario && (
@@ -465,6 +485,17 @@ function GastosContenido() {
             step="0.01"
             className="w-full border border-gray-300 rounded px-3 py-2"
           />
+
+          <div>
+            <label className="text-sm text-gray-600 mb-1 block">¿Cuándo se hizo el cobro?</label>
+            <input
+              type="date"
+              value={formData.fecha}
+              onChange={(e) => setFormData({ ...formData, fecha: e.target.value })}
+              className="w-full border border-gray-300 rounded px-3 py-2"
+            />
+            <p className="text-[11px] text-gray-500 mt-1">Vacío = hoy.</p>
+          </div>
 
           {tarjetas.length > 0 && (
             <div>
@@ -792,6 +823,13 @@ function GastosContenido() {
                 onChange={(e) => setFormEdicion({ ...formEdicion, cantidad: e.target.value })}
                 required
                 step="0.01"
+                className="w-full border border-gray-300 rounded px-3 py-2"
+              />
+              <input
+                type="date"
+                value={formEdicion.fecha}
+                onChange={(e) => setFormEdicion({ ...formEdicion, fecha: e.target.value })}
+                required
                 className="w-full border border-gray-300 rounded px-3 py-2"
               />
               <select

@@ -31,7 +31,7 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { nombre, cantidad, categoriaId, notas, tipoPresupuesto } = body;
+    const { nombre, cantidad, categoriaId, notas, tipoPresupuesto, fecha } = body;
 
     const existente = await prisma.gastoVariable.findUnique({ where: { id: parseInt(id) } });
     if (!existente) {
@@ -55,6 +55,7 @@ export async function PUT(
         ...(categoriaId && { categoriaId: parseInt(categoriaId) }),
         ...(notas && { notas }),
         ...(tipoPresupuesto !== undefined && { tipoPresupuesto: tipoPresupuesto || null }),
+        ...(fecha && { fecha: new Date(fecha) }),
       },
       include: { categoria: true, ahorroLugar: true, depositoTercero: true, devoluciones: true },
     });

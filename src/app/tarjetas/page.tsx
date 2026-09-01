@@ -62,6 +62,7 @@ function TarjetasContenido() {
     tipoPresupuesto: 'gusto' as 'necesidad' | 'gusto',
     esMSI: false,
     numeroMeses: '',
+    fecha: '',
   });
 
   const [editandoCompraId, setEditandoCompraId] = useState<number | null>(null);
@@ -70,6 +71,7 @@ function TarjetasContenido() {
     cantidad: '',
     categoriaId: '',
     tipoPresupuesto: 'gusto' as 'necesidad' | 'gusto',
+    fecha: '',
   });
 
   const [formDevolucionAbierto, setFormDevolucionAbierto] = useState<number | null>(null);
@@ -83,6 +85,7 @@ function TarjetasContenido() {
     ahorroLugarId: '',
     depositoTerceroId: '',
     compraTarjetaId: '',
+    fecha: '',
   });
 
   const [formPagoCompraAbierto, setFormPagoCompraAbierto] = useState<number | null>(null);
@@ -91,6 +94,7 @@ function TarjetasContenido() {
     fuente: 'disponible' as IFuenteDinero,
     ahorroLugarId: '',
     depositoTerceroId: '',
+    fecha: '',
   });
 
   useEffect(() => {
@@ -238,7 +242,7 @@ function TarjetasContenido() {
         const datos = await resp.json().catch(() => null);
         throw new Error(datos?.error || 'Error al registrar pago');
       }
-      setFormPago({ cantidad: '', concepto: '', fuente: 'disponible', ahorroLugarId: '', depositoTerceroId: '', compraTarjetaId: '' });
+      setFormPago({ cantidad: '', concepto: '', fuente: 'disponible', ahorroLugarId: '', depositoTerceroId: '', compraTarjetaId: '', fecha: '' });
       setFormPagoAbierto(null);
       cargarPagos();
       cargarAhorroLugares();
@@ -270,6 +274,7 @@ function TarjetasContenido() {
       fuente: 'disponible',
       ahorroLugarId: '',
       depositoTerceroId: '',
+      fecha: '',
     });
   };
 
@@ -287,6 +292,7 @@ function TarjetasContenido() {
           ahorroLugarId: formPagoCompra.fuente === 'ahorro' ? formPagoCompra.ahorroLugarId : undefined,
           depositoTerceroId: formPagoCompra.fuente === 'tercero' ? formPagoCompra.depositoTerceroId : undefined,
           compraTarjetaId: compra.id,
+          fecha: formPagoCompra.fecha || undefined,
         }),
       });
       if (!resp.ok) {
@@ -334,7 +340,7 @@ function TarjetasContenido() {
         }),
       });
       if (!resp.ok) throw new Error('Error al registrar compra');
-      setFormCompra({ nombre: '', cantidad: '', categoriaId: '', tipoPresupuesto: 'gusto', esMSI: false, numeroMeses: '' });
+      setFormCompra({ nombre: '', cantidad: '', categoriaId: '', tipoPresupuesto: 'gusto', esMSI: false, numeroMeses: '', fecha: '' });
       setFormCompraAbierto(null);
       cargarCompras();
     } catch (err) {
@@ -380,6 +386,7 @@ function TarjetasContenido() {
       cantidad: String(compra.cantidad),
       categoriaId: compra.categoriaId ? String(compra.categoriaId) : '',
       tipoPresupuesto: compra.tipoPresupuesto ?? compra.categoria?.tipoPresupuesto ?? 'gusto',
+      fecha: new Date(compra.fecha).toISOString().slice(0, 10),
     });
   };
 
@@ -576,6 +583,13 @@ function TarjetasContenido() {
                   step="0.01"
                   className="w-full border border-gray-300 rounded px-3 py-2"
                 />
+                <input
+                  type="date"
+                  title="¿Cuándo se hizo el cobro? Vacío = hoy"
+                  value={formCompra.fecha}
+                  onChange={(e) => setFormCompra({ ...formCompra, fecha: e.target.value })}
+                  className="w-full border border-gray-300 rounded px-3 py-2"
+                />
                 <select
                   value={formCompra.categoriaId}
                   onChange={(e) => handleCategoriaCompraChange(e.target.value)}
@@ -671,6 +685,13 @@ function TarjetasContenido() {
                           onChange={(e) => setFormEdicionCompra({ ...formEdicionCompra, cantidad: e.target.value })}
                           required
                           step="0.01"
+                          className="w-full border border-gray-300 rounded px-3 py-2"
+                        />
+                        <input
+                          type="date"
+                          value={formEdicionCompra.fecha}
+                          onChange={(e) => setFormEdicionCompra({ ...formEdicionCompra, fecha: e.target.value })}
+                          required
                           className="w-full border border-gray-300 rounded px-3 py-2"
                         />
                         <select
@@ -832,6 +853,13 @@ function TarjetasContenido() {
                                     max={saldoPendiente || undefined}
                                     className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
                                   />
+                                  <input
+                                    type="date"
+                                    title="¿Cuándo se hizo el pago? Vacío = hoy"
+                                    value={formPagoCompra.fecha}
+                                    onChange={(e) => setFormPagoCompra({ ...formPagoCompra, fecha: e.target.value })}
+                                    className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+                                  />
                                   <div className="flex bg-white rounded-lg p-1 text-xs font-medium w-fit border border-gray-200 flex-wrap">
                                     {(['disponible', 'ahorro', 'tercero'] as const).map((f) => (
                                       <button
@@ -927,6 +955,13 @@ function TarjetasContenido() {
                     onChange={(e) => setFormPago({ ...formPago, cantidad: e.target.value })}
                     required
                     step="0.01"
+                    className="w-full border border-gray-300 rounded px-3 py-2"
+                  />
+                  <input
+                    type="date"
+                    title="¿Cuándo se hizo el pago? Vacío = hoy"
+                    value={formPago.fecha}
+                    onChange={(e) => setFormPago({ ...formPago, fecha: e.target.value })}
                     className="w-full border border-gray-300 rounded px-3 py-2"
                   />
                   <div>
