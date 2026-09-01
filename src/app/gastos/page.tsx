@@ -57,6 +57,15 @@ function GastosContenido() {
     tarjetaId: '',
   });
 
+  const [editandoCompraId, setEditandoCompraId] = useState<number | null>(null);
+  const [formEdicionCompra, setFormEdicionCompra] = useState({
+    nombre: '',
+    cantidad: '',
+    categoriaId: '',
+    tipoPresupuesto: 'gusto' as 'necesidad' | 'gusto',
+    fecha: '',
+  });
+
   const [formData, setFormData] = useState({
     nombre: '',
     cantidad: '',
@@ -415,6 +424,36 @@ function GastosContenido() {
     }
   };
 
+  const iniciarEdicionCompra = (compra: (typeof comprasConSaldo)[number]) => {
+    setEditandoCompraId(compra.id);
+    setFormEdicionCompra({
+      nombre: compra.nombre,
+      cantidad: String(compra.cantidad),
+      categoriaId: compra.categoriaId ? String(compra.categoriaId) : '',
+      tipoPresupuesto: compra.tipoPresupuesto ?? compra.categoria?.tipoPresupuesto ?? 'gusto',
+      fecha: new Date(compra.fecha).toISOString().slice(0, 10),
+    });
+  };
+
+  const handleGuardarEdicionCompra = async (e: React.FormEvent, id: number) => {
+    e.preventDefault();
+    try {
+      const resp = await fetch(`/api/tarjetas/compras/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formEdicionCompra),
+      });
+      if (!resp.ok) {
+        const datos = await resp.json().catch(() => null);
+        throw new Error(datos?.error || 'Error al actualizar la compra');
+      }
+      setEditandoCompraId(null);
+      cargarCompras();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error desconocido');
+    }
+  };
+
   if (cargando) return <div>Cargando...</div>;
 
   const total = gastos.reduce((sum, g) => sum + netoDe(g), 0);
@@ -478,15 +517,24 @@ function GastosContenido() {
                       {formatearDiaMes(new Date(c.fecha))}
                       {!c.pagada && c.montoPagado > 0 && ` · abonado ${formatearMoneda(c.montoPagado)}`}
                     </p>
-                    {!c.pagada && (
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
                       <button
                         type="button"
-                        onClick={() => abrirPagoDesdeColumna(c)}
-                        className="flex-shrink-0 text-[9px] font-medium text-blue-600 hover:text-blue-800 border border-blue-200 rounded px-1"
+                        onClick={() => iniciarEdicionCompra(c)}
+                        className="text-gray-400 hover:text-gray-600"
                       >
-                        Pagar
+                        <Pencil className="w-2.5 h-2.5" strokeWidth={1.75} />
                       </button>
-                    )}
+                      {!c.pagada && (
+                        <button
+                          type="button"
+                          onClick={() => abrirPagoDesdeColumna(c)}
+                          className="text-[9px] font-medium text-blue-600 hover:text-blue-800 border border-blue-200 rounded px-1"
+                        >
+                          Pagar
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </li>
               ))}
@@ -613,6 +661,113 @@ function GastosContenido() {
                   <button
                     type="button"
                     onClick={() => setMostrarFormCompra(false)}
+                    className="flex-1 bg-gray-400 text-white py-2.5 rounded text-sm font-medium hover:bg-gray-500"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Editar compra -- misma hoja, para poder corregir la fecha (u otro dato) de una ya registrada */}
+        {editandoCompraId != null && (
+          <div className="fixed inset-0 z-30" role="dialog" aria-modal="true">
+            <button
+              type="button"
+              aria-label="Cerrar"
+              onClick={() => setEditandoCompraId(null)}
+              className="absolute inset-0 bg-black/40"
+            />
+            <div className="absolute bottom-0 left-0 right-0 max-h-[85vh] flex flex-col bg-white rounded-t-2xl p-5 pb-6 shadow-lg">
+              <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3 flex-shrink-0" />
+              <div className="flex items-center justify-between gap-3 mb-3 flex-shrink-0">
+                <h3 className="text-lg font-bold text-gray-900">Editar compra</h3>
+                <button
+                  type="button"
+                  onClick={() => setEditandoCompraId(null)}
+                  aria-label="Cerrar"
+                  className="text-gray-400 hover:text-gray-600 flex-shrink-0"
+                >
+                  <X className="w-5 h-5" strokeWidth={2} />
+                </button>
+              </div>
+              <form
+                onSubmit={(e) => handleGuardarEdicionCompra(e, editandoCompraId)}
+                className="overflow-y-auto space-y-3"
+              >
+                <input
+                  type="text"
+                  placeholder="Concepto de la compra"
+                  value={formEdicionCompra.nombre}
+                  onChange={(e) => setFormEdicionCompra({ ...formEdicionCompra, nombre: e.target.value })}
+                  required
+                  className="w-full border border-gray-300 rounded px-3 py-2 text-base"
+                />
+                <input
+                  type="number"
+                  placeholder="Cantidad"
+                  value={formEdicionCompra.cantidad}
+                  onChange={(e) => setFormEdicionCompra({ ...formEdicionCompra, cantidad: e.target.value })}
+                  required
+                  step="0.01"
+                  className="w-full border border-gray-300 rounded px-3 py-2 text-base"
+                />
+                <div>
+                  <label className="text-sm text-gray-600 mb-1 block">¿Cuándo fue?</label>
+                  <input
+                    type="date"
+                    value={formEdicionCompra.fecha}
+                    onChange={(e) => setFormEdicionCompra({ ...formEdicionCompra, fecha: e.target.value })}
+                    required
+                    className="w-full border border-gray-300 rounded px-3 py-2 text-base"
+                  />
+                </div>
+                <select
+                  value={formEdicionCompra.categoriaId}
+                  onChange={(e) => {
+                    const categoria = categorias.find((cat) => String(cat.id) === e.target.value);
+                    setFormEdicionCompra({
+                      ...formEdicionCompra,
+                      categoriaId: e.target.value,
+                      tipoPresupuesto: categoria?.tipoPresupuesto ?? 'gusto',
+                    });
+                  }}
+                  className="w-full border border-gray-300 rounded px-3 py-2 text-base"
+                >
+                  <option value="">Selecciona una categoría</option>
+                  {categorias.map((cat) => (
+                    <option key={cat.id} value={cat.id}>{cat.nombre}</option>
+                  ))}
+                </select>
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">¿A qué se destina?</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(['necesidad', 'gusto'] as const).map((tipo) => (
+                      <button
+                        key={tipo}
+                        type="button"
+                        onClick={() => setFormEdicionCompra({ ...formEdicionCompra, tipoPresupuesto: tipo })}
+                        className={`w-full text-sm font-medium py-2 rounded transition-colors ${
+                          formEdicionCompra.tipoPresupuesto === tipo ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {tipo === 'necesidad' ? 'Necesidad' : 'Gusto'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    className="flex-1 bg-green-600 text-white py-2.5 rounded text-sm font-medium hover:bg-green-700"
+                  >
+                    Guardar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditandoCompraId(null)}
                     className="flex-1 bg-gray-400 text-white py-2.5 rounded text-sm font-medium hover:bg-gray-500"
                   >
                     Cancelar
