@@ -16,7 +16,7 @@ import type {
 } from '@/types';
 import { formatearMoneda, formatearDiaMes } from '@/utils/calculos';
 import { SelectorDiasSemana } from '@/components/SelectorDiasSemana';
-import { Receipt, Pencil, Trash2, Repeat, Undo2 } from 'lucide-react';
+import { Receipt, Pencil, Trash2, Repeat, Undo2, ChevronDown, ChevronUp } from 'lucide-react';
 
 const ETIQUETA_FUENTE: Record<IFuenteDinero, string> = {
   disponible: 'Disponible',
@@ -64,6 +64,11 @@ function GastosContenido() {
   // fácil de "olvidar marcar"), esto crea un PagoTarjeta real, ligado
   // opcionalmente a la compra que estás pagando.
   const [esPagoTarjeta, setEsPagoTarjeta] = useState(false);
+
+  // Las compras ya pagadas quedan colapsadas por default -- solo las
+  // pendientes se ven de una vez, para que el botón de agregar y lo que
+  // sigue debiendo no queden enterrados bajo el historial completo.
+  const [mostrarComprasPagadas, setMostrarComprasPagadas] = useState(false);
 
   // "¿Es un gasto fijo?" -- si es "sí", en vez de registrar un gasto de una sola
   // vez (fuente disponible/ahorro/tercero), se crea una regla recurrente
@@ -347,6 +352,8 @@ function GastosContenido() {
       return { ...c, montoPagado, neto, saldoPendiente, pagada: saldoPendiente <= 0.01 };
     })
     .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+  const comprasPendientes = comprasConSaldo.filter((c) => !c.pagada);
+  const comprasPagadas = comprasConSaldo.filter((c) => c.pagada);
 
   const abrirPagoDesdeColumna = (compra: (typeof comprasConSaldo)[number]) => {
     setMostrarFormulario(true);
@@ -393,43 +400,6 @@ function GastosContenido() {
               </p>
             </div>
           </div>
-          {comprasConSaldo.length === 0 ? (
-            <p className="text-[11px] text-gray-500">Todavía no registras ninguna compra.</p>
-          ) : (
-            <ul className="divide-y divide-gray-100 -mx-2">
-              {comprasConSaldo.map((c) => (
-                <li key={c.id} className="px-2 py-1.5">
-                  <div className="flex items-baseline justify-between gap-1">
-                    <p className={`text-[11px] truncate min-w-0 ${c.pagada ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
-                      {c.nombre}
-                    </p>
-                    <span
-                      className={`text-[11px] font-semibold flex-shrink-0 tabular-nums ${
-                        c.pagada ? 'text-gray-400' : 'text-red-600'
-                      }`}
-                    >
-                      {formatearMoneda(c.pagada ? c.neto : c.saldoPendiente)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-1 mt-0.5">
-                    <p className="text-[9px] text-gray-400 truncate min-w-0">
-                      {formatearDiaMes(new Date(c.fecha))}
-                      {!c.pagada && c.montoPagado > 0 && ` · abonado ${formatearMoneda(c.montoPagado)}`}
-                    </p>
-                    {!c.pagada && (
-                      <button
-                        type="button"
-                        onClick={() => abrirPagoDesdeColumna(c)}
-                        className="flex-shrink-0 text-[9px] font-medium text-blue-600 hover:text-blue-800 border border-blue-200 rounded px-1"
-                      >
-                        Pagar
-                      </button>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
           <Link
             href="/tarjetas?nuevo=1"
             className="block text-center bg-violet-50 text-violet-700 text-[11px] font-medium py-1.5 rounded hover:bg-violet-100"
@@ -437,6 +407,71 @@ function GastosContenido() {
             + Compra
           </Link>
           <p className="text-[9px] text-gray-400 leading-tight">No afecta tu disponible hasta pagarlo.</p>
+
+          {comprasConSaldo.length === 0 ? (
+            <p className="text-[11px] text-gray-500">Todavía no registras ninguna compra.</p>
+          ) : (
+            <>
+              {comprasPendientes.length > 0 && (
+                <ul className="divide-y divide-gray-100 -mx-2">
+                  {comprasPendientes.map((c) => (
+                    <li key={c.id} className="px-2 py-1.5">
+                      <div className="flex items-baseline justify-between gap-1">
+                        <p className="text-[11px] truncate min-w-0 text-gray-900">{c.nombre}</p>
+                        <span className="text-[11px] font-semibold flex-shrink-0 tabular-nums text-red-600">
+                          {formatearMoneda(c.saldoPendiente)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-1 mt-0.5">
+                        <p className="text-[9px] text-gray-400 truncate min-w-0">
+                          {formatearDiaMes(new Date(c.fecha))}
+                          {c.montoPagado > 0 && ` · abonado ${formatearMoneda(c.montoPagado)}`}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => abrirPagoDesdeColumna(c)}
+                          className="flex-shrink-0 text-[9px] font-medium text-blue-600 hover:text-blue-800 border border-blue-200 rounded px-1"
+                        >
+                          Pagar
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {comprasPagadas.length > 0 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setMostrarComprasPagadas((v) => !v)}
+                    className="w-full text-[10px] text-gray-500 hover:text-gray-700 flex items-center justify-center gap-1 py-1"
+                  >
+                    {mostrarComprasPagadas ? 'Ocultar pagadas' : `Ver pagadas (${comprasPagadas.length})`}
+                    {mostrarComprasPagadas ? (
+                      <ChevronUp className="w-3 h-3" strokeWidth={2} />
+                    ) : (
+                      <ChevronDown className="w-3 h-3" strokeWidth={2} />
+                    )}
+                  </button>
+                  {mostrarComprasPagadas && (
+                    <ul className="divide-y divide-gray-100 -mx-2">
+                      {comprasPagadas.map((c) => (
+                        <li key={c.id} className="px-2 py-1.5">
+                          <div className="flex items-baseline justify-between gap-1">
+                            <p className="text-[11px] truncate min-w-0 text-gray-400 line-through">{c.nombre}</p>
+                            <span className="text-[11px] font-semibold flex-shrink-0 tabular-nums text-gray-400">
+                              {formatearMoneda(c.neto)}
+                            </span>
+                          </div>
+                          <p className="text-[9px] text-gray-400 truncate">{formatearDiaMes(new Date(c.fecha))}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              )}
+            </>
+          )}
         </div>
 
         {/* Columna 2: gastos de siempre (efectivo, ahorro, tercero, y pagos a tarjeta) */}
