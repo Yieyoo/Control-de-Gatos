@@ -298,7 +298,10 @@ function GastosDomiciliadosPendientes({
           return (
             <li key={clave}>
               <div className="flex items-center justify-between gap-2 text-sm">
-                <span className="min-w-0 flex-1 truncate text-gray-700">{m.nombre}</span>
+                <span className="min-w-0 flex-1 truncate text-gray-700 inline-flex items-center gap-1">
+                  <span className="truncate">{m.nombre}</span>
+                  {m.credito && <CreditCard className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={1.75} />}
+                </span>
                 <span className="text-xs text-gray-400 flex-shrink-0">aprox {formatearMoneda(m.cantidad)}</span>
                 <button
                   type="button"
@@ -388,10 +391,10 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista, onActualizar
     (m) => m.tipo === 'gasto' && m.gastoDomiciliadoId == null && !m.credito
   );
   const ahorroItems = p.movimientos.filter((m) => m.tipo === 'ahorro');
-  // Domiciliados en efectivo (ej. gasolina) de este periodo que ya cayeron y
-  // siguen sin confirmar -- no incluye cargos de tarjeta (esos se marcan
-  // desde /tarjetas, no aquí).
-  const gastosDomPendientes = gastosFijosItems.filter((m) => !m.pagado && !m.credito);
+  // Domiciliados de este periodo que ya cayeron y siguen sin confirmar --
+  // tanto en efectivo como de tarjeta (ej. gasolina pagada con crédito): en
+  // ambos casos confirmar puede llevar un monto real distinto al estimado.
+  const gastosDomPendientes = gastosFijosItems.filter((m) => !m.pagado);
 
   const abrirPromptPin = () => {
     setPin('');

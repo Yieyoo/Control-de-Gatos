@@ -57,6 +57,7 @@ interface OcurrenciaTag {
 }
 
 export interface CargoTarjetaDomiciliado {
+  gastoDomiciliadoId: number;
   nombre: string;
   cantidad: number;
   fecha: Date;
@@ -175,6 +176,7 @@ export function construirPeriodo(
           if (!fechaEnRangos(oc.fecha, rangos)) return;
           if (g.tarjetaId != null) {
             cargosTarjetaDomiciliada.push({
+              gastoDomiciliadoId: g.id,
               nombre: g.nombre,
               cantidad: oc.cantidad,
               fecha: oc.fecha,
@@ -221,6 +223,7 @@ export function construirPeriodo(
       ocurrenciasSemanales(parseDiasSemana(g.diasSemana), g.cantidad, rangos).forEach((oc) => {
         if (g.tarjetaId != null) {
           cargosTarjetaDomiciliada.push({
+            gastoDomiciliadoId: g.id,
             nombre: g.nombre,
             cantidad: oc.cantidad,
             fecha: oc.fecha,
@@ -467,6 +470,7 @@ export function construirPeriodo(
       tipo: 'gasto' as const,
       pagado: c.pagadoAdelantado,
       credito: true,
+      gastoDomiciliadoId: c.gastoDomiciliadoId,
     })),
   ].sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
 

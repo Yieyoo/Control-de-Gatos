@@ -221,6 +221,11 @@ export async function confirmarGastoDomiciliado(id: number, fecha: Date, montoRe
   const gasto = await prisma.gastoDomiciliado.findUnique({ where: { id } });
   if (!gasto) return null;
 
+  // Si está ligado a una tarjeta (ej. gasolina que se paga con crédito), no es
+  // un gasto en efectivo -- confirmar crea una compra de tarjeta real, no un
+  // GastoVariable (ver confirmarCargoTarjetaDomiciliado).
+  if (gasto.tarjetaId) return confirmarCargoTarjetaDomiciliado(gasto, fecha, montoReal);
+
   try {
     return await prisma.gastoVariable.create({
       data: {
@@ -248,13 +253,75 @@ export async function confirmarGastoDomiciliado(id: number, fecha: Date, montoRe
   }
 }
 
-/** Deshace la confirmación de una ocurrencia específica de un gasto domiciliado en efectivo: borra su GastoVariable real. */
+/**
+ * Confirma una ocurrencia de un gasto domiciliado ligado a una tarjeta cuyo
+ * monto varía cada vez (ej. gasolina, pagada con crédito) -- a diferencia de
+ * los cargos fijos de tarjeta (Netflix, Colegiatura), que solo marcan
+ * `pagadoAdelantadoHasta` sin crear ninguna fila real (se asume que se pagan
+ * solos vía domiciliación bancaria), este SÍ crea una CompraTarjeta real con
+ * el monto capturado -- así "Deuda de tarjetas" refleja el monto exacto y
+ * queda pendiente de pagarse como cualquier otra compra. También avanza
+ * `pagadoAdelantadoHasta` hasta esta fecha, para que el recordatorio
+ * proyectado de esta ocurrencia deje de aparecer como pendiente.
+ */
+async function confirmarCargoTarjetaDomiciliado(
+  gasto: { id: number; nombre: string; cantidad: number; categoriaId: number; tipoPresupuesto: string | null; tarjetaId: number | null },
+  fecha: Date,
+  montoReal?: number
+) {
+  if (!gasto.tarjetaId) return null;
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const compra = await tx.compraTarjeta.create({
+        data: {
+          nombre: gasto.nombre,
+          cantidad: montoReal ?? gasto.cantidad,
+          fecha,
+          tarjetaId: gasto.tarjetaId!,
+          categoriaId: gasto.categoriaId,
+          tipoPresupuesto: gasto.tipoPresupuesto,
+          gastoDomiciliadoOrigenId: gasto.id,
+        },
+        include: { categoria: true, devoluciones: true, tarjeta: true },
+      });
+      await tx.gastoDomiciliado.update({ where: { id: gasto.id }, data: { pagadoAdelantadoHasta: fecha } });
+      return compra;
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      const existente = await prisma.compraTarjeta.findFirst({
+        where: { gastoDomiciliadoOrigenId: gasto.id, fecha },
+      });
+      if (existente) return existente;
+    }
+    throw error;
+  }
+}
+
+/** Deshace la confirmación de una ocurrencia específica de un gasto domiciliado (en efectivo o de tarjeta). */
 export async function deshacerGastoDomiciliado(id: number, fecha: Date): Promise<void> {
-  const gasto = await prisma.gastoVariable.findFirst({
+  const gastoVariable = await prisma.gastoVariable.findFirst({
     where: { gastoDomiciliadoOrigenId: id, fecha },
   });
-  if (!gasto) return;
-  await prisma.gastoVariable.delete({ where: { id: gasto.id } });
+  if (gastoVariable) {
+    await prisma.gastoVariable.delete({ where: { id: gastoVariable.id } });
+    return;
+  }
+
+  const compra = await prisma.compraTarjeta.findFirst({
+    where: { gastoDomiciliadoOrigenId: id, fecha },
+  });
+  if (!compra) return;
+  await prisma.$transaction(async (tx) => {
+    await tx.compraTarjeta.delete({ where: { id: compra.id } });
+    // Solo se retrocede el marcador si esta era la ocurrencia más reciente
+    // confirmada -- si ya se confirmó una posterior, el marcador sigue ahí.
+    const gasto = await tx.gastoDomiciliado.findUnique({ where: { id } });
+    if (gasto?.pagadoAdelantadoHasta && gasto.pagadoAdelantadoHasta.getTime() === fecha.getTime()) {
+      await tx.gastoDomiciliado.update({ where: { id }, data: { pagadoAdelantadoHasta: null } });
+    }
+  });
 }
 
 /**

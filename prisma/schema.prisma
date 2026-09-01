@@ -118,6 +118,7 @@ model GastoDomiciliado {
 
   // Relaciones
   gastosGenerados     GastoVariable[] @relation("materializadoDeGastoDomiciliado")
+  cargosConfirmados   CompraTarjeta[] @relation("cargoTarjetaConfirmado")
 
   @@map("gastos_domiciliados")
 }
@@ -242,9 +243,17 @@ model CompraTarjeta {
   numeroMeses         Int?
   montoMensual        Float?
 
+  // Si esta compra viene de confirmar (con el monto real) un cargo domiciliado
+  // de tarjeta que varía cada vez (ej. gasolina) -- ver gastoDomiciliadoOrigenId
+  // en GastoVariable, mismo patrón. Único por (origen, fecha de la ocurrencia)
+  // para no duplicar si se confirma dos veces la misma ocurrencia.
+  gastoDomiciliadoOrigenId Int?
+  gastoDomiciliadoOrigen   GastoDomiciliado? @relation("cargoTarjetaConfirmado", fields: [gastoDomiciliadoOrigenId], references: [id], onDelete: SetNull)
+
   pagos               PagoTarjeta[] // pagos atribuidos opcionalmente a esta compra (para ver cuotas MSI pagadas)
   devoluciones        Devolucion[]
 
+  @@unique([gastoDomiciliadoOrigenId, fecha])
   @@map("compras_tarjeta")
 }
 
