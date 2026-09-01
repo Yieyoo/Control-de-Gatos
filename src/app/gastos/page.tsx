@@ -381,75 +381,71 @@ function GastosContenido() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+      <div className="grid grid-cols-2 gap-2 sm:gap-4 items-start">
         {/* Columna 1: lo que has comprado con tarjeta de crédito */}
-        <div className="bg-white border border-gray-200 rounded-lg p-3 space-y-3 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <h2 className="text-sm font-bold truncate">Gastos con tarjeta</h2>
-              <p className="text-[11px] text-gray-500">Compras hechas con tarjeta de crédito</p>
-            </div>
-            <div className="text-right flex-shrink-0">
-              <p className="text-[10px] text-gray-500 leading-tight">Pendiente por pagar</p>
-              <p className="text-sm font-bold text-red-600 leading-tight">
+        <div className="bg-white border border-gray-200 rounded-lg p-2 space-y-2 min-w-0">
+          <div className="min-w-0">
+            <h2 className="text-xs font-bold truncate">Gastos con tarjeta</h2>
+            <div className="flex items-baseline justify-between gap-1">
+              <p className="text-[9px] text-gray-500 truncate">Pendiente</p>
+              <p className="text-xs font-bold text-red-600 flex-shrink-0">
                 {formatearMoneda(comprasConSaldo.reduce((s, c) => s + c.saldoPendiente, 0))}
               </p>
             </div>
           </div>
           {comprasConSaldo.length === 0 ? (
-            <p className="text-xs text-gray-500">Todavía no registras ninguna compra con tarjeta.</p>
+            <p className="text-[11px] text-gray-500">Todavía no registras ninguna compra.</p>
           ) : (
-            <ul className="divide-y divide-gray-100 -mx-3">
+            <ul className="divide-y divide-gray-100 -mx-2">
               {comprasConSaldo.map((c) => (
-                <li key={c.id} className="px-3 py-2 flex items-center gap-2">
-                  <div className="min-w-0 flex-1">
-                    <p className={`text-xs truncate ${c.pagada ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+                <li key={c.id} className="px-2 py-1.5">
+                  <div className="flex items-baseline justify-between gap-1">
+                    <p className={`text-[11px] truncate min-w-0 ${c.pagada ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
                       {c.nombre}
                     </p>
-                    <p className="text-[10px] text-gray-400 truncate">
-                      {formatearDiaMes(new Date(c.fecha))} · {c.tarjeta?.nombre}
+                    <span
+                      className={`text-[11px] font-semibold flex-shrink-0 tabular-nums ${
+                        c.pagada ? 'text-gray-400' : 'text-red-600'
+                      }`}
+                    >
+                      {formatearMoneda(c.pagada ? c.neto : c.saldoPendiente)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-1 mt-0.5">
+                    <p className="text-[9px] text-gray-400 truncate min-w-0">
+                      {formatearDiaMes(new Date(c.fecha))}
                       {!c.pagada && c.montoPagado > 0 && ` · abonado ${formatearMoneda(c.montoPagado)}`}
                     </p>
+                    {!c.pagada && (
+                      <button
+                        type="button"
+                        onClick={() => abrirPagoDesdeColumna(c)}
+                        className="flex-shrink-0 text-[9px] font-medium text-blue-600 hover:text-blue-800 border border-blue-200 rounded px-1"
+                      >
+                        Pagar
+                      </button>
+                    )}
                   </div>
-                  <span
-                    className={`text-xs font-semibold flex-shrink-0 tabular-nums ${
-                      c.pagada ? 'text-gray-400' : 'text-red-600'
-                    }`}
-                  >
-                    {formatearMoneda(c.pagada ? c.neto : c.saldoPendiente)}
-                  </span>
-                  {!c.pagada && (
-                    <button
-                      type="button"
-                      onClick={() => abrirPagoDesdeColumna(c)}
-                      className="flex-shrink-0 text-[11px] font-medium text-blue-600 hover:text-blue-800 border border-blue-200 rounded px-1.5 py-0.5"
-                    >
-                      Pagar
-                    </button>
-                  )}
                 </li>
               ))}
             </ul>
           )}
           <Link
             href="/tarjetas?nuevo=1"
-            className="block text-center bg-violet-50 text-violet-700 text-xs font-medium py-2 rounded hover:bg-violet-100"
+            className="block text-center bg-violet-50 text-violet-700 text-[11px] font-medium py-1.5 rounded hover:bg-violet-100"
           >
-            + Compra con tarjeta
+            + Compra
           </Link>
-          <p className="text-[10px] text-gray-400">Esto no afecta tu disponible hasta que lo pagues.</p>
+          <p className="text-[9px] text-gray-400 leading-tight">No afecta tu disponible hasta pagarlo.</p>
         </div>
 
         {/* Columna 2: gastos de siempre (efectivo, ahorro, tercero, y pagos a tarjeta) */}
-        <div className="bg-white border border-gray-200 rounded-lg p-3 space-y-3 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <h2 className="text-sm font-bold truncate">Gastos generales</h2>
-              <p className="text-[11px] text-gray-500">Efectivo, débito, transferencia, etc.</p>
-            </div>
-            <div className="text-right flex-shrink-0">
-              <p className="text-[10px] text-gray-500 leading-tight">Gastado este mes</p>
-              <p className="text-sm font-bold text-red-600 leading-tight">{formatearMoneda(total)}</p>
+        <div className="bg-white border border-gray-200 rounded-lg p-2 space-y-2 min-w-0">
+          <div className="min-w-0">
+            <h2 className="text-xs font-bold truncate">Gastos generales</h2>
+            <div className="flex items-baseline justify-between gap-1">
+              <p className="text-[9px] text-gray-500 truncate">Este mes</p>
+              <p className="text-xs font-bold text-red-600 flex-shrink-0">{formatearMoneda(total)}</p>
             </div>
           </div>
 
@@ -457,12 +453,12 @@ function GastosContenido() {
       {!mostrarFormulario && (
         <button
           onClick={() => setMostrarFormulario(true)}
-          className="w-full bg-blue-50 text-blue-700 text-xs font-medium py-2 rounded hover:bg-blue-100"
+          className="w-full bg-blue-50 text-blue-700 text-[11px] font-medium py-1.5 rounded hover:bg-blue-100"
         >
           + Agregar gasto
         </button>
       )}
-      <p className="text-[10px] text-gray-400">Estos gastos sí afectan tu disponible de inmediato.</p>
+      <p className="text-[9px] text-gray-400 leading-tight">Sí afectan tu disponible de inmediato.</p>
 
       {/* Formulario */}
       {mostrarFormulario && (
@@ -800,13 +796,13 @@ function GastosContenido() {
       )}
 
       {/* Lista */}
-      <ul className="divide-y divide-gray-100 -mx-3">
+      <ul className="divide-y divide-gray-100 -mx-2">
         {gastos.map((gasto) => (
           <li key={gasto.id}>
             {editandoId === gasto.id ? (
               <form
                 onSubmit={(e) => handleGuardarEdicion(e, gasto.id)}
-                className="bg-blue-50/50 border border-blue-200 rounded-lg p-3 mx-3 my-1 space-y-2"
+                className="bg-blue-50/50 border border-blue-200 rounded-lg p-2 mx-2 my-1 space-y-1.5"
               >
                 <input
                   type="text"
@@ -881,39 +877,38 @@ function GastosContenido() {
                 </div>
               </form>
             ) : (
-              <div className="px-3 py-2 space-y-1">
-                <div className="flex justify-between items-center gap-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs text-gray-900 truncate">{gasto.nombre}</p>
-                    <p className="text-[10px] text-gray-500 truncate">
-                      {gasto.categoria?.nombre} · {formatearDiaMes(new Date(gasto.fecha))} · {ETIQUETA_FUENTE[gasto.fuente]}
-                      {gasto.notas && ` · ${gasto.notas}`}
-                      {gasto.gastoDomiciliadoOrigenId != null && (
-                        <span className="inline-flex items-center gap-0.5">
-                          {' · '}
-                          <Repeat className="w-2.5 h-2.5" strokeWidth={1.75} /> automático
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <div className="text-right">
-                      <p className="text-xs font-semibold text-red-600 whitespace-nowrap">{formatearMoneda(netoDe(gasto))}</p>
-                      {(gasto.devoluciones?.length ?? 0) > 0 && (
-                        <p className="text-[10px] text-gray-400 whitespace-nowrap line-through">{formatearMoneda(gasto.cantidad)}</p>
-                      )}
-                    </div>
+              <div className="px-2 py-1.5 space-y-0.5">
+                <div className="flex items-baseline justify-between gap-1">
+                  <p className="text-[11px] text-gray-900 truncate min-w-0">{gasto.nombre}</p>
+                  <span className="text-[11px] font-semibold text-red-600 flex-shrink-0 tabular-nums">
+                    {formatearMoneda(netoDe(gasto))}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-1">
+                  <p className="text-[9px] text-gray-500 truncate min-w-0">
+                    {gasto.categoria?.nombre} · {formatearDiaMes(new Date(gasto.fecha))}
+                    {gasto.gastoDomiciliadoOrigenId != null && (
+                      <span className="inline-flex items-center gap-0.5">
+                        {' · '}
+                        <Repeat className="w-2 h-2" strokeWidth={1.75} />
+                      </span>
+                    )}
+                  </p>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    {(gasto.devoluciones?.length ?? 0) > 0 && (
+                      <span className="text-[9px] text-gray-400 line-through">{formatearMoneda(gasto.cantidad)}</span>
+                    )}
                     <button onClick={() => iniciarEdicion(gasto)} className="text-blue-600 hover:text-blue-800">
-                      <Pencil className="w-3.5 h-3.5" strokeWidth={1.75} />
+                      <Pencil className="w-3 h-3" strokeWidth={1.75} />
                     </button>
                     <button onClick={() => handleEliminar(gasto.id)} className="text-red-600 hover:text-red-800">
-                      <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+                      <Trash2 className="w-3 h-3" strokeWidth={1.75} />
                     </button>
                   </div>
                 </div>
 
                 {(gasto.devoluciones?.length ?? 0) > 0 && (
-                  <ul className="text-[10px] text-gray-500 space-y-0.5">
+                  <ul className="text-[9px] text-gray-500 space-y-0.5">
                     {gasto.devoluciones!.map((d) => (
                       <li key={d.id} className="inline-flex items-center gap-1">
                         <Undo2 className="w-2.5 h-2.5 flex-shrink-0" strokeWidth={1.75} />
