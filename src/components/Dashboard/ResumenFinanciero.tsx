@@ -248,12 +248,14 @@ function DeudaTarjetasExpandible({
 }
 
 /**
- * Gastos domiciliados en efectivo (ej. gasolina) que ya cayeron este periodo
- * y siguen sin confirmar -- cada uno con su estimado, un lápiz para editar el
- * monto real antes de confirmar (varía cada vez) y una palomita para
- * confirmarlo directo con ese mismo estimado.
+ * Gastos domiciliados de este periodo (en efectivo o de tarjeta, ej.
+ * gasolina) que varían de monto cada vez -- se quedan siempre en la lista
+ * (no desaparecen al confirmarlos, solo cambian a gris) para llevar el
+ * control de todos, pendientes y ya pagados. Un lápiz edita el monto real
+ * antes de confirmar; la palomita confirma directo con el estimado, o
+ * deshace la confirmación si ya estaba marcado.
  */
-function GastosDomiciliadosPendientes({
+function GastosDomiciliados({
   items,
   onActualizar,
 }: {
@@ -287,10 +289,28 @@ function GastosDomiciliadosPendientes({
     }
   };
 
+  const deshacer = async (m: IMovimientoPeriodo) => {
+    const clave = claveDe(m);
+    setEnviando(clave);
+    try {
+      const resp = await fetch(`/api/gastos/domiciliados/${m.gastoDomiciliadoId}/confirmar`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fecha: m.fecha }),
+      });
+      if (!resp.ok) throw new Error('Error al deshacer');
+      onActualizar();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setEnviando(null);
+    }
+  };
+
   return (
     <div className="mt-4 pt-3 border-t border-gray-100">
       <p className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-        <Fuel className="w-4 h-4 text-gray-500" strokeWidth={1.75} /> Por confirmar
+        <Fuel className="w-4 h-4 text-gray-500" strokeWidth={1.75} /> Gastos domiciliados
       </p>
       <ul className="space-y-1.5">
         {items.map((m) => {
@@ -298,32 +318,39 @@ function GastosDomiciliadosPendientes({
           return (
             <li key={clave}>
               <div className="flex items-center justify-between gap-2 text-sm">
-                <span className="min-w-0 flex-1 truncate text-gray-700 inline-flex items-center gap-1">
+                <span
+                  className={`min-w-0 flex-1 truncate inline-flex items-center gap-1 ${
+                    m.pagado ? 'text-gray-400 line-through' : 'text-gray-700'
+                  }`}
+                >
                   <span className="truncate">{m.nombre}</span>
                   {m.credito && <CreditCard className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={1.75} />}
                 </span>
-                <span className="text-xs text-gray-400 flex-shrink-0">aprox {formatearMoneda(m.cantidad)}</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditando(clave);
-                    setMonto(String(m.cantidad));
-                  }}
+                <span className={`flex-shrink-0 ${m.pagado ? 'text-gray-400' : 'text-red-600 font-semibold'}`}>
+                  {m.pagado ? formatearMoneda(m.cantidad) : `aprox ${formatearMoneda(m.cantidad)}`}
+                </span>
+                {!m.pagado && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditando(clave);
+                      setMonto(String(m.cantidad));
+                    }}
+                    disabled={enviando === clave}
+                    title="Editar el monto real antes de confirmar"
+                    className="text-gray-400 hover:text-gray-600 flex-shrink-0"
+                  >
+                    <Pencil className="w-3.5 h-3.5" strokeWidth={1.75} />
+                  </button>
+                )}
+                <input
+                  type="checkbox"
+                  checked={m.pagado}
                   disabled={enviando === clave}
-                  title="Editar el monto real antes de confirmar"
-                  className="text-gray-400 hover:text-gray-600 flex-shrink-0"
-                >
-                  <Pencil className="w-3.5 h-3.5" strokeWidth={1.75} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => confirmar(m)}
-                  disabled={enviando === clave}
-                  title="Ya le puse -- confirmar con el estimado"
-                  className="text-green-600 hover:text-green-700 flex-shrink-0"
-                >
-                  <Check className="w-4 h-4" strokeWidth={2.5} />
-                </button>
+                  onChange={() => (m.pagado ? deshacer(m) : confirmar(m))}
+                  title={m.pagado ? 'Ya pagado -- destildar para deshacer' : 'Ya le puse -- confirmar con el estimado'}
+                  className="w-4 h-4 flex-shrink-0"
+                />
               </div>
               {editando === clave && (
                 <form
@@ -391,10 +418,6 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista, onActualizar
     (m) => m.tipo === 'gasto' && m.gastoDomiciliadoId == null && !m.credito
   );
   const ahorroItems = p.movimientos.filter((m) => m.tipo === 'ahorro');
-  // Domiciliados de este periodo que ya cayeron y siguen sin confirmar --
-  // tanto en efectivo como de tarjeta (ej. gasolina pagada con crédito): en
-  // ambos casos confirmar puede llevar un monto real distinto al estimado.
-  const gastosDomPendientes = gastosFijosItems.filter((m) => !m.pagado);
 
   const abrirPromptPin = () => {
     setPin('');
@@ -616,7 +639,7 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista, onActualizar
       </div>
 
       <DeudaTarjetasExpandible tarjetas={resumen.deudaTarjetas} vista={vista} />
-      <GastosDomiciliadosPendientes items={gastosDomPendientes} onActualizar={onActualizar} />
+      <GastosDomiciliados items={gastosFijosItems} onActualizar={onActualizar} />
 
       {tileAbierto && (
         <div className="fixed inset-0 z-30" role="dialog" aria-modal="true">

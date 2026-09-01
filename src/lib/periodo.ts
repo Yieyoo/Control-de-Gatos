@@ -131,6 +131,18 @@ export function construirPeriodo(
   const estaMarcadoPagado = (g: GastoDomiciliadoConCategoria, fecha: Date) =>
     !!(g.pagadoAdelantadoHasta && new Date(g.pagadoAdelantadoHasta) >= fecha);
 
+  // Si un cargo de tarjeta domiciliado de monto variable (ej. gasolina) ya se
+  // confirmó con un monto real (ver confirmarCargoTarjetaDomiciliado), existe
+  // una CompraTarjeta real ligada a esa ocurrencia -- se usa ese monto en vez
+  // del estimado para que "Gastos fijos" refleje lo que de verdad costó.
+  const montoRealCargoTarjeta = new Map(
+    comprasTarjeta
+      .filter((c) => c.gastoDomiciliadoOrigenId != null)
+      .map((c) => [`${c.gastoDomiciliadoOrigenId}|${new Date(c.fecha).getTime()}`, neto(c)])
+  );
+  const montoDeCargo = (g: GastoDomiciliadoConCategoria, fecha: Date, estimado: number) =>
+    montoRealCargoTarjeta.get(`${g.id}|${fecha.getTime()}`) ?? estimado;
+
   // Cada ocurrencia de un domiciliado (gasto en efectivo o ahorro) es una
   // transferencia independiente -- confirmar la de esta quincena no implica
   // que la de la quincena pasada también se cobró/envió. Por eso se compara
@@ -178,7 +190,7 @@ export function construirPeriodo(
             cargosTarjetaDomiciliada.push({
               gastoDomiciliadoId: g.id,
               nombre: g.nombre,
-              cantidad: oc.cantidad,
+              cantidad: montoDeCargo(g, oc.fecha, oc.cantidad),
               fecha: oc.fecha,
               pagadoAdelantado: estaMarcadoPagado(g, oc.fecha),
             });
@@ -225,7 +237,7 @@ export function construirPeriodo(
           cargosTarjetaDomiciliada.push({
             gastoDomiciliadoId: g.id,
             nombre: g.nombre,
-            cantidad: oc.cantidad,
+            cantidad: montoDeCargo(g, oc.fecha, oc.cantidad),
             fecha: oc.fecha,
             pagadoAdelantado: estaMarcadoPagado(g, oc.fecha),
           });
