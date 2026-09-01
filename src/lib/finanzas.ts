@@ -213,9 +213,11 @@ export async function eliminarPagoTarjeta(id: number) {
 /**
  * Marca una ocurrencia de un gasto domiciliado en efectivo como cobrada: crea
  * el GastoVariable real (fuente="disponible"), fechado exactamente en esa
- * ocurrencia.
+ * ocurrencia. `montoReal` permite capturar cuánto fue en realidad (ej.
+ * gasolina, que varía cada vez) en vez de asumir el monto estimado de la
+ * regla; si no se manda, se usa ese estimado tal cual.
  */
-export async function confirmarGastoDomiciliado(id: number, fecha: Date) {
+export async function confirmarGastoDomiciliado(id: number, fecha: Date, montoReal?: number) {
   const gasto = await prisma.gastoDomiciliado.findUnique({ where: { id } });
   if (!gasto) return null;
 
@@ -223,7 +225,7 @@ export async function confirmarGastoDomiciliado(id: number, fecha: Date) {
     return await prisma.gastoVariable.create({
       data: {
         nombre: gasto.nombre,
-        cantidad: gasto.cantidad,
+        cantidad: montoReal ?? gasto.cantidad,
         categoriaId: gasto.categoriaId,
         fecha,
         tipoPresupuesto: gasto.tipoPresupuesto,

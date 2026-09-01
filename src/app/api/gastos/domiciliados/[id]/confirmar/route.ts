@@ -7,11 +7,15 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const { fecha } = await request.json();
+    const { fecha, monto } = await request.json();
     if (!fecha) {
       return Response.json({ error: 'Falta la fecha' }, { status: 400 });
     }
-    const gasto = await confirmarGastoDomiciliado(parseInt(id), new Date(fecha));
+    const montoReal = monto !== undefined && monto !== null && monto !== '' ? parseFloat(monto) : undefined;
+    if (montoReal !== undefined && (!Number.isFinite(montoReal) || montoReal <= 0)) {
+      return Response.json({ error: 'Monto inválido' }, { status: 400 });
+    }
+    const gasto = await confirmarGastoDomiciliado(parseInt(id), new Date(fecha), montoReal);
     if (!gasto) {
       return Response.json({ error: 'Gasto domiciliado no encontrado' }, { status: 404 });
     }

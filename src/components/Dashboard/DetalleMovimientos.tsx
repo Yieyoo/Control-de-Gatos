@@ -25,10 +25,15 @@ function formatearFecha(fechaISO: string): string {
 
 export function DetalleMovimientos({ etiqueta, movimientos, onActualizar }: DetalleMovimientosProps) {
   const [confirmando, setConfirmando] = useState<string | null>(null);
+  // Clave del gasto domiciliado que se está confirmando ahora mismo (mientras
+  // se captura el monto real) -- solo aplica a gastos, un ahorro domiciliado
+  // siempre es la misma cantidad, así que ese se confirma directo.
+  const [editandoMonto, setEditandoMonto] = useState<string | null>(null);
+  const [montoEditado, setMontoEditado] = useState('');
   const gastos = movimientos.filter((m) => m.tipo === 'gasto');
   const ahorros = movimientos.filter((m) => m.tipo === 'ahorro');
 
-  /** Confirma/deshace un gasto domiciliado en efectivo o un ahorro domiciliado -- misma mecánica, distinto endpoint. */
+  /** Deshace un gasto domiciliado en efectivo o un ahorro domiciliado, o confirma un ahorro (siempre el mismo monto). */
   const handleToggleConfirmado = async (m: IMovimientoPeriodo, tipo: 'gasto' | 'ahorro') => {
     const id = tipo === 'gasto' ? m.gastoDomiciliadoId : m.ahorroDomiciliadoId;
     if (id == null) return;
@@ -42,6 +47,33 @@ export function DetalleMovimientos({ etiqueta, movimientos, onActualizar }: Deta
         body: JSON.stringify({ fecha: m.fecha }),
       });
       if (!resp.ok) throw new Error('Error al actualizar');
+      onActualizar();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setConfirmando(null);
+    }
+  };
+
+  /** Abre la captura del monto real para confirmar un gasto domiciliado (ej. gasolina, que varía cada vez). */
+  const iniciarConfirmacionGasto = (m: IMovimientoPeriodo) => {
+    const clave = `gasto-${m.gastoDomiciliadoId}-${m.fecha}`;
+    setEditandoMonto(clave);
+    setMontoEditado(String(m.cantidad));
+  };
+
+  const handleConfirmarMonto = async (e: React.FormEvent, m: IMovimientoPeriodo) => {
+    e.preventDefault();
+    const clave = `gasto-${m.gastoDomiciliadoId}-${m.fecha}`;
+    setConfirmando(clave);
+    try {
+      const resp = await fetch(`/api/gastos/domiciliados/${m.gastoDomiciliadoId}/confirmar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fecha: m.fecha, monto: montoEditado }),
+      });
+      if (!resp.ok) throw new Error('Error al confirmar');
+      setEditandoMonto(null);
       onActualizar();
     } catch (err) {
       console.error(err);
@@ -69,36 +101,72 @@ export function DetalleMovimientos({ etiqueta, movimientos, onActualizar }: Deta
                 {gastos.map((m, i) => {
                   const clave = `gasto-${m.gastoDomiciliadoId}-${m.fecha}`;
                   return (
-                    <li key={i} className="py-2 flex items-center gap-3">
-                      <span
-                        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: m.categoriaColor ?? '#e34948' }}
-                      />
-                      <span
-                        className={`flex-1 min-w-0 truncate text-sm inline-flex items-center gap-1 ${
-                          m.pagado ? 'text-gray-400' : 'text-gray-900'
-                        }`}
-                      >
-                        <span className="truncate">{m.nombre}</span>
-                        {m.credito && <CreditCard className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={1.75} />}
-                      </span>
-                      <span className="text-xs text-gray-400 flex-shrink-0">{formatearFecha(m.fecha)}</span>
-                      <span
-                        className={`text-sm font-semibold flex-shrink-0 tabular-nums ${
-                          m.pagado ? 'text-gray-400' : 'text-red-600'
-                        }`}
-                      >
-                        {formatearMoneda(m.cantidad)}
-                      </span>
-                      {m.gastoDomiciliadoId != null && (
-                        <input
-                          type="checkbox"
-                          checked={m.pagado}
-                          disabled={confirmando === clave}
-                          onChange={() => handleToggleConfirmado(m, 'gasto')}
-                          title="¿Ya se cobró este gasto?"
-                          className="w-4 h-4 flex-shrink-0"
+                    <li key={i}>
+                      <div className="py-2 flex items-center gap-3">
+                        <span
+                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: m.categoriaColor ?? '#e34948' }}
                         />
+                        <span
+                          className={`flex-1 min-w-0 truncate text-sm inline-flex items-center gap-1 ${
+                            m.pagado ? 'text-gray-400' : 'text-gray-900'
+                          }`}
+                        >
+                          <span className="truncate">{m.nombre}</span>
+                          {m.credito && <CreditCard className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={1.75} />}
+                        </span>
+                        <span className="text-xs text-gray-400 flex-shrink-0">{formatearFecha(m.fecha)}</span>
+                        <span
+                          className={`text-sm font-semibold flex-shrink-0 tabular-nums ${
+                            m.pagado ? 'text-gray-400' : 'text-red-600'
+                          }`}
+                        >
+                          {formatearMoneda(m.cantidad)}
+                        </span>
+                        {m.gastoDomiciliadoId != null && (
+                          <input
+                            type="checkbox"
+                            checked={m.pagado}
+                            disabled={confirmando === clave}
+                            onChange={() =>
+                              m.pagado ? handleToggleConfirmado(m, 'gasto') : iniciarConfirmacionGasto(m)
+                            }
+                            title="¿Ya se cobró este gasto?"
+                            className="w-4 h-4 flex-shrink-0"
+                          />
+                        )}
+                      </div>
+                      {editandoMonto === clave && (
+                        <form
+                          onSubmit={(e) => handleConfirmarMonto(e, m)}
+                          className="flex flex-wrap items-center gap-2 bg-gray-50 rounded-lg p-2 mb-1"
+                        >
+                          <span className="text-xs text-gray-500">¿Cuánto fue en realidad?</span>
+                          <input
+                            type="number"
+                            autoFocus
+                            value={montoEditado}
+                            onChange={(e) => setMontoEditado(e.target.value)}
+                            required
+                            step="0.01"
+                            min="0.01"
+                            className="border border-gray-300 rounded px-2 py-1 text-sm w-28"
+                          />
+                          <button
+                            type="submit"
+                            disabled={confirmando === clave}
+                            className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700 disabled:opacity-50"
+                          >
+                            Confirmar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditandoMonto(null)}
+                            className="bg-gray-400 text-white px-3 py-1 rounded text-sm hover:bg-gray-500"
+                          >
+                            Cancelar
+                          </button>
+                        </form>
                       )}
                     </li>
                   );
