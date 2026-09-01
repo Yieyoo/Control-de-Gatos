@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { formatearMoneda } from '@/utils/calculos';
 import type { IMovimientoPeriodo } from '@/types';
-import { CreditCard } from 'lucide-react';
+import { CreditCard, Pencil } from 'lucide-react';
 
 interface DetalleMovimientosProps {
   etiqueta: string;
@@ -123,14 +123,23 @@ export function DetalleMovimientos({ etiqueta, movimientos, onActualizar }: Deta
                         >
                           {formatearMoneda(m.cantidad)}
                         </span>
+                        {m.gastoDomiciliadoId != null && !m.pagado && (
+                          <button
+                            type="button"
+                            onClick={() => iniciarConfirmacionGasto(m)}
+                            disabled={confirmando === clave}
+                            title="Editar el monto real antes de confirmar"
+                            className="text-gray-400 hover:text-gray-600 flex-shrink-0"
+                          >
+                            <Pencil className="w-3.5 h-3.5" strokeWidth={1.75} />
+                          </button>
+                        )}
                         {m.gastoDomiciliadoId != null && (
                           <input
                             type="checkbox"
                             checked={m.pagado}
                             disabled={confirmando === clave}
-                            onChange={() =>
-                              m.pagado ? handleToggleConfirmado(m, 'gasto') : iniciarConfirmacionGasto(m)
-                            }
+                            onChange={() => handleToggleConfirmado(m, 'gasto')}
                             title="¿Ya se cobró este gasto?"
                             className="w-4 h-4 flex-shrink-0"
                           />
