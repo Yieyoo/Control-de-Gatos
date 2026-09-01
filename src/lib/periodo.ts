@@ -128,9 +128,6 @@ export function construirPeriodo(
   const gastosDomActivos = gastosDomiciliados.filter((g) => g.activo);
   const ahorrosDomActivos = ahorrosDomiciliados.filter((a) => a.activo);
 
-  const estaMarcadoPagado = (g: GastoDomiciliadoConCategoria, fecha: Date) =>
-    !!(g.pagadoAdelantadoHasta && new Date(g.pagadoAdelantadoHasta) >= fecha);
-
   // Si un cargo de tarjeta domiciliado de monto variable (ej. gasolina) ya se
   // confirmó con un monto real (ver confirmarCargoTarjetaDomiciliado), existe
   // una CompraTarjeta real ligada a esa ocurrencia -- se usa ese monto en vez
@@ -140,6 +137,20 @@ export function construirPeriodo(
       .filter((c) => c.gastoDomiciliadoOrigenId != null)
       .map((c) => [`${c.gastoDomiciliadoOrigenId}|${new Date(c.fecha).getTime()}`, neto(c)])
   );
+
+  // "Pagado" de un cargo de tarjeta: primero se checa si ESA ocurrencia
+  // exacta ya tiene una CompraTarjeta real ligada (confirmación con monto
+  // variable, ej. gasolina) -- cada ocurrencia es independiente, como en los
+  // domiciliados en efectivo. Solo si no hay compra real se cae al marcador
+  // simple `pagadoAdelantadoHasta` (cargos fijos tipo Netflix que nunca
+  // generan una compra, donde "pagado hasta la fecha X" sí es válido porque
+  // se asume que se van pagando en orden). Usar el marcador para gasolina
+  // fue el bug: confirmar la ocurrencia de hoy adelantaba la fecha y con eso
+  // "pagaba" también la ocurrencia anterior sin compra real de por medio.
+  const estaMarcadoPagado = (g: GastoDomiciliadoConCategoria, fecha: Date) => {
+    if (montoRealCargoTarjeta.has(`${g.id}|${fecha.getTime()}`)) return true;
+    return !!(g.pagadoAdelantadoHasta && new Date(g.pagadoAdelantadoHasta) >= fecha);
+  };
   const montoDeCargo = (g: GastoDomiciliadoConCategoria, fecha: Date, estimado: number) =>
     montoRealCargoTarjeta.get(`${g.id}|${fecha.getTime()}`) ?? estimado;
 

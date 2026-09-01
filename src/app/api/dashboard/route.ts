@@ -170,6 +170,21 @@ export async function GET() {
     const periodoActual = periodoQuincenaActual(hoy, CORTE_1, CORTE_2);
     const periodoProximo = periodoQuincenaSiguiente(periodoActual, CORTE_1, CORTE_2);
 
+    // Ocurrencias de cargos domiciliados de tarjeta que ya se confirmaron con
+    // un monto real (ver confirmarCargoTarjetaDomiciliado) -- esas ya cuentan
+    // en `comprado` vía su CompraTarjeta real, así que no deben contarse
+    // TAMBIÉN como pendientes aquí. No se puede usar solo
+    // `pagadoAdelantadoHasta` para esto: ese marcador es "pagado hasta la
+    // fecha X" (válido para cargos fijos tipo Netflix, que se pagan en
+    // orden), pero un cargo de monto variable (gasolina) no es así -- cada
+    // ocurrencia es independiente, y usar el marcador aquí "pagaba" también
+    // ocurrencias anteriores sin compra real de por medio.
+    const cargosConCompraReal = new Set(
+      comprasTarjeta
+        .filter((c) => c.gastoDomiciliadoOrigenId != null)
+        .map((c) => `${c.gastoDomiciliadoOrigenId}|${new Date(c.fecha).getTime()}`)
+    );
+
     // Deuda de tarjetas: todo lo que llevas comprado (haya cortado o no, incluye MSI
     // completo), menos devoluciones, más los gastos domiciliados ligados a esta
     // tarjeta que ya cayeron y no se marcaron como pagados, menos lo que ya abonaste.
@@ -187,7 +202,9 @@ export async function GET() {
         .reduce((sum, g) => {
           const ocurrencias = ocurrenciasDeGastoEnRangos(g, [cicloActualTarjeta], CORTE_1);
           const pendientes = ocurrencias.filter(
-            (oc) => !g.pagadoAdelantadoHasta || g.pagadoAdelantadoHasta < oc.fecha
+            (oc) =>
+              !cargosConCompraReal.has(`${g.id}|${oc.fecha.getTime()}`) &&
+              (!g.pagadoAdelantadoHasta || g.pagadoAdelantadoHasta < oc.fecha)
           );
           return sum + pendientes.reduce((s, oc) => s + oc.cantidad, 0);
         }, 0);

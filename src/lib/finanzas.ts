@@ -260,9 +260,20 @@ export async function confirmarGastoDomiciliado(id: number, fecha: Date, montoRe
  * `pagadoAdelantadoHasta` sin crear ninguna fila real (se asume que se pagan
  * solos vía domiciliación bancaria), este SÍ crea una CompraTarjeta real con
  * el monto capturado -- así "Deuda de tarjetas" refleja el monto exacto y
- * queda pendiente de pagarse como cualquier otra compra. También avanza
- * `pagadoAdelantadoHasta` hasta esta fecha, para que el recordatorio
- * proyectado de esta ocurrencia deje de aparecer como pendiente.
+ * queda pendiente de pagarse como cualquier otra compra.
+ *
+ * A propósito NO toca `pagadoAdelantadoHasta`: ese marcador es "pagado hasta
+ * la fecha X" (válido para cargos fijos, que se asume se pagan en orden),
+ * pero gasolina no es así -- cada ocurrencia es independiente (como los
+ * domiciliados en efectivo), así que "ya pagué la de hoy" NO puede implicar
+ * "ya pagué la de hace dos semanas". Si esta función movía ese marcador,
+ * confirmar la ocurrencia más reciente adelantaba la fecha y con eso
+ * "pagaba" también cualquier ocurrencia anterior sin haber creado ninguna
+ * compra real para ella -- la deuda de esa ocurrencia simplemente
+ * desaparecía. "Pagado" para este tipo de cargo se detecta en cambio
+ * buscando si existe una CompraTarjeta real ligada a esa ocurrencia exacta
+ * (ver estaMarcadoPagado en src/lib/periodo.ts), igual que gastosVariables
+ * para los domiciliados en efectivo.
  */
 async function confirmarCargoTarjetaDomiciliado(
   gasto: { id: number; nombre: string; cantidad: number; categoriaId: number; tipoPresupuesto: string | null; tarjetaId: number | null },
@@ -272,21 +283,17 @@ async function confirmarCargoTarjetaDomiciliado(
   if (!gasto.tarjetaId) return null;
 
   try {
-    return await prisma.$transaction(async (tx) => {
-      const compra = await tx.compraTarjeta.create({
-        data: {
-          nombre: gasto.nombre,
-          cantidad: montoReal ?? gasto.cantidad,
-          fecha,
-          tarjetaId: gasto.tarjetaId!,
-          categoriaId: gasto.categoriaId,
-          tipoPresupuesto: gasto.tipoPresupuesto,
-          gastoDomiciliadoOrigenId: gasto.id,
-        },
-        include: { categoria: true, devoluciones: true, tarjeta: true },
-      });
-      await tx.gastoDomiciliado.update({ where: { id: gasto.id }, data: { pagadoAdelantadoHasta: fecha } });
-      return compra;
+    return await prisma.compraTarjeta.create({
+      data: {
+        nombre: gasto.nombre,
+        cantidad: montoReal ?? gasto.cantidad,
+        fecha,
+        tarjetaId: gasto.tarjetaId,
+        categoriaId: gasto.categoriaId,
+        tipoPresupuesto: gasto.tipoPresupuesto,
+        gastoDomiciliadoOrigenId: gasto.id,
+      },
+      include: { categoria: true, devoluciones: true, tarjeta: true },
     });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
@@ -309,18 +316,8 @@ export async function deshacerGastoDomiciliado(id: number, fecha: Date): Promise
     return;
   }
 
-  const compra = await prisma.compraTarjeta.findFirst({
+  await prisma.compraTarjeta.deleteMany({
     where: { gastoDomiciliadoOrigenId: id, fecha },
-  });
-  if (!compra) return;
-  await prisma.$transaction(async (tx) => {
-    await tx.compraTarjeta.delete({ where: { id: compra.id } });
-    // Solo se retrocede el marcador si esta era la ocurrencia más reciente
-    // confirmada -- si ya se confirmó una posterior, el marcador sigue ahí.
-    const gasto = await tx.gastoDomiciliado.findUnique({ where: { id } });
-    if (gasto?.pagadoAdelantadoHasta && gasto.pagadoAdelantadoHasta.getTime() === fecha.getTime()) {
-      await tx.gastoDomiciliado.update({ where: { id }, data: { pagadoAdelantadoHasta: null } });
-    }
   });
 }
 
