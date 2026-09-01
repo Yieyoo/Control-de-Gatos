@@ -2,8 +2,6 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
-import Link from 'next/link';
 import type {
   IGastoVariable,
   ICategoria,
@@ -33,7 +31,6 @@ export default function GastosPage() {
 }
 
 function GastosContenido() {
-  const searchParams = useSearchParams();
   const [gastos, setGastos] = useState<IGastoVariable[]>([]);
   const [categorias, setCategorias] = useState<ICategoria[]>([]);
   const [ahorroLugares, setAhorroLugares] = useState<IAhorroLugar[]>([]);
@@ -43,7 +40,22 @@ function GastosContenido() {
   const [pagosTarjeta, setPagosTarjeta] = useState<IPagoTarjeta[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [mostrarFormulario, setMostrarFormulario] = useState(() => searchParams.get('nuevo') === '1');
+  const [mostrarFormulario, setMostrarFormulario] = useState(false);
+
+  // Formulario para registrar una compra nueva con tarjeta -- se queda aquí
+  // mismo en /gastos (misma hoja que "Agregar gasto") en vez de mandar a
+  // /tarjetas, para no salirte de la pantalla.
+  const [mostrarFormCompra, setMostrarFormCompra] = useState(false);
+  const [formCompra, setFormCompra] = useState({
+    nombre: '',
+    cantidad: '',
+    categoriaId: '',
+    tipoPresupuesto: 'gusto' as 'necesidad' | 'gusto',
+    esMSI: false,
+    numeroMeses: '',
+    fecha: '',
+    tarjetaId: '',
+  });
 
   const [formData, setFormData] = useState({
     nombre: '',
@@ -362,6 +374,47 @@ function GastosContenido() {
     });
   };
 
+  const abrirFormCompra = () => {
+    setFormCompra({
+      nombre: '',
+      cantidad: '',
+      categoriaId: '',
+      tipoPresupuesto: 'gusto',
+      esMSI: false,
+      numeroMeses: '',
+      fecha: '',
+      tarjetaId: tarjetas.length === 1 ? String(tarjetas[0].id) : '',
+    });
+    setMostrarFormCompra(true);
+  };
+
+  const handleCategoriaCompraChange = (categoriaId: string) => {
+    const categoria = categorias.find((c) => String(c.id) === categoriaId);
+    setFormCompra({ ...formCompra, categoriaId, tipoPresupuesto: categoria?.tipoPresupuesto ?? 'gusto' });
+  };
+
+  const handleSubmitCompra = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const resp = await fetch('/api/tarjetas/compras', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...formCompra,
+          numeroMeses: formCompra.esMSI ? formCompra.numeroMeses : undefined,
+        }),
+      });
+      if (!resp.ok) {
+        const datos = await resp.json().catch(() => null);
+        throw new Error(datos?.error || 'Error al registrar la compra');
+      }
+      setMostrarFormCompra(false);
+      cargarCompras();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error desconocido');
+    }
+  };
+
   if (cargando) return <div>Cargando...</div>;
 
   const total = gastos.reduce((sum, g) => sum + netoDe(g), 0);
@@ -393,12 +446,13 @@ function GastosContenido() {
               </p>
             </div>
           </div>
-          <Link
-            href="/tarjetas"
-            className="block text-center bg-violet-50 text-violet-700 text-[11px] font-medium py-1.5 rounded hover:bg-violet-100"
+          <button
+            type="button"
+            onClick={abrirFormCompra}
+            className="block w-full text-center bg-violet-50 text-violet-700 text-[11px] font-medium py-1.5 rounded hover:bg-violet-100"
           >
             + Compra
-          </Link>
+          </button>
           <p className="text-[9px] text-gray-400 leading-tight">No afecta tu disponible hasta pagarlo.</p>
 
           {comprasConSaldo.length === 0 ? (
@@ -439,6 +493,135 @@ function GastosContenido() {
             </ul>
           )}
         </div>
+
+        {/* Formulario de compra -- misma hoja de pantalla completa que "Agregar gasto" */}
+        {mostrarFormCompra && (
+          <div className="fixed inset-0 z-30" role="dialog" aria-modal="true">
+            <button
+              type="button"
+              aria-label="Cerrar"
+              onClick={() => setMostrarFormCompra(false)}
+              className="absolute inset-0 bg-black/40"
+            />
+            <div className="absolute bottom-0 left-0 right-0 max-h-[85vh] flex flex-col bg-white rounded-t-2xl p-5 pb-6 shadow-lg">
+              <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3 flex-shrink-0" />
+              <div className="flex items-center justify-between gap-3 mb-3 flex-shrink-0">
+                <h3 className="text-lg font-bold text-gray-900">Compra con tarjeta</h3>
+                <button
+                  type="button"
+                  onClick={() => setMostrarFormCompra(false)}
+                  aria-label="Cerrar"
+                  className="text-gray-400 hover:text-gray-600 flex-shrink-0"
+                >
+                  <X className="w-5 h-5" strokeWidth={2} />
+                </button>
+              </div>
+              <form onSubmit={handleSubmitCompra} className="overflow-y-auto space-y-3">
+                <input
+                  type="text"
+                  placeholder="Concepto de la compra"
+                  value={formCompra.nombre}
+                  onChange={(e) => setFormCompra({ ...formCompra, nombre: e.target.value })}
+                  required
+                  className="w-full border border-gray-300 rounded px-3 py-2 text-base"
+                />
+                <input
+                  type="number"
+                  placeholder="Cantidad"
+                  value={formCompra.cantidad}
+                  onChange={(e) => setFormCompra({ ...formCompra, cantidad: e.target.value })}
+                  required
+                  step="0.01"
+                  className="w-full border border-gray-300 rounded px-3 py-2 text-base"
+                />
+                <div>
+                  <label className="text-sm text-gray-600 mb-1 block">¿Cuándo fue?</label>
+                  <input
+                    type="date"
+                    value={formCompra.fecha}
+                    onChange={(e) => setFormCompra({ ...formCompra, fecha: e.target.value })}
+                    className="w-full border border-gray-300 rounded px-3 py-2 text-base"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Vacío = hoy.</p>
+                </div>
+                {tarjetas.length > 1 && (
+                  <select
+                    value={formCompra.tarjetaId}
+                    onChange={(e) => setFormCompra({ ...formCompra, tarjetaId: e.target.value })}
+                    required
+                    className="w-full border border-gray-300 rounded px-3 py-2 text-base"
+                  >
+                    <option value="">¿Qué tarjeta?</option>
+                    {tarjetas.map((t) => (
+                      <option key={t.id} value={t.id}>{t.nombre}</option>
+                    ))}
+                  </select>
+                )}
+                <select
+                  value={formCompra.categoriaId}
+                  onChange={(e) => handleCategoriaCompraChange(e.target.value)}
+                  className="w-full border border-gray-300 rounded px-3 py-2 text-base"
+                >
+                  <option value="">Selecciona una categoría</option>
+                  {categorias.map((cat) => (
+                    <option key={cat.id} value={cat.id}>{cat.nombre}</option>
+                  ))}
+                </select>
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={formCompra.esMSI}
+                    onChange={(e) => setFormCompra({ ...formCompra, esMSI: e.target.checked })}
+                  />
+                  Meses sin intereses
+                </label>
+                {formCompra.esMSI && (
+                  <input
+                    type="number"
+                    placeholder="Número de meses"
+                    value={formCompra.numeroMeses}
+                    onChange={(e) => setFormCompra({ ...formCompra, numeroMeses: e.target.value })}
+                    required
+                    min={2}
+                    className="w-full border border-gray-300 rounded px-3 py-2 text-base"
+                  />
+                )}
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">¿A qué se destina?</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(['necesidad', 'gusto'] as const).map((tipo) => (
+                      <button
+                        key={tipo}
+                        type="button"
+                        onClick={() => setFormCompra({ ...formCompra, tipoPresupuesto: tipo })}
+                        className={`w-full text-sm font-medium py-2 rounded transition-colors ${
+                          formCompra.tipoPresupuesto === tipo ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {tipo === 'necesidad' ? 'Necesidad' : 'Gusto'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    className="flex-1 bg-green-600 text-white py-2.5 rounded text-sm font-medium hover:bg-green-700"
+                  >
+                    Guardar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMostrarFormCompra(false)}
+                    className="flex-1 bg-gray-400 text-white py-2.5 rounded text-sm font-medium hover:bg-gray-500"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
         {/* Columna 2: gastos de siempre (efectivo, ahorro, tercero, y pagos a tarjeta) */}
         <div className="bg-white border border-gray-200 rounded-lg p-2 space-y-2 min-w-0">
