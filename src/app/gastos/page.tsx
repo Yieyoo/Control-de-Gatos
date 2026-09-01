@@ -3,10 +3,19 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import type { IGastoVariable, ICategoria, IAhorroLugar, IDepositoTercero, IFuenteDinero, ITarjetaCredito } from '@/types';
+import type {
+  IGastoVariable,
+  ICategoria,
+  IAhorroLugar,
+  IDepositoTercero,
+  IFuenteDinero,
+  ITarjetaCredito,
+  ICompraTarjeta,
+  IPagoTarjeta,
+} from '@/types';
 import { formatearMoneda, formatearDiaMes } from '@/utils/calculos';
 import { SelectorDiasSemana } from '@/components/SelectorDiasSemana';
-import { Receipt, Pencil, Trash2, Repeat, Undo2 } from 'lucide-react';
+import { Receipt, Pencil, Trash2, Repeat, Undo2, CreditCard } from 'lucide-react';
 
 const ETIQUETA_FUENTE: Record<IFuenteDinero, string> = {
   disponible: 'Disponible',
@@ -29,6 +38,8 @@ function GastosContenido() {
   const [ahorroLugares, setAhorroLugares] = useState<IAhorroLugar[]>([]);
   const [depositosTerceros, setDepositosTerceros] = useState<IDepositoTercero[]>([]);
   const [tarjetas, setTarjetas] = useState<ITarjetaCredito[]>([]);
+  const [compras, setCompras] = useState<ICompraTarjeta[]>([]);
+  const [pagosTarjeta, setPagosTarjeta] = useState<IPagoTarjeta[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mostrarFormulario, setMostrarFormulario] = useState(() => searchParams.get('nuevo') === '1');
@@ -42,7 +53,15 @@ function GastosContenido() {
     fuente: 'disponible' as IFuenteDinero,
     ahorroLugarId: '',
     depositoTerceroId: '',
+    tarjetaId: '',
+    compraTarjetaId: '',
   });
+
+  // "¿Es un pago a tu tarjeta de crédito?" -- en vez de un GastoVariable
+  // suelto (que resta tu disponible pero nunca baja la deuda de la tarjeta,
+  // fácil de "olvidar marcar"), esto crea un PagoTarjeta real, ligado
+  // opcionalmente a la compra que estás pagando.
+  const [esPagoTarjeta, setEsPagoTarjeta] = useState(false);
 
   // "¿Es un gasto fijo?" -- si es "sí", en vez de registrar un gasto de una sola
   // vez (fuente disponible/ahorro/tercero), se crea una regla recurrente
@@ -70,7 +89,15 @@ function GastosContenido() {
   const [formDevolucion, setFormDevolucion] = useState({ cantidad: '', concepto: '' });
 
   useEffect(() => {
-    Promise.all([cargarGastos(), cargarCategorias(), cargarAhorroLugares(), cargarDepositosTerceros(), cargarTarjetas()]);
+    Promise.all([
+      cargarGastos(),
+      cargarCategorias(),
+      cargarAhorroLugares(),
+      cargarDepositosTerceros(),
+      cargarTarjetas(),
+      cargarCompras(),
+      cargarPagosTarjeta(),
+    ]);
   }, []);
 
   const cargarGastos = async () => {
@@ -124,6 +151,24 @@ function GastosContenido() {
     }
   };
 
+  const cargarCompras = async () => {
+    try {
+      const resp = await fetch('/api/tarjetas/compras');
+      if (resp.ok) setCompras(await resp.json());
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const cargarPagosTarjeta = async () => {
+    try {
+      const resp = await fetch('/api/tarjetas/pagos');
+      if (resp.ok) setPagosTarjeta(await resp.json());
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (esGastoFijo && formFijo.frecuencia === 'semanal' && diasSemanaFijo.length === 0) {
@@ -148,21 +193,35 @@ function GastosContenido() {
               tarjetaId: formFijo.tarjetaId || undefined,
             }),
           })
-        : await fetch('/api/gastos/variables', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              ...formData,
-              cantidad: parseFloat(formData.cantidad),
-              categoriaId: parseInt(formData.categoriaId),
-              ahorroLugarId: formData.fuente === 'ahorro' ? formData.ahorroLugarId : undefined,
-              depositoTerceroId: formData.fuente === 'tercero' ? formData.depositoTerceroId : undefined,
-            }),
-          });
+        : esPagoTarjeta
+          ? await fetch('/api/tarjetas/pagos', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                tarjetaId: formData.tarjetaId,
+                cantidad: parseFloat(formData.cantidad),
+                concepto: formData.nombre,
+                fuente: formData.fuente,
+                ahorroLugarId: formData.fuente === 'ahorro' ? formData.ahorroLugarId : undefined,
+                depositoTerceroId: formData.fuente === 'tercero' ? formData.depositoTerceroId : undefined,
+                compraTarjetaId: formData.compraTarjetaId || undefined,
+              }),
+            })
+          : await fetch('/api/gastos/variables', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                ...formData,
+                cantidad: parseFloat(formData.cantidad),
+                categoriaId: parseInt(formData.categoriaId),
+                ahorroLugarId: formData.fuente === 'ahorro' ? formData.ahorroLugarId : undefined,
+                depositoTerceroId: formData.fuente === 'tercero' ? formData.depositoTerceroId : undefined,
+              }),
+            });
 
       if (!resp.ok) {
         const datos = await resp.json().catch(() => null);
-        throw new Error(datos?.error || 'Error al crear gasto');
+        throw new Error(datos?.error || (esPagoTarjeta ? 'Error al registrar el pago' : 'Error al crear gasto'));
       }
       setFormData({
         nombre: '',
@@ -173,14 +232,21 @@ function GastosContenido() {
         fuente: 'disponible',
         ahorroLugarId: '',
         depositoTerceroId: '',
+        tarjetaId: '',
+        compraTarjetaId: '',
       });
       setEsGastoFijo(false);
+      setEsPagoTarjeta(false);
       setFormFijo({ frecuencia: 'mensual', fechaCobro: '', cuentaPago: '', tarjetaId: '' });
       setDiasSemanaFijo([]);
       setMostrarFormulario(false);
       cargarGastos();
       cargarAhorroLugares();
       cargarDepositosTerceros();
+      if (esPagoTarjeta) {
+        cargarCompras();
+        cargarPagosTarjeta();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
     }
@@ -263,6 +329,33 @@ function GastosContenido() {
   const netoDe = (gasto: IGastoVariable) =>
     gasto.cantidad - (gasto.devoluciones ?? []).reduce((s, d) => s + d.cantidad, 0);
 
+  // Mismo cálculo que ya usa /tarjetas -- cuánto de cada compra sigue sin
+  // pagarse, para poder ofrecerla como destino de un pago desde este formulario.
+  const comprasConSaldo = compras
+    .map((c) => {
+      const montoPagado = pagosTarjeta
+        .filter((p) => p.compraTarjetaId === c.id)
+        .reduce((s, p) => s + p.cantidad, 0);
+      const neto = c.cantidad - (c.devoluciones ?? []).reduce((s, d) => s + d.cantidad, 0);
+      const saldoPendiente = Math.max(0, neto - montoPagado);
+      return { ...c, montoPagado, neto, saldoPendiente, pagada: saldoPendiente <= 0.01 };
+    })
+    .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+
+  const abrirPagoDesdeColumna = (compra: (typeof comprasConSaldo)[number]) => {
+    setMostrarFormulario(true);
+    setEsPagoTarjeta(true);
+    setEsGastoFijo(false);
+    setFormData({
+      ...formData,
+      nombre: `Pago: ${compra.nombre}`,
+      cantidad: compra.saldoPendiente > 0 ? String(compra.saldoPendiente) : '',
+      tarjetaId: String(compra.tarjetaId),
+      compraTarjetaId: String(compra.id),
+      fuente: 'disponible',
+    });
+  };
+
   if (cargando) return <div>Cargando...</div>;
 
   const total = gastos.reduce((sum, g) => sum + netoDe(g), 0);
@@ -282,6 +375,59 @@ function GastosContenido() {
         </div>
       )}
 
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        {/* Columna 1: lo que has comprado con tarjeta de crédito */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold flex items-center gap-2">
+              <CreditCard className="w-5 h-5" strokeWidth={1.75} /> Compras con tarjeta
+            </h2>
+            <span className="text-sm font-semibold text-red-600">
+              {formatearMoneda(comprasConSaldo.reduce((s, c) => s + c.saldoPendiente, 0))} pendiente
+            </span>
+          </div>
+          {comprasConSaldo.length === 0 ? (
+            <p className="text-sm text-gray-500">Todavía no registras ninguna compra con tarjeta.</p>
+          ) : (
+            <ul className="bg-white border border-gray-200 rounded-lg divide-y divide-gray-100">
+              {comprasConSaldo.map((c) => (
+                <li key={c.id} className="p-3 flex items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className={`text-sm truncate ${c.pagada ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+                      {c.nombre}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {formatearDiaMes(new Date(c.fecha))} · {c.tarjeta?.nombre}
+                      {!c.pagada && c.montoPagado > 0 && ` · abonado ${formatearMoneda(c.montoPagado)}`}
+                    </p>
+                  </div>
+                  <span
+                    className={`text-sm font-semibold flex-shrink-0 tabular-nums ${
+                      c.pagada ? 'text-gray-400' : 'text-red-600'
+                    }`}
+                  >
+                    {formatearMoneda(c.pagada ? c.neto : c.saldoPendiente)}
+                  </span>
+                  {!c.pagada && (
+                    <button
+                      type="button"
+                      onClick={() => abrirPagoDesdeColumna(c)}
+                      className="flex-shrink-0 text-xs font-medium text-blue-600 hover:text-blue-800 border border-blue-200 rounded px-2 py-1"
+                    >
+                      Pagar
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="text-[11px] text-gray-400">
+            Para registrar una compra nueva ve a Tarjetas -- aquí solo se listan para que no se te olvide pagarlas.
+          </p>
+        </div>
+
+        {/* Columna 2: gastos de siempre (efectivo, ahorro, tercero, y pagos a tarjeta) */}
+        <div className="space-y-6">
       {/* Resumen */}
       <div className="bg-white border border-gray-200 rounded-lg p-6">
         <p className="text-gray-600">Total de gastos este mes</p>
@@ -320,6 +466,121 @@ function GastosContenido() {
             className="w-full border border-gray-300 rounded px-3 py-2"
           />
 
+          {tarjetas.length > 0 && (
+            <div>
+              <p className="text-sm text-gray-600 mb-1">¿Qué es esto?</p>
+              <div className="flex bg-gray-100 rounded-lg p-1 text-sm font-medium w-fit flex-wrap">
+                {([false, true] as const).map((valor) => (
+                  <button
+                    key={String(valor)}
+                    type="button"
+                    onClick={() => {
+                      setEsPagoTarjeta(valor);
+                      if (valor) {
+                        setEsGastoFijo(false);
+                        if (tarjetas.length === 1) {
+                          setFormData((f) => ({ ...f, tarjetaId: String(tarjetas[0].id) }));
+                        }
+                      }
+                    }}
+                    className={`px-3 py-1.5 rounded-md transition-colors ${
+                      esPagoTarjeta === valor ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                    }`}
+                  >
+                    {valor ? 'Pago a tarjeta de crédito' : 'Gasto'}
+                  </button>
+                ))}
+              </div>
+              {esPagoTarjeta && (
+                <p className="text-[11px] text-gray-500 mt-1">
+                  Baja tu disponible y también la deuda de la tarjeta -- a diferencia de un gasto suelto, que solo
+                  baja tu disponible y se te puede olvidar marcar contra la compra.
+                </p>
+              )}
+            </div>
+          )}
+
+          {esPagoTarjeta ? (
+            <div className="space-y-3 bg-gray-50 rounded-lg p-3">
+              {tarjetas.length > 1 && (
+                <select
+                  value={formData.tarjetaId}
+                  onChange={(e) => setFormData({ ...formData, tarjetaId: e.target.value, compraTarjetaId: '' })}
+                  required
+                  className="w-full border border-gray-300 rounded px-3 py-2"
+                >
+                  <option value="">¿Qué tarjeta?</option>
+                  {tarjetas.map((t) => (
+                    <option key={t.id} value={t.id}>{t.nombre}</option>
+                  ))}
+                </select>
+              )}
+              <select
+                value={formData.compraTarjetaId}
+                onChange={(e) => setFormData({ ...formData, compraTarjetaId: e.target.value })}
+                className="w-full border border-gray-300 rounded px-3 py-2"
+              >
+                <option value="">Pago general (no ligado a una compra específica)</option>
+                {comprasConSaldo
+                  .filter(
+                    (c) =>
+                      (!formData.tarjetaId || c.tarjetaId === parseInt(formData.tarjetaId)) && c.saldoPendiente > 0.01
+                  )
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nombre} — debes {formatearMoneda(c.saldoPendiente)}
+                    </option>
+                  ))}
+              </select>
+
+              <p className="text-sm text-gray-600 mb-1">¿De dónde sale el dinero para este pago?</p>
+              <div className="flex bg-gray-100 rounded-lg p-1 text-sm font-medium w-fit flex-wrap">
+                {(['disponible', 'ahorro', 'tercero'] as const).map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setFormData({ ...formData, fuente: f })}
+                    className={`px-3 py-1.5 rounded-md transition-colors ${
+                      formData.fuente === f ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                    }`}
+                  >
+                    {ETIQUETA_FUENTE[f]}
+                  </button>
+                ))}
+              </div>
+              {formData.fuente === 'ahorro' && (
+                <select
+                  value={formData.ahorroLugarId}
+                  onChange={(e) => setFormData({ ...formData, ahorroLugarId: e.target.value })}
+                  required
+                  className="w-full border border-gray-300 rounded px-3 py-2"
+                >
+                  <option value="">¿De qué cuenta de ahorro?</option>
+                  {ahorroLugares.map((a) => (
+                    <option key={a.id} value={a.id}>{a.nombre} ({formatearMoneda(a.saldoActual)})</option>
+                  ))}
+                </select>
+              )}
+              {formData.fuente === 'tercero' && (
+                <select
+                  value={formData.depositoTerceroId}
+                  onChange={(e) => setFormData({ ...formData, depositoTerceroId: e.target.value })}
+                  required
+                  className="w-full border border-gray-300 rounded px-3 py-2"
+                >
+                  <option value="">¿Con qué depósito de tercero?</option>
+                  {depositosTerceros
+                    .filter((d) => d.pendiente > 0)
+                    .map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.persona} — {d.concepto} ({formatearMoneda(d.pendiente)} pendiente)
+                      </option>
+                    ))}
+                </select>
+              )}
+            </div>
+          ) : (
+            <>
           <select
             value={formData.categoriaId}
             onChange={(e) => handleCategoriaChange(e.target.value)}
@@ -481,6 +742,8 @@ function GastosContenido() {
             className="w-full border border-gray-300 rounded px-3 py-2"
             rows={2}
           />
+            </>
+          )}
 
           <div className="flex gap-2">
             <button
@@ -494,6 +757,7 @@ function GastosContenido() {
               onClick={() => {
                 setMostrarFormulario(false);
                 setEsGastoFijo(false);
+                setEsPagoTarjeta(false);
                 setDiasSemanaFijo([]);
               }}
               className="bg-gray-400 text-white px-4 py-2 rounded hover:bg-gray-500"
@@ -670,6 +934,8 @@ function GastosContenido() {
             </div>
           )
         )}
+      </div>
+        </div>
       </div>
     </div>
   );
