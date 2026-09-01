@@ -26,6 +26,8 @@ import {
   EyeOff,
   Check,
   X,
+  Fuel,
+  Pencil,
 } from 'lucide-react';
 
 type Vista = 'mes' | 'quincena1' | 'quincena2';
@@ -34,6 +36,7 @@ interface ResumenFinancieroProps {
   resumen: IDashboardResumen;
   vista: Vista;
   onCambiarVista: (vista: Vista) => void;
+  onActualizar: () => void;
 }
 
 const PIN_AHORRO = '1296';
@@ -244,9 +247,127 @@ function DeudaTarjetasExpandible({
   );
 }
 
+/**
+ * Gastos domiciliados en efectivo (ej. gasolina) que ya cayeron este periodo
+ * y siguen sin confirmar -- cada uno con su estimado, un lápiz para editar el
+ * monto real antes de confirmar (varía cada vez) y una palomita para
+ * confirmarlo directo con ese mismo estimado.
+ */
+function GastosDomiciliadosPendientes({
+  items,
+  onActualizar,
+}: {
+  items: IMovimientoPeriodo[];
+  onActualizar: () => void;
+}) {
+  const [editando, setEditando] = useState<string | null>(null);
+  const [monto, setMonto] = useState('');
+  const [enviando, setEnviando] = useState<string | null>(null);
+
+  if (items.length === 0) return null;
+
+  const claveDe = (m: IMovimientoPeriodo) => `${m.gastoDomiciliadoId}-${m.fecha}`;
+
+  const confirmar = async (m: IMovimientoPeriodo, montoReal?: string) => {
+    const clave = claveDe(m);
+    setEnviando(clave);
+    try {
+      const resp = await fetch(`/api/gastos/domiciliados/${m.gastoDomiciliadoId}/confirmar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fecha: m.fecha, monto: montoReal }),
+      });
+      if (!resp.ok) throw new Error('Error al confirmar');
+      setEditando(null);
+      onActualizar();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setEnviando(null);
+    }
+  };
+
+  return (
+    <div className="mt-4 pt-3 border-t border-gray-100">
+      <p className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+        <Fuel className="w-4 h-4 text-gray-500" strokeWidth={1.75} /> Por confirmar
+      </p>
+      <ul className="space-y-1.5">
+        {items.map((m) => {
+          const clave = claveDe(m);
+          return (
+            <li key={clave}>
+              <div className="flex items-center justify-between gap-2 text-sm">
+                <span className="min-w-0 flex-1 truncate text-gray-700">{m.nombre}</span>
+                <span className="text-xs text-gray-400 flex-shrink-0">aprox {formatearMoneda(m.cantidad)}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditando(clave);
+                    setMonto(String(m.cantidad));
+                  }}
+                  disabled={enviando === clave}
+                  title="Editar el monto real antes de confirmar"
+                  className="text-gray-400 hover:text-gray-600 flex-shrink-0"
+                >
+                  <Pencil className="w-3.5 h-3.5" strokeWidth={1.75} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => confirmar(m)}
+                  disabled={enviando === clave}
+                  title="Ya le puse -- confirmar con el estimado"
+                  className="text-green-600 hover:text-green-700 flex-shrink-0"
+                >
+                  <Check className="w-4 h-4" strokeWidth={2.5} />
+                </button>
+              </div>
+              {editando === clave && (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    confirmar(m, monto);
+                  }}
+                  className="flex items-center gap-2 bg-gray-50 rounded-lg p-2 mt-1"
+                >
+                  <span className="text-xs text-gray-500">¿Cuánto fue?</span>
+                  <input
+                    type="number"
+                    autoFocus
+                    value={monto}
+                    onChange={(e) => setMonto(e.target.value)}
+                    required
+                    step="0.01"
+                    min="0.01"
+                    className="border border-gray-300 rounded px-2 py-1 text-sm w-24"
+                  />
+                  <button
+                    type="submit"
+                    disabled={enviando === clave}
+                    className="bg-green-600 text-white px-2.5 py-1 rounded text-sm hover:bg-green-700 disabled:opacity-50"
+                  >
+                    Confirmar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditando(null)}
+                    className="bg-gray-400 text-white px-2.5 py-1 rounded text-sm hover:bg-gray-500"
+                  >
+                    Cancelar
+                  </button>
+                </form>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 type TileClave = 'ingresos' | 'ahorro' | 'gastosFijos' | 'gastosVariables';
 
-export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFinancieroProps) {
+export function ResumenFinanciero({ resumen, vista, onCambiarVista, onActualizar }: ResumenFinancieroProps) {
   // Ingresos y ahorro empiezan ocultos siempre que se abre la app; un solo
   // ojo junto a "Resumen" los destapa a todos (Ingresos, Ahorro del periodo y
   // Ahorro e inversión) de una vez, protegido con el mismo PIN.
@@ -267,6 +388,10 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
     (m) => m.tipo === 'gasto' && m.gastoDomiciliadoId == null && !m.credito
   );
   const ahorroItems = p.movimientos.filter((m) => m.tipo === 'ahorro');
+  // Domiciliados en efectivo (ej. gasolina) de este periodo que ya cayeron y
+  // siguen sin confirmar -- no incluye cargos de tarjeta (esos se marcan
+  // desde /tarjetas, no aquí).
+  const gastosDomPendientes = gastosFijosItems.filter((m) => !m.pagado && !m.credito);
 
   const abrirPromptPin = () => {
     setPin('');
@@ -488,6 +613,7 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista }: ResumenFin
       </div>
 
       <DeudaTarjetasExpandible tarjetas={resumen.deudaTarjetas} vista={vista} />
+      <GastosDomiciliadosPendientes items={gastosDomPendientes} onActualizar={onActualizar} />
 
       {tileAbierto && (
         <div className="fixed inset-0 z-30" role="dialog" aria-modal="true">

@@ -66,6 +66,7 @@ export default function Home() {
         resumen={resumen}
         vista={vista}
         onCambiarVista={setVista}
+        onActualizar={cargarResumen}
       />
       <PorcentajeDestino datos={resumen.periodos[vista].porcentajeDestino} />
       {vista !== 'mes' && (
