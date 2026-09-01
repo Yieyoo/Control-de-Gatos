@@ -310,7 +310,7 @@ function GastosDomiciliados({
   return (
     <div className="mt-4 pt-3 border-t border-gray-100">
       <p className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-        <Fuel className="w-4 h-4 text-gray-500" strokeWidth={1.75} /> Gastos domiciliados
+        <Fuel className="w-4 h-4 text-gray-500" strokeWidth={1.75} /> Gasolina
       </p>
       <ul className="space-y-1.5">
         {items.map((m) => {
@@ -418,6 +418,10 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista, onActualizar
     (m) => m.tipo === 'gasto' && m.gastoDomiciliadoId == null && !m.credito
   );
   const ahorroItems = p.movimientos.filter((m) => m.tipo === 'ahorro');
+  // Panel dedicado solo a Gasolina (no a todos los domiciliados) -- los demás
+  // (Claude, Plan Telcel, etc.) son cargos fijos que ya se manejan bien con
+  // el checkbox simple de /tarjetas, sin necesitar este panel aparte.
+  const gastosGasolinaItems = gastosFijosItems.filter((m) => m.nombre === 'Gasolina');
 
   const abrirPromptPin = () => {
     setPin('');
@@ -639,7 +643,7 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista, onActualizar
       </div>
 
       <DeudaTarjetasExpandible tarjetas={resumen.deudaTarjetas} vista={vista} />
-      <GastosDomiciliados items={gastosFijosItems} onActualizar={onActualizar} />
+      <GastosDomiciliados items={gastosGasolinaItems} onActualizar={onActualizar} />
 
       {tileAbierto && (
         <div className="fixed inset-0 z-30" role="dialog" aria-modal="true">
