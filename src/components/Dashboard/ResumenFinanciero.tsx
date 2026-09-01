@@ -99,6 +99,15 @@ function DeudaTarjetasExpandible({
   const rangosCargos: RangoFechas[] =
     vista === 'quincena1' ? [periodoActual] : vista === 'quincena2' ? [periodoProximo] : [rangoMes];
 
+  // Ocurrencias de cargos domiciliados que ya tienen una CompraTarjeta real
+  // ligada (confirmadas con monto variable, ej. gasolina) -- ver el filtro
+  // de `cargosBase` más abajo.
+  const comprasConfirmadasKeys = new Set(
+    compras
+      .filter((c) => c.gastoDomiciliadoOrigenId != null)
+      .map((c) => `${c.gastoDomiciliadoOrigenId}|${new Date(c.fecha).getTime()}`)
+  );
+
   // Comprado/pagado siempre cuentan todo el historial (las compras y los pagos
   // no dependen de qué quincena se esté viendo); solo los cargos domiciliados
   // pendientes se acotan a `rangosCargos`. Se calcula una sola vez por tarjeta
@@ -119,7 +128,15 @@ function DeudaTarjetasExpandible({
         const cargosBase: CargoDomiciliadoResumen[] = gastosDomiciliados
           .filter((g) => g.activo && g.tarjetaId === t.id)
           .map((g) => {
-            const ocurrencias = ocurrenciasDeGastoEnRangos(g, rangosCargos, CORTE_1);
+            // Si una ocurrencia ya se confirmó con un monto real (ej.
+            // gasolina, ver confirmarCargoTarjetaDomiciliado), existe una
+            // CompraTarjeta real ligada a ella -- se excluye de lo proyectado
+            // aquí porque ya cuenta aparte en `comprasBase`/`comprado`. Sin
+            // esto, la misma ocurrencia se contaba dos veces: una vez como
+            // compra real y otra como estimado todavía pendiente.
+            const ocurrencias = ocurrenciasDeGastoEnRangos(g, rangosCargos, CORTE_1).filter(
+              (oc) => !comprasConfirmadasKeys.has(`${g.id}|${oc.fecha.getTime()}`)
+            );
             const fechaMasReciente = ocurrencias.reduce<Date | null>(
               (max, oc) => (!max || oc.fecha > max ? oc.fecha : max),
               null

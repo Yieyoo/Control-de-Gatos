@@ -128,6 +128,8 @@ export interface ICompraTarjeta {
   numeroMeses?: number;
   montoMensual?: number;
   devoluciones?: IDevolucion[];
+  /** Si viene de confirmar (con monto real) un cargo domiciliado de tarjeta de monto variable, ej. gasolina. */
+  gastoDomiciliadoOrigenId?: number;
 }
 
 export interface IPagoTarjeta {
