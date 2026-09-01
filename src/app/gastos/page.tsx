@@ -463,14 +463,14 @@ function GastosContenido() {
 
       {/* Formulario */}
       {mostrarFormulario && (
-        <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-lg p-2 space-y-2">
           <input
             type="text"
             placeholder="Concepto del gasto"
             value={formData.nombre}
             onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
             required
-            className="w-full border border-gray-300 rounded px-3 py-2"
+            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
           />
 
           <input
@@ -480,24 +480,24 @@ function GastosContenido() {
             onChange={(e) => setFormData({ ...formData, cantidad: e.target.value })}
             required
             step="0.01"
-            className="w-full border border-gray-300 rounded px-3 py-2"
+            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
           />
 
           <div>
-            <label className="text-sm text-gray-600 mb-1 block">¿Cuándo se hizo el cobro?</label>
+            <label className="text-[11px] text-gray-600 mb-1 block">¿Cuándo se hizo el cobro?</label>
             <input
               type="date"
               value={formData.fecha}
               onChange={(e) => setFormData({ ...formData, fecha: e.target.value })}
-              className="w-full border border-gray-300 rounded px-3 py-2"
+              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
             />
-            <p className="text-[11px] text-gray-500 mt-1">Vacío = hoy.</p>
+            <p className="text-[9px] text-gray-500 mt-0.5">Vacío = hoy.</p>
           </div>
 
           {tarjetas.length > 0 && (
             <div>
-              <p className="text-sm text-gray-600 mb-1">¿Qué es esto?</p>
-              <div className="flex bg-gray-100 rounded-lg p-1 text-sm font-medium w-fit flex-wrap">
+              <p className="text-[11px] text-gray-600 mb-1">¿Qué es esto?</p>
+              <div className="grid grid-cols-1 gap-1">
                 {([false, true] as const).map((valor) => (
                   <button
                     key={String(valor)}
@@ -511,16 +511,16 @@ function GastosContenido() {
                         }
                       }
                     }}
-                    className={`px-3 py-1.5 rounded-md transition-colors ${
-                      esPagoTarjeta === valor ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                    className={`w-full text-xs font-medium py-1.5 rounded transition-colors ${
+                      esPagoTarjeta === valor ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600'
                     }`}
                   >
-                    {valor ? 'Pago a tarjeta de crédito' : 'Gasto'}
+                    {valor ? 'Pago a tarjeta' : 'Gasto'}
                   </button>
                 ))}
               </div>
               {esPagoTarjeta && (
-                <p className="text-[11px] text-gray-500 mt-1">
+                <p className="text-[9px] text-gray-500 mt-1">
                   Baja tu disponible y también la deuda de la tarjeta -- a diferencia de un gasto suelto, que solo
                   baja tu disponible y se te puede olvidar marcar contra la compra.
                 </p>
@@ -529,13 +529,13 @@ function GastosContenido() {
           )}
 
           {esPagoTarjeta ? (
-            <div className="space-y-3 bg-gray-50 rounded-lg p-3">
+            <div className="space-y-2 bg-gray-50 rounded-lg p-2">
               {tarjetas.length > 1 && (
                 <select
                   value={formData.tarjetaId}
                   onChange={(e) => setFormData({ ...formData, tarjetaId: e.target.value, compraTarjetaId: '' })}
                   required
-                  className="w-full border border-gray-300 rounded px-3 py-2"
+                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
                 >
                   <option value="">¿Qué tarjeta?</option>
                   {tarjetas.map((t) => (
@@ -546,9 +546,9 @@ function GastosContenido() {
               <select
                 value={formData.compraTarjetaId}
                 onChange={(e) => setFormData({ ...formData, compraTarjetaId: e.target.value })}
-                className="w-full border border-gray-300 rounded px-3 py-2"
+                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
               >
-                <option value="">Pago general (no ligado a una compra específica)</option>
+                <option value="">Pago general (sin compra específica)</option>
                 {comprasConSaldo
                   .filter(
                     (c) =>
@@ -561,15 +561,15 @@ function GastosContenido() {
                   ))}
               </select>
 
-              <p className="text-sm text-gray-600 mb-1">¿De dónde sale el dinero para este pago?</p>
-              <div className="flex bg-gray-100 rounded-lg p-1 text-sm font-medium w-fit flex-wrap">
+              <p className="text-[11px] text-gray-600 mb-1">¿De dónde sale el dinero?</p>
+              <div className="grid grid-cols-3 gap-1">
                 {(['disponible', 'ahorro', 'tercero'] as const).map((f) => (
                   <button
                     key={f}
                     type="button"
                     onClick={() => setFormData({ ...formData, fuente: f })}
-                    className={`px-3 py-1.5 rounded-md transition-colors ${
-                      formData.fuente === f ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                    className={`w-full text-[10px] font-medium py-1.5 rounded transition-colors truncate px-1 ${
+                      formData.fuente === f ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 border border-gray-200'
                     }`}
                   >
                     {ETIQUETA_FUENTE[f]}
@@ -581,7 +581,7 @@ function GastosContenido() {
                   value={formData.ahorroLugarId}
                   onChange={(e) => setFormData({ ...formData, ahorroLugarId: e.target.value })}
                   required
-                  className="w-full border border-gray-300 rounded px-3 py-2"
+                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
                 >
                   <option value="">¿De qué cuenta de ahorro?</option>
                   {ahorroLugares.map((a) => (
@@ -594,7 +594,7 @@ function GastosContenido() {
                   value={formData.depositoTerceroId}
                   onChange={(e) => setFormData({ ...formData, depositoTerceroId: e.target.value })}
                   required
-                  className="w-full border border-gray-300 rounded px-3 py-2"
+                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
                 >
                   <option value="">¿Con qué depósito de tercero?</option>
                   {depositosTerceros
@@ -613,7 +613,7 @@ function GastosContenido() {
             value={formData.categoriaId}
             onChange={(e) => handleCategoriaChange(e.target.value)}
             required
-            className="w-full border border-gray-300 rounded px-3 py-2"
+            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
           >
             <option value="">Selecciona una categoría</option>
             {categorias.map((cat) => (
@@ -624,15 +624,15 @@ function GastosContenido() {
           </select>
 
           <div>
-            <p className="text-sm text-gray-600 mb-1">¿Es un gasto fijo (se repite cada mes/quincena/semana)?</p>
-            <div className="flex bg-gray-100 rounded-lg p-1 text-sm font-medium w-fit">
+            <p className="text-[11px] text-gray-600 mb-1">¿Es un gasto fijo (se repite cada mes/quincena/semana)?</p>
+            <div className="grid grid-cols-2 gap-1">
               {([false, true] as const).map((valor) => (
                 <button
                   key={String(valor)}
                   type="button"
                   onClick={() => setEsGastoFijo(valor)}
-                  className={`px-3 py-1.5 rounded-md transition-colors ${
-                    esGastoFijo === valor ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                  className={`w-full text-xs font-medium py-1.5 rounded transition-colors ${
+                    esGastoFijo === valor ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600'
                   }`}
                 >
                   {valor ? 'Sí' : 'No'}
@@ -642,11 +642,11 @@ function GastosContenido() {
           </div>
 
           {esGastoFijo ? (
-            <div className="space-y-3 bg-gray-50 rounded-lg p-3">
+            <div className="space-y-2 bg-gray-50 rounded-lg p-2">
               <select
                 value={formFijo.frecuencia}
                 onChange={(e) => setFormFijo({ ...formFijo, frecuencia: e.target.value as typeof formFijo.frecuencia })}
-                className="w-full border border-gray-300 rounded px-3 py-2"
+                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
               >
                 <option value="mensual">Mensual</option>
                 <option value="quincenal">Quincenal</option>
@@ -663,7 +663,7 @@ function GastosContenido() {
                   required
                   min={1}
                   max={31}
-                  className="w-full border border-gray-300 rounded px-3 py-2"
+                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
                 />
               )}
               <input
@@ -672,13 +672,13 @@ function GastosContenido() {
                 value={formFijo.cuentaPago}
                 onChange={(e) => setFormFijo({ ...formFijo, cuentaPago: e.target.value })}
                 required
-                className="w-full border border-gray-300 rounded px-3 py-2"
+                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
               />
               {tarjetas.length > 0 && (
                 <select
                   value={formFijo.tarjetaId}
                   onChange={(e) => setFormFijo({ ...formFijo, tarjetaId: e.target.value })}
-                  className="w-full border border-gray-300 rounded px-3 py-2"
+                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
                 >
                   <option value="">¿Se carga a una tarjeta de crédito? (opcional)</option>
                   {tarjetas.map((t) => (
@@ -686,21 +686,21 @@ function GastosContenido() {
                   ))}
                 </select>
               )}
-              <p className="text-[11px] text-gray-500">
+              <p className="text-[9px] text-gray-500">
                 Va a aparecer como pendiente cada quincena hasta que marques la palomita de que ya se cobró.
               </p>
             </div>
           ) : (
             <div>
-              <p className="text-sm text-gray-600 mb-1">¿De dónde sale el dinero?</p>
-              <div className="flex bg-gray-100 rounded-lg p-1 text-sm font-medium w-fit flex-wrap">
+              <p className="text-[11px] text-gray-600 mb-1">¿De dónde sale el dinero?</p>
+              <div className="grid grid-cols-3 gap-1">
                 {(['disponible', 'ahorro', 'tercero'] as const).map((f) => (
                   <button
                     key={f}
                     type="button"
                     onClick={() => setFormData({ ...formData, fuente: f })}
-                    className={`px-3 py-1.5 rounded-md transition-colors ${
-                      formData.fuente === f ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                    className={`w-full text-[10px] font-medium py-1.5 rounded transition-colors truncate px-1 ${
+                      formData.fuente === f ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600'
                     }`}
                   >
                     {ETIQUETA_FUENTE[f]}
@@ -712,7 +712,7 @@ function GastosContenido() {
                   value={formData.ahorroLugarId}
                   onChange={(e) => setFormData({ ...formData, ahorroLugarId: e.target.value })}
                   required
-                  className="w-full border border-gray-300 rounded px-3 py-2 mt-2"
+                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm mt-1"
                 >
                   <option value="">¿De qué cuenta de ahorro?</option>
                   {ahorroLugares.map((a) => (
@@ -725,7 +725,7 @@ function GastosContenido() {
                   value={formData.depositoTerceroId}
                   onChange={(e) => setFormData({ ...formData, depositoTerceroId: e.target.value })}
                   required
-                  className="w-full border border-gray-300 rounded px-3 py-2 mt-2"
+                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm mt-1"
                 >
                   <option value="">¿Con qué depósito de tercero?</option>
                   {depositosTerceros
@@ -738,7 +738,7 @@ function GastosContenido() {
                 </select>
               )}
               {formData.fuente === 'tercero' && depositosTerceros.filter((d) => d.pendiente > 0).length === 0 && (
-                <p className="text-xs text-amber-600 mt-1">
+                <p className="text-[9px] text-amber-600 mt-1">
                   Primero registra un depósito en la sección Terceros.
                 </p>
               )}
@@ -746,15 +746,15 @@ function GastosContenido() {
           )}
 
           <div>
-            <p className="text-sm text-gray-600 mb-1">¿A qué se destina?</p>
-            <div className="flex bg-gray-100 rounded-lg p-1 text-sm font-medium w-fit">
+            <p className="text-[11px] text-gray-600 mb-1">¿A qué se destina?</p>
+            <div className="grid grid-cols-2 gap-1">
               {(['necesidad', 'gusto'] as const).map((tipo) => (
                 <button
                   key={tipo}
                   type="button"
                   onClick={() => setFormData({ ...formData, tipoPresupuesto: tipo })}
-                  className={`px-3 py-1.5 rounded-md transition-colors ${
-                    formData.tipoPresupuesto === tipo ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                  className={`w-full text-xs font-medium py-1.5 rounded transition-colors ${
+                    formData.tipoPresupuesto === tipo ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600'
                   }`}
                 >
                   {tipo === 'necesidad' ? 'Necesidad' : 'Gusto'}
@@ -767,7 +767,7 @@ function GastosContenido() {
             placeholder="Notas (opcional)"
             value={formData.notas}
             onChange={(e) => setFormData({ ...formData, notas: e.target.value })}
-            className="w-full border border-gray-300 rounded px-3 py-2"
+            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
             rows={2}
           />
             </>
@@ -776,7 +776,7 @@ function GastosContenido() {
           <div className="flex gap-2">
             <button
               type="submit"
-              className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+              className="flex-1 bg-green-600 text-white py-1.5 rounded text-xs font-medium hover:bg-green-700"
             >
               Guardar
             </button>
@@ -788,7 +788,7 @@ function GastosContenido() {
                 setEsPagoTarjeta(false);
                 setDiasSemanaFijo([]);
               }}
-              className="bg-gray-400 text-white px-4 py-2 rounded hover:bg-gray-500"
+              className="flex-1 bg-gray-400 text-white py-1.5 rounded text-xs font-medium hover:bg-gray-500"
             >
               Cancelar
             </button>
