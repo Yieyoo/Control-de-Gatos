@@ -47,6 +47,7 @@ export interface IGastoDomiciliado {
   tipoPresupuesto?: 'necesidad' | 'gusto';
   activo: boolean;
   notas?: string;
+  fechaCreacion: string;
 }
 
 export interface IAhorroDomiciliado {

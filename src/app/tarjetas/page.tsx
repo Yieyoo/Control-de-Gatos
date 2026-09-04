@@ -20,6 +20,7 @@ import {
   cicloTarjetaActual,
   cicloTarjetaAnterior,
   ocurrenciasDeGastoEnRangos,
+  ocurrenciasDesdeCreacion,
 } from '@/utils/calculos';
 import { CreditCard, Trash2, Pencil, CheckCircle2, Wallet, Undo2 } from 'lucide-react';
 
@@ -466,9 +467,10 @@ function TarjetasContenido() {
         const cargosDomiciliadosTarjeta = gastosDomiciliados
           .filter((g) => g.activo && g.tarjetaId === tarjeta.id)
           .map((g) => {
-            const ocurrencias = ocurrenciasDeGastoEnRangos(g, [cicloActual], CORTE_1).filter(
-              (oc) => !comprasConfirmadasKeys.has(`${g.id}|${oc.fecha.getTime()}`)
-            );
+            const ocurrencias = ocurrenciasDesdeCreacion(
+              ocurrenciasDeGastoEnRangos(g, [cicloActual], CORTE_1),
+              g.fechaCreacion
+            ).filter((oc) => !comprasConfirmadasKeys.has(`${g.id}|${oc.fecha.getTime()}`));
             const fechaMasReciente = ocurrencias.reduce<Date | null>(
               (max, oc) => (!max || oc.fecha > max ? oc.fecha : max),
               null

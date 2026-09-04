@@ -10,6 +10,7 @@ import { gastoNeto, calcularDineroDisponible } from '@/utils/finanzas';
 import {
   ocurrenciasDelMes,
   ocurrenciasSemanales,
+  ocurrenciasDesdeCreacion,
   parseDiasSemana,
   finDelDia,
   fechaEnRangos,
@@ -177,7 +178,10 @@ export function construirPeriodo(
 
   for (const { año, mes } of mesesTocados(rangos)) {
     gastosFijosActivos.forEach((g) => {
-      ocurrenciasDelMes(g.fechaPago, 'mensual', g.cantidad, año, mes, CORTE_1).forEach((oc) => {
+      ocurrenciasDesdeCreacion(
+        ocurrenciasDelMes(g.fechaPago, 'mensual', g.cantidad, año, mes, CORTE_1),
+        g.fechaCreacion
+      ).forEach((oc) => {
         if (fechaEnRangos(oc.fecha, rangos)) {
           ocurrencias.push({
             nombre: g.nombre,
@@ -195,7 +199,10 @@ export function construirPeriodo(
     gastosDomActivos
       .filter((g) => g.frecuencia !== 'semanal' && g.fechaCobro != null)
       .forEach((g) => {
-        ocurrenciasDelMes(g.fechaCobro as number, g.frecuencia, g.cantidad, año, mes, CORTE_1).forEach((oc) => {
+        ocurrenciasDesdeCreacion(
+          ocurrenciasDelMes(g.fechaCobro as number, g.frecuencia, g.cantidad, año, mes, CORTE_1),
+          g.fechaCreacion
+        ).forEach((oc) => {
           if (!fechaEnRangos(oc.fecha, rangos)) return;
           if (g.tarjetaId != null) {
             cargosTarjetaDomiciliada.push({
@@ -225,7 +232,10 @@ export function construirPeriodo(
       .filter((a) => a.frecuencia !== 'semanal')
       .forEach((a) => {
         const dia = diaMexico(new Date(a.fechaInicio));
-        ocurrenciasDelMes(dia, a.frecuencia, a.cantidad, año, mes, CORTE_1).forEach((oc) => {
+        ocurrenciasDesdeCreacion(
+          ocurrenciasDelMes(dia, a.frecuencia, a.cantidad, año, mes, CORTE_1),
+          a.fechaCreacion
+        ).forEach((oc) => {
           if (fechaEnRangos(oc.fecha, rangos) && !estaEnviado(a, oc.fecha)) {
             ocurrencias.push({
               nombre: a.nombre,
@@ -243,7 +253,10 @@ export function construirPeriodo(
   gastosDomActivos
     .filter((g) => g.frecuencia === 'semanal')
     .forEach((g) => {
-      ocurrenciasSemanales(parseDiasSemana(g.diasSemana), g.cantidad, rangos).forEach((oc) => {
+      ocurrenciasDesdeCreacion(
+        ocurrenciasSemanales(parseDiasSemana(g.diasSemana), g.cantidad, rangos),
+        g.fechaCreacion
+      ).forEach((oc) => {
         if (g.tarjetaId != null) {
           cargosTarjetaDomiciliada.push({
             gastoDomiciliadoId: g.id,
@@ -271,7 +284,10 @@ export function construirPeriodo(
   ahorrosDomActivos
     .filter((a) => a.frecuencia === 'semanal')
     .forEach((a) => {
-      ocurrenciasSemanales(parseDiasSemana(a.diasSemana), a.cantidad, rangos).forEach((oc) => {
+      ocurrenciasDesdeCreacion(
+        ocurrenciasSemanales(parseDiasSemana(a.diasSemana), a.cantidad, rangos),
+        a.fechaCreacion
+      ).forEach((oc) => {
         if (!estaEnviado(a, oc.fecha)) {
           ocurrencias.push({
             nombre: a.nombre,

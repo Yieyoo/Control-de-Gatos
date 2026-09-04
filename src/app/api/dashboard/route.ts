@@ -13,6 +13,7 @@ import {
   cicloTarjetaActual,
   ocurrenciasDeGastoEnRangos,
   ocurrenciasSemanales,
+  ocurrenciasDesdeCreacion,
   parseDiasSemana,
   fechaEnRangos,
   formatearDiaMes,
@@ -200,7 +201,10 @@ export async function GET() {
       const cargosDomiciliados = gastosDomiciliados
         .filter((g) => g.activo && g.tarjetaId === t.id)
         .reduce((sum, g) => {
-          const ocurrencias = ocurrenciasDeGastoEnRangos(g, [cicloActualTarjeta], CORTE_1);
+          const ocurrencias = ocurrenciasDesdeCreacion(
+            ocurrenciasDeGastoEnRangos(g, [cicloActualTarjeta], CORTE_1),
+            g.fechaCreacion
+          );
           const pendientes = ocurrencias.filter(
             (oc) =>
               !cargosConCompraReal.has(`${g.id}|${oc.fecha.getTime()}`) &&
@@ -299,10 +303,11 @@ export async function GET() {
       .forEach((g) => {
         // Ocurrencias reales dentro del mes (no un estimado de "quincenal =
         // 2 veces siempre"), y sin las que ya tienen compra real.
-        const ocurrencias = (
+        const ocurrencias = ocurrenciasDesdeCreacion(
           g.frecuencia === 'semanal'
             ? ocurrenciasSemanales(parseDiasSemana(g.diasSemana), g.cantidad, [rangoMes])
-            : ocurrenciasDeGastoEnRangos(g, [rangoMes], CORTE_1)
+            : ocurrenciasDeGastoEnRangos(g, [rangoMes], CORTE_1),
+          g.fechaCreacion
         ).filter((oc) => !comprasConfirmadasKeys.has(`${g.id}|${oc.fecha.getTime()}`));
         acumular(g.categoriaId, g.categoria, ocurrencias.reduce((sum, oc) => sum + oc.cantidad, 0));
       });

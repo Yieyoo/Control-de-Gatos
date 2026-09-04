@@ -5,6 +5,7 @@ import {
   rangoMes,
   fechaEnRangos,
   ocurrenciasDeGastoEnRangos,
+  ocurrenciasDesdeCreacion,
 } from '@/utils/calculos';
 import { gastoNeto } from '@/utils/finanzas';
 import type { IMesResumen, IHistorialMensualResumen } from '@/types';
@@ -48,6 +49,15 @@ export async function GET(request: Request) {
       ? new Date(Math.min(...ingresos.map((i) => new Date(i.fechaInicio).getTime())))
       : null;
 
+    // Ocurrencias de cargos domiciliados de tarjeta que ya se confirmaron con
+    // un monto real (ej. gasolina) -- ya se cuentan aparte en comprasTarjeta,
+    // así que se excluyen aquí para no sumarlas dos veces.
+    const comprasConfirmadasKeys = new Set(
+      comprasTarjeta
+        .filter((c) => c.gastoDomiciliadoOrigenId != null)
+        .map((c) => `${c.gastoDomiciliadoOrigenId}|${new Date(c.fecha).getTime()}`)
+    );
+
     const añosDisponibles: number[] = [];
     const primerAño = inicioReal ? inicioReal.getUTCFullYear() : añoActual;
     for (let a = añoActual; a >= primerAño; a--) añosDisponibles.push(a);
@@ -71,16 +81,22 @@ export async function GET(request: Request) {
       const gastosFijosMes = gastosFijos.reduce(
         (sum, g) =>
           sum +
-          ocurrenciasDeGastoEnRangos(
-            { fechaCobro: g.fechaPago, frecuencia: 'mensual', cantidad: g.cantidad },
-            [rango],
-            CORTE_1
+          ocurrenciasDesdeCreacion(
+            ocurrenciasDeGastoEnRangos(
+              { fechaCobro: g.fechaPago, frecuencia: 'mensual', cantidad: g.cantidad },
+              [rango],
+              CORTE_1
+            ),
+            g.fechaCreacion
           ).reduce((s, oc) => s + oc.cantidad, 0),
         0
       );
       const gastosDomMes = gastosDomiciliados.reduce(
         (sum, g) =>
-          sum + ocurrenciasDeGastoEnRangos(g, [rango], CORTE_1).reduce((s, oc) => s + oc.cantidad, 0),
+          sum +
+          ocurrenciasDesdeCreacion(ocurrenciasDeGastoEnRangos(g, [rango], CORTE_1), g.fechaCreacion)
+            .filter((oc) => !comprasConfirmadasKeys.has(`${g.id}|${oc.fecha.getTime()}`))
+            .reduce((s, oc) => s + oc.cantidad, 0),
         0
       );
       const gastosVariablesMes = gastosVariables

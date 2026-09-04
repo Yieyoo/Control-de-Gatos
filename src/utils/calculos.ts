@@ -282,6 +282,24 @@ export function ocurrenciasSemanales(
 }
 
 /**
+ * Excluye ocurrencias de antes de que la regla existiera -- sin esto, una
+ * regla recién creada (ej. "Gasolina" dada de alta hoy) "inventa" cargos de
+ * quincenas/meses pasados que nunca se pactaron, solo porque su día de cobro
+ * ya había "pasado" ese mes. Compara por día de calendario en México (no el
+ * timestamp exacto): si la regla se creó a media tarde, la ocurrencia de ESE
+ * mismo día sigue contando -- solo se descartan días anteriores.
+ */
+export function ocurrenciasDesdeCreacion<T extends { fecha: Date }>(
+  ocurrencias: T[],
+  fechaCreacion: Date | string
+): T[] {
+  const creacion = new Date(fechaCreacion);
+  const ajustado = new Date(creacion.getTime() - OFFSET_MEXICO_HORAS * 60 * 60 * 1000);
+  const desdeDia = fechaUTC(ajustado.getUTCFullYear(), ajustado.getUTCMonth(), ajustado.getUTCDate());
+  return ocurrencias.filter((oc) => oc.fecha >= desdeDia);
+}
+
+/**
  * Todas las ocurrencias de un gasto/ahorro fijo (mensual, quincenal o semanal)
  * dentro de una lista de rangos de fechas. Junta ocurrenciasDelMes/ocurrenciasSemanales
  * para no repetir esa lógica en cada lugar que necesita "¿cuándo cae esto en este rango?".

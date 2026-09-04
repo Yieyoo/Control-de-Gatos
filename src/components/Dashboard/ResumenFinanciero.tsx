@@ -9,6 +9,7 @@ import {
   periodoQuincenaSiguiente,
   rangoMesActual,
   ocurrenciasDeGastoEnRangos,
+  ocurrenciasDesdeCreacion,
   type RangoFechas,
 } from '@/utils/calculos';
 import type { IDashboardResumen, IResumenPeriodo, ICompraTarjeta, IPagoTarjeta, IGastoDomiciliado, IMovimientoPeriodo } from '@/types';
@@ -134,9 +135,10 @@ function DeudaTarjetasExpandible({
             // aquí porque ya cuenta aparte en `comprasBase`/`comprado`. Sin
             // esto, la misma ocurrencia se contaba dos veces: una vez como
             // compra real y otra como estimado todavía pendiente.
-            const ocurrencias = ocurrenciasDeGastoEnRangos(g, rangosCargos, CORTE_1).filter(
-              (oc) => !comprasConfirmadasKeys.has(`${g.id}|${oc.fecha.getTime()}`)
-            );
+            const ocurrencias = ocurrenciasDesdeCreacion(
+              ocurrenciasDeGastoEnRangos(g, rangosCargos, CORTE_1),
+              g.fechaCreacion
+            ).filter((oc) => !comprasConfirmadasKeys.has(`${g.id}|${oc.fecha.getTime()}`));
             const fechaMasReciente = ocurrencias.reduce<Date | null>(
               (max, oc) => (!max || oc.fecha > max ? oc.fecha : max),
               null
