@@ -88,6 +88,7 @@ export function BottomNav() {
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-20 bg-white border-t border-gray-200 pb-[max(env(safe-area-inset-bottom),0.75rem)]">
         <div className="flex items-center">
           <TabLink href="/" label="Inicio" icono={Home} activo={pathname === '/'} />
+          <TabLink href="/gastos" label="Gasto" icono={Receipt} activo={pathname === '/gastos'} />
 
           <div className="flex-1 flex justify-center">
             <button
@@ -100,6 +101,7 @@ export function BottomNav() {
             </button>
           </div>
 
+          <TabLink href="/historial" label="Historial" icono={History} activo={pathname === '/historial'} />
           <TabLink
             href="/historial-mensual"
             label="Meses"
