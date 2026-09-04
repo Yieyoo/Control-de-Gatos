@@ -66,7 +66,11 @@ export function PorcentajeDestino({ datos }: PorcentajeDestinoProps) {
         {RUBROS.map(({ clave, icono: Icono, titulo, colorTexto, colorBarra, colorFondoIcono, favorable }) => {
           const rubro = datos[clave];
           const sobreLaMeta = estaSobreLaMeta(rubro, favorable);
-          const anchoBarra = Math.min(rubro.porcentaje, 100);
+          // % de tu límite ya usado (no % de tu ingreso total) -- así la barra
+          // se llena justo al 100% cuando llegas al tope, no a una fracción
+          // chica de la barra que no dice nada sobre qué tan cerca estás.
+          const porcentajeDelLimite = rubro.metaMonto > 0 ? (rubro.monto / rubro.metaMonto) * 100 : 0;
+          const anchoBarra = Math.min(porcentajeDelLimite, 100);
 
           return (
             <button
@@ -96,7 +100,7 @@ export function PorcentajeDestino({ datos }: PorcentajeDestinoProps) {
               </div>
 
               <p className={`text-[10px] leading-tight ${sobreLaMeta ? 'text-amber-600 font-medium' : 'text-gray-500'}`}>
-                {rubro.porcentaje.toFixed(1)}% ({formatearMoneda(rubro.monto)})
+                {porcentajeDelLimite.toFixed(1)}% de tu límite ({formatearMoneda(rubro.monto)})
               </p>
             </button>
           );
