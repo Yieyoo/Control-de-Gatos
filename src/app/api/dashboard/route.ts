@@ -282,16 +282,29 @@ export async function GET() {
       }
     };
 
+    // Ocurrencias de cargos domiciliados de tarjeta que ya se confirmaron con
+    // un monto real (ej. gasolina, ver confirmarCargoTarjetaDomiciliado) --
+    // esa CompraTarjeta ya se suma más abajo con `comprasTarjeta.forEach`, así
+    // que aquí se excluyen para no contarlas dos veces (una como proyección
+    // estimada y otra como la compra real).
+    const comprasConfirmadasKeys = new Set(
+      comprasTarjeta
+        .filter((c) => c.gastoDomiciliadoOrigenId != null)
+        .map((c) => `${c.gastoDomiciliadoOrigenId}|${new Date(c.fecha).getTime()}`)
+    );
+
     gastosFijos.forEach((g) => acumular(g.categoriaId, g.categoria, g.cantidad));
     gastosDomiciliados
       .filter((g) => g.activo && g.tarjetaId != null)
       .forEach((g) => {
-        if (g.frecuencia === 'semanal') {
-          const ocurrencias = ocurrenciasSemanales(parseDiasSemana(g.diasSemana), g.cantidad, [rangoMes]);
-          acumular(g.categoriaId, g.categoria, ocurrencias.reduce((sum, oc) => sum + oc.cantidad, 0));
-        } else {
-          acumular(g.categoriaId, g.categoria, g.frecuencia === 'quincenal' ? g.cantidad * 2 : g.cantidad);
-        }
+        // Ocurrencias reales dentro del mes (no un estimado de "quincenal =
+        // 2 veces siempre"), y sin las que ya tienen compra real.
+        const ocurrencias = (
+          g.frecuencia === 'semanal'
+            ? ocurrenciasSemanales(parseDiasSemana(g.diasSemana), g.cantidad, [rangoMes])
+            : ocurrenciasDeGastoEnRangos(g, [rangoMes], CORTE_1)
+        ).filter((oc) => !comprasConfirmadasKeys.has(`${g.id}|${oc.fecha.getTime()}`));
+        acumular(g.categoriaId, g.categoria, ocurrencias.reduce((sum, oc) => sum + oc.cantidad, 0));
       });
     gastosVariables.forEach((g) => {
       if (g.fuente !== 'tercero' && fechaEnRangos(new Date(g.fecha), [rangoMes])) {
