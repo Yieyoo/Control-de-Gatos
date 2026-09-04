@@ -66,7 +66,7 @@ export function PorcentajeDestino({ datos }: PorcentajeDestinoProps) {
         <PieChart className="w-5 h-5 text-gray-700" strokeWidth={1.75} /> % destinado a
       </h2>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-2">
         {RUBROS.map(({ clave, icono: Icono, tituloCorto, colorTexto, colorBarra, colorFondoIcono, favorable }) => {
           const rubro = datos[clave];
           const sobreLaMeta = estaSobreLaMeta(rubro, favorable);
@@ -81,25 +81,25 @@ export function PorcentajeDestino({ datos }: PorcentajeDestinoProps) {
               key={clave}
               type="button"
               onClick={() => setRubroAbierto(clave)}
-              className="text-left rounded-lg p-1 -m-1 active:bg-gray-50"
+              className="flex flex-col items-center text-center rounded-lg p-1 -m-1 active:bg-gray-50 w-full"
             >
-              <span className={`w-6 h-6 rounded-md ${colorFondoIcono} flex items-center justify-center mb-1.5`}>
-                <Icono className={`w-3.5 h-3.5 ${colorTexto}`} strokeWidth={2} />
+              <span className={`w-5 h-5 rounded-md ${colorFondoIcono} flex items-center justify-center mb-1`}>
+                <Icono className={`w-3 h-3 ${colorTexto}`} strokeWidth={2} />
               </span>
 
-              <p className={`text-xl font-bold leading-none ${sobreLaMeta ? 'text-amber-600' : colorTexto}`}>
+              <p className={`text-base font-bold leading-none ${sobreLaMeta ? 'text-amber-600' : colorTexto}`}>
                 {Math.round(porcentajeDelLimite)}%
               </p>
-              <p className="text-[10px] text-gray-500 leading-tight mt-0.5">{tituloCorto}</p>
+              <p className="text-[9px] text-gray-500 leading-tight mt-0.5">{tituloCorto}</p>
 
-              <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden mt-2">
+              <div className="h-1 w-full rounded-full bg-gray-100 overflow-hidden mt-1.5">
                 <div
                   className={`h-full rounded-full ${sobreLaMeta ? 'bg-amber-500' : colorBarra}`}
                   style={{ width: `${anchoBarra}%` }}
                 />
               </div>
 
-              <p className="text-[10px] text-gray-400 leading-tight mt-1 truncate">
+              <p className="text-[9px] text-gray-400 leading-tight mt-1 truncate max-w-full">
                 {formatearMoneda(rubro.monto)} de {formatearMoneda(rubro.metaMonto)}
               </p>
             </button>
