@@ -452,10 +452,23 @@ function TarjetasContenido() {
           .reduce((s, c) => s + netoCompra(c), 0);
         const totalPagado = pagosTarjeta.reduce((s, p) => s + p.cantidad, 0);
 
+        // Ocurrencias de cargos domiciliados que ya se confirmaron con una
+        // CompraTarjeta real (ej. gasolina, monto variable) -- se excluyen de
+        // lo proyectado aquí abajo, si no la misma ocurrencia se cuenta dos
+        // veces: una como compra real (en totalCompradoSiempre) y otra como
+        // estimado todavía pendiente.
+        const comprasConfirmadasKeys = new Set(
+          compras
+            .filter((c) => c.gastoDomiciliadoOrigenId != null)
+            .map((c) => `${c.gastoDomiciliadoOrigenId}|${new Date(c.fecha).getTime()}`)
+        );
+
         const cargosDomiciliadosTarjeta = gastosDomiciliados
           .filter((g) => g.activo && g.tarjetaId === tarjeta.id)
           .map((g) => {
-            const ocurrencias = ocurrenciasDeGastoEnRangos(g, [cicloActual], CORTE_1);
+            const ocurrencias = ocurrenciasDeGastoEnRangos(g, [cicloActual], CORTE_1).filter(
+              (oc) => !comprasConfirmadasKeys.has(`${g.id}|${oc.fecha.getTime()}`)
+            );
             const fechaMasReciente = ocurrencias.reduce<Date | null>(
               (max, oc) => (!max || oc.fecha > max ? oc.fecha : max),
               null
