@@ -13,6 +13,7 @@ const RUBROS: {
   clave: keyof IPorcentajeDestino;
   icono: LucideIcon;
   titulo: string;
+  tituloCorto: string;
   colorTexto: string;
   colorBarra: string;
   colorFondoIcono: string;
@@ -22,6 +23,7 @@ const RUBROS: {
     clave: 'necesidades',
     icono: Home,
     titulo: 'Necesidades y gastos fijos',
+    tituloCorto: 'Necesidades',
     colorTexto: 'text-blue-700',
     colorBarra: 'bg-blue-500',
     colorFondoIcono: 'bg-blue-100',
@@ -31,6 +33,7 @@ const RUBROS: {
     clave: 'gustos',
     icono: Gamepad2,
     titulo: 'Gustos y gastos personales',
+    tituloCorto: 'Gustos',
     colorTexto: 'text-violet-700',
     colorBarra: 'bg-violet-500',
     colorFondoIcono: 'bg-violet-100',
@@ -40,6 +43,7 @@ const RUBROS: {
     clave: 'ahorro',
     icono: TrendingUp,
     titulo: 'Ahorro e inversión',
+    tituloCorto: 'Ahorro',
     colorTexto: 'text-green-700',
     colorBarra: 'bg-green-500',
     colorFondoIcono: 'bg-green-100',
@@ -62,8 +66,8 @@ export function PorcentajeDestino({ datos }: PorcentajeDestinoProps) {
         <PieChart className="w-5 h-5 text-gray-700" strokeWidth={1.75} /> % destinado a
       </h2>
 
-      <div className="grid grid-cols-3 gap-2">
-        {RUBROS.map(({ clave, icono: Icono, titulo, colorTexto, colorBarra, colorFondoIcono, favorable }) => {
+      <div className="grid grid-cols-3 gap-3">
+        {RUBROS.map(({ clave, icono: Icono, tituloCorto, colorTexto, colorBarra, colorFondoIcono, favorable }) => {
           const rubro = datos[clave];
           const sobreLaMeta = estaSobreLaMeta(rubro, favorable);
           // % de tu límite ya usado (no % de tu ingreso total) -- así la barra
@@ -77,30 +81,26 @@ export function PorcentajeDestino({ datos }: PorcentajeDestinoProps) {
               key={clave}
               type="button"
               onClick={() => setRubroAbierto(clave)}
-              className="text-left space-y-1.5 rounded-lg p-1 -m-1 active:bg-gray-50"
+              className="text-left rounded-lg p-1 -m-1 active:bg-gray-50"
             >
-              <div className="flex items-center gap-1">
-                <span className={`w-5 h-5 rounded-md ${colorFondoIcono} flex items-center justify-center flex-shrink-0`}>
-                  <Icono className={`w-3 h-3 ${colorTexto}`} strokeWidth={2} />
-                </span>
-                <p className={`text-[11px] font-semibold leading-tight ${colorTexto}`}>
-                  {Math.round(rubro.metaPorcentaje)}% — {formatearMoneda(rubro.metaMonto)}
-                </p>
-              </div>
-              <p className="text-[10px] text-gray-500 leading-tight flex items-start gap-0.5">
-                <span className="flex-1">{titulo}</span>
-                <span className="text-gray-300 flex-shrink-0">›</span>
-              </p>
+              <span className={`w-6 h-6 rounded-md ${colorFondoIcono} flex items-center justify-center mb-1.5`}>
+                <Icono className={`w-3.5 h-3.5 ${colorTexto}`} strokeWidth={2} />
+              </span>
 
-              <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+              <p className={`text-xl font-bold leading-none ${sobreLaMeta ? 'text-amber-600' : colorTexto}`}>
+                {Math.round(porcentajeDelLimite)}%
+              </p>
+              <p className="text-[10px] text-gray-500 leading-tight mt-0.5">{tituloCorto}</p>
+
+              <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden mt-2">
                 <div
                   className={`h-full rounded-full ${sobreLaMeta ? 'bg-amber-500' : colorBarra}`}
                   style={{ width: `${anchoBarra}%` }}
                 />
               </div>
 
-              <p className={`text-[10px] leading-tight ${sobreLaMeta ? 'text-amber-600 font-medium' : 'text-gray-500'}`}>
-                {porcentajeDelLimite.toFixed(1)}% de tu límite ({formatearMoneda(rubro.monto)})
+              <p className="text-[10px] text-gray-400 leading-tight mt-1 truncate">
+                {formatearMoneda(rubro.monto)} de {formatearMoneda(rubro.metaMonto)}
               </p>
             </button>
           );
