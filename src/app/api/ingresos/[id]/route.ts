@@ -29,7 +29,7 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { nombre, cantidad, frecuencia, activo, notas } = body;
+    const { nombre, cantidad, frecuencia, activo, notas, fecha } = body;
 
     const ingreso = await prisma.ingreso.update({
       where: { id: parseInt(id) },
@@ -38,7 +38,8 @@ export async function PUT(
         ...(cantidad && { cantidad: parseFloat(cantidad) }),
         ...(frecuencia && { frecuencia }),
         ...(activo !== undefined && { activo }),
-        ...(notas && { notas }),
+        ...(notas !== undefined && { notas }),
+        ...(fecha && { fechaInicio: new Date(`${fecha}T12:00:00Z`) }),
       },
     });
 

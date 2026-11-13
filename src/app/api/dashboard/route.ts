@@ -80,7 +80,14 @@ function calcularExtraAntesDe(
   const inicioReal = new Date(Math.min(...activos.map((i) => new Date(i.fechaInicio).getTime())));
   if (inicioReal >= periodo.inicio) return 0;
 
-  const numQuincenas = contarQuincenasAntes(inicioReal, periodo.inicio);
+  // Las quincenas de sueldo se cuentan desde el ingreso recurrente más
+  // antiguo: un dinero extra ("unico") registrado con fecha anterior no debe
+  // inventar quincenas de sueldo de antes de que existiera.
+  const recurrentes = activos.filter((i) => i.frecuencia !== 'unico');
+  const inicioSueldo = recurrentes.length > 0
+    ? new Date(Math.min(...recurrentes.map((i) => new Date(i.fechaInicio).getTime())))
+    : periodo.inicio;
+  const numQuincenas = inicioSueldo < periodo.inicio ? contarQuincenasAntes(inicioSueldo, periodo.inicio) : 0;
   const rangoAntes: RangoFechas = { inicio: inicioReal, fin: new Date(periodo.inicio.getTime() - 1) };
 
   const ingresoAntes = activos.reduce((sum, ing) => {

@@ -70,6 +70,9 @@ export async function GET(request: Request) {
       if (inicioReal && rango.fin < inicioReal) continue;
 
       const ingresosMes = ingresos.reduce((sum, ing) => {
+        // Un sueldo no cuenta en meses que terminaron antes de darlo de alta
+        // (importa si un dinero extra con fecha atrasada movió inicioReal antes).
+        if (ing.frecuencia !== 'unico' && rango.fin < new Date(ing.fechaInicio)) return sum;
         if (ing.frecuencia === 'quincenal') return sum + ing.cantidad * 2;
         if (ing.frecuencia === 'mensual') return sum + ing.cantidad;
         if (ing.frecuencia === 'unico') {

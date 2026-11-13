@@ -17,7 +17,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { nombre, cantidad, frecuencia, activo = true, notas } = body;
+    const { nombre, cantidad, frecuencia, activo = true, notas, fecha } = body;
 
     if (!nombre || !cantidad || !frecuencia) {
       return Response.json(
@@ -33,7 +33,10 @@ export async function POST(request: Request) {
         frecuencia,
         activo,
         notas,
-        fechaInicio: new Date(),
+        // "fecha" (YYYY-MM-DD) permite registrar un dinero extra que llegó
+        // otro día (ej. el aguinaldo de ayer). Se guarda a mediodía UTC para
+        // que la zona horaria no lo corra al día anterior.
+        fechaInicio: fecha ? new Date(`${fecha}T12:00:00Z`) : new Date(),
       },
     });
 
