@@ -1,6 +1,8 @@
 // src/app/api/tarjetas/pagos/route.ts
 import { prisma } from '@/lib/prisma';
-import { crearPagoTarjeta, validarFuente } from '@/lib/finanzas';
+import { crearPagoTarjeta, validarFuente, FondosInsuficientesError, CompraTarjetaInvalidaError } from '@/lib/finanzas';
+import { leerEnteroPositivo, leerFecha, leerMontoPositivo } from '@/lib/validacion';
+import { hoyMexico } from '@/utils/calculos';
 
 export async function GET() {
   try {
@@ -19,35 +21,47 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { tarjetaId, cantidad, concepto, fecha, fuente, ahorroLugarId, depositoTerceroId, compraTarjetaId } = body;
+    const tarjetaIdFinal = leerEnteroPositivo(tarjetaId);
+    const cantidadFinal = leerMontoPositivo(cantidad);
+    const ahorroLugarIdFinal = ahorroLugarId ? leerEnteroPositivo(ahorroLugarId) : null;
+    const depositoTerceroIdFinal = depositoTerceroId ? leerEnteroPositivo(depositoTerceroId) : null;
+    const compraTarjetaIdFinal = compraTarjetaId ? leerEnteroPositivo(compraTarjetaId) : null;
+    const fechaFinal = fecha ? leerFecha(fecha) : hoyMexico();
 
-    if (!tarjetaId || !cantidad) {
+    if (!tarjetaIdFinal || !cantidadFinal || (ahorroLugarId && !ahorroLugarIdFinal) || (depositoTerceroId && !depositoTerceroIdFinal) || (compraTarjetaId && !compraTarjetaIdFinal) || (fecha && !fechaFinal)) {
       return Response.json({ error: 'Faltan campos requeridos' }, { status: 400 });
     }
 
     const fuenteFinal = fuente || 'disponible';
     const errorFuente = validarFuente({
       fuente: fuenteFinal,
-      ahorroLugarId: ahorroLugarId ? parseInt(ahorroLugarId) : null,
-      depositoTerceroId: depositoTerceroId ? parseInt(depositoTerceroId) : null,
-      cantidad: parseFloat(cantidad),
+      ahorroLugarId: ahorroLugarIdFinal,
+      depositoTerceroId: depositoTerceroIdFinal,
+      cantidad: cantidadFinal,
     });
     if (errorFuente) {
       return Response.json({ error: errorFuente }, { status: 400 });
     }
 
     const pago = await crearPagoTarjeta({
-      tarjetaId: parseInt(tarjetaId),
-      cantidad: parseFloat(cantidad),
+      tarjetaId: tarjetaIdFinal,
+      cantidad: cantidadFinal,
       concepto: concepto || null,
-      fecha: fecha ? new Date(fecha) : undefined,
+      fecha: fechaFinal ?? undefined,
       fuente: fuenteFinal,
-      ahorroLugarId: ahorroLugarId ? parseInt(ahorroLugarId) : null,
-      depositoTerceroId: depositoTerceroId ? parseInt(depositoTerceroId) : null,
-      compraTarjetaId: compraTarjetaId ? parseInt(compraTarjetaId) : null,
+      ahorroLugarId: ahorroLugarIdFinal,
+      depositoTerceroId: depositoTerceroIdFinal,
+      compraTarjetaId: compraTarjetaIdFinal,
     });
 
     return Response.json(pago, { status: 201 });
   } catch (error) {
+    if (error instanceof FondosInsuficientesError) {
+      return Response.json({ error: error.message }, { status: 400 });
+    }
+    if (error instanceof CompraTarjetaInvalidaError) {
+      return Response.json({ error: error.message }, { status: 400 });
+    }
     console.error('Error:', error);
     return Response.json({ error: 'Error al registrar pago' }, { status: 500 });
   }

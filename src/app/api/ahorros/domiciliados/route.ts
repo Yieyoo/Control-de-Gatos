@@ -1,5 +1,6 @@
 // src/app/api/ahorros/domiciliados/route.ts
 import { prisma } from '@/lib/prisma';
+import { leerEnteroPositivo, leerMontoPositivo, validarDiasSemana } from '@/lib/validacion';
 
 export async function GET() {
   try {
@@ -18,24 +19,26 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { nombre, cantidad, frecuencia, diasSemana, ahorroDestinoId, obligatorio, notas } = body;
+    const monto = leerMontoPositivo(cantidad);
+    const destino = leerEnteroPositivo(ahorroDestinoId);
 
-    if (!nombre || !cantidad || !frecuencia || !ahorroDestinoId) {
+    if (!nombre || !monto || !['mensual', 'quincenal', 'semanal'].includes(frecuencia) || !destino) {
       return Response.json(
         { error: 'Faltan campos requeridos' },
         { status: 400 }
       );
     }
-    if (frecuencia === 'semanal' && !diasSemana) {
+    if (frecuencia === 'semanal' && !validarDiasSemana(diasSemana)) {
       return Response.json({ error: 'Selecciona al menos un día de la semana' }, { status: 400 });
     }
 
     const ahorro = await prisma.ahorroDomiciliado.create({
       data: {
         nombre,
-        cantidad: parseFloat(cantidad),
+        cantidad: monto,
         frecuencia,
         diasSemana: frecuencia === 'semanal' ? diasSemana : null,
-        ahorroDestinoId: parseInt(ahorroDestinoId),
+        ahorroDestinoId: destino,
         obligatorio: obligatorio ?? true,
         notas,
       },

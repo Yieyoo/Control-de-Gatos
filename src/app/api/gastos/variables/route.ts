@@ -1,6 +1,8 @@
 // src/app/api/gastos/variables/route.ts
 import { prisma } from '@/lib/prisma';
-import { crearGastoVariable, validarFuente } from '@/lib/finanzas';
+import { crearGastoVariable, validarFuente, FondosInsuficientesError } from '@/lib/finanzas';
+import { leerEnteroPositivo, leerFecha, leerMontoPositivo } from '@/lib/validacion';
+import { hoyMexico } from '@/utils/calculos';
 
 export async function GET() {
   try {
@@ -10,6 +12,9 @@ export async function GET() {
     });
     return Response.json(gastos);
   } catch (error) {
+    if (error instanceof FondosInsuficientesError) {
+      return Response.json({ error: error.message }, { status: 400 });
+    }
     console.error('Error:', error);
     return Response.json({ error: 'Error al obtener gastos' }, { status: 500 });
   }
@@ -20,16 +25,19 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { nombre, cantidad, categoriaId, notas, tipoPresupuesto, fuente, ahorroLugarId, depositoTerceroId, fecha } = body;
 
-    if (!nombre || !cantidad || !categoriaId) {
+    const monto = leerMontoPositivo(cantidad);
+    const categoriaIdFinal = leerEnteroPositivo(categoriaId);
+    const fechaFinal = fecha ? leerFecha(fecha) : hoyMexico();
+    if (!nombre || !monto || !categoriaIdFinal || (fecha && !fechaFinal)) {
       return Response.json({ error: 'Faltan campos requeridos' }, { status: 400 });
     }
 
     const fuenteFinal = fuente || 'disponible';
     const errorFuente = validarFuente({
       fuente: fuenteFinal,
-      ahorroLugarId: ahorroLugarId ? parseInt(ahorroLugarId) : null,
-      depositoTerceroId: depositoTerceroId ? parseInt(depositoTerceroId) : null,
-      cantidad: parseFloat(cantidad),
+      ahorroLugarId: ahorroLugarId ? leerEnteroPositivo(ahorroLugarId) : null,
+      depositoTerceroId: depositoTerceroId ? leerEnteroPositivo(depositoTerceroId) : null,
+      cantidad: monto,
     });
     if (errorFuente) {
       return Response.json({ error: errorFuente }, { status: 400 });
@@ -37,14 +45,14 @@ export async function POST(request: Request) {
 
     const gasto = await crearGastoVariable({
       nombre,
-      cantidad: parseFloat(cantidad),
-      categoriaId: parseInt(categoriaId),
-      fecha: fecha ? new Date(fecha) : undefined,
+      cantidad: monto,
+      categoriaId: categoriaIdFinal,
+      fecha: fechaFinal ?? undefined,
       notas,
       tipoPresupuesto: tipoPresupuesto || null,
       fuente: fuenteFinal,
-      ahorroLugarId: ahorroLugarId ? parseInt(ahorroLugarId) : null,
-      depositoTerceroId: depositoTerceroId ? parseInt(depositoTerceroId) : null,
+      ahorroLugarId: ahorroLugarId ? leerEnteroPositivo(ahorroLugarId) : null,
+      depositoTerceroId: depositoTerceroId ? leerEnteroPositivo(depositoTerceroId) : null,
     });
 
     return Response.json(gasto, { status: 201 });

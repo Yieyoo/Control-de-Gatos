@@ -23,6 +23,7 @@ import {
   ocurrenciasDesdeCreacion,
 } from '@/utils/calculos';
 import { CreditCard, Trash2, Pencil, CheckCircle2, Wallet, Undo2 } from 'lucide-react';
+import { calcularDeudaTarjeta, gastoNeto, calcularMontoMensualMSI } from '@/utils/finanzas';
 
 const CORTE_1 = 10;
 
@@ -357,7 +358,10 @@ function TarjetasContenido() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...formDevolucion, compraTarjetaId }),
       });
-      if (!resp.ok) throw new Error('Error al registrar devolución');
+      if (!resp.ok) {
+        const datos = await resp.json().catch(() => null);
+        throw new Error(datos?.error || 'Error al registrar devolución');
+      }
       setFormDevolucion({ cantidad: '', concepto: '' });
       setFormDevolucionAbierto(null);
       cargarCompras();
@@ -367,13 +371,16 @@ function TarjetasContenido() {
   };
 
   const netoCompra = (compra: ICompraTarjeta) =>
-    compra.cantidad - (compra.devoluciones ?? []).reduce((s, d) => s + d.cantidad, 0);
+    gastoNeto(compra.cantidad, compra.devoluciones ?? []);
 
   const handleEliminarCompra = async (id: number) => {
     if (!confirm('¿Eliminar esta compra?')) return;
     try {
       const resp = await fetch(`/api/tarjetas/compras/${id}`, { method: 'DELETE' });
-      if (!resp.ok) throw new Error('Error al eliminar');
+      if (!resp.ok) {
+        const datos = await resp.json().catch(() => null);
+        throw new Error(datos?.error || 'Error al eliminar');
+      }
       cargarCompras();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
@@ -489,7 +496,7 @@ function TarjetasContenido() {
           .filter((c) => !c.pagadoAdelantado)
           .reduce((s, c) => s + c.monto, 0);
 
-        const debeTotal = totalCompradoSiempre - totalPagado + totalCargosPendientes;
+        const debeTotal = calcularDeudaTarjeta(totalCompradoSiempre, totalPagado, totalCargosPendientes);
 
         return (
           <div key={tarjeta.id} className="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
@@ -637,7 +644,7 @@ function TarjetasContenido() {
                 )}
                 {formCompra.esMSI && formCompra.numeroMeses && formCompra.cantidad && (
                   <p className="text-xs text-gray-500">
-                    {formatearMoneda(parseFloat(formCompra.cantidad) / parseInt(formCompra.numeroMeses))}/mes durante {formCompra.numeroMeses} meses
+                    {formatearMoneda(calcularMontoMensualMSI(parseFloat(formCompra.cantidad), parseInt(formCompra.numeroMeses)))}/mes durante {formCompra.numeroMeses} meses
                   </p>
                 )}
                 <div>
@@ -756,7 +763,7 @@ function TarjetasContenido() {
                             <p className="font-semibold truncate">{c.nombre}</p>
                             <p className="text-xs text-gray-500 truncate">
                               {c.categoria?.nombre ?? 'Sin categoría'} • {formatearDiaMes(new Date(c.fecha))}
-                              {c.numeroMeses && ` • ${c.numeroMeses} MSI (${formatearMoneda(c.montoMensual ?? 0)}/mes)`}
+                              {c.numeroMeses && ` • ${c.numeroMeses} MSI (${formatearMoneda(calcularMontoMensualMSI(netoCompra(c), c.numeroMeses))}/mes)`}
                             </p>
                           </div>
                           <div className="flex items-center gap-3 flex-shrink-0">

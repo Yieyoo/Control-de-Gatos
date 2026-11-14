@@ -1,5 +1,6 @@
 // src/app/api/ahorros/domiciliados/[id]/confirmar/route.ts
 import { confirmarAhorroDomiciliado, deshacerAhorroDomiciliado } from '@/lib/finanzas';
+import { leerEnteroPositivo, leerFecha } from '@/lib/validacion';
 
 export async function POST(
   request: Request,
@@ -8,10 +9,12 @@ export async function POST(
   try {
     const { id } = await params;
     const { fecha } = await request.json();
-    if (!fecha) {
+    const idFinal = leerEnteroPositivo(id);
+    const fechaFinal = leerFecha(fecha);
+    if (!idFinal || !fechaFinal) {
       return Response.json({ error: 'Falta la fecha' }, { status: 400 });
     }
-    const movimiento = await confirmarAhorroDomiciliado(parseInt(id), new Date(fecha));
+    const movimiento = await confirmarAhorroDomiciliado(idFinal, fechaFinal);
     if (!movimiento) {
       return Response.json({ error: 'Ahorro domiciliado no encontrado' }, { status: 404 });
     }
@@ -29,10 +32,12 @@ export async function DELETE(
   try {
     const { id } = await params;
     const { fecha } = await request.json();
-    if (!fecha) {
+    const idFinal = leerEnteroPositivo(id);
+    const fechaFinal = leerFecha(fecha);
+    if (!idFinal || !fechaFinal) {
       return Response.json({ error: 'Falta la fecha' }, { status: 400 });
     }
-    await deshacerAhorroDomiciliado(parseInt(id), new Date(fecha));
+    await deshacerAhorroDomiciliado(idFinal, fechaFinal);
     return Response.json({ success: true });
   } catch (error) {
     console.error('Error:', error);

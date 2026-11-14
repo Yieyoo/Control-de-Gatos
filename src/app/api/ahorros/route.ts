@@ -1,5 +1,6 @@
 // src/app/api/ahorros/route.ts
 import { prisma } from '@/lib/prisma';
+import { leerSaldoNoNegativo } from '@/lib/validacion';
 
 export async function GET() {
   try {
@@ -17,8 +18,9 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { nombre, tipo, saldoActual = 0, notas } = body;
+    const saldo = leerSaldoNoNegativo(saldoActual);
 
-    if (!nombre || !tipo) {
+    if (!nombre || !tipo || saldo === null) {
       return Response.json(
         { error: 'Faltan campos requeridos' },
         { status: 400 }
@@ -29,7 +31,7 @@ export async function POST(request: Request) {
       data: {
         nombre,
         tipo,
-        saldoActual: parseFloat(saldoActual || 0),
+        saldoActual: saldo,
         notas,
       },
     });

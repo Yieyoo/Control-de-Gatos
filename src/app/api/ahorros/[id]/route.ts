@@ -1,5 +1,6 @@
 // src/app/api/ahorros/[id]/route.ts
 import { prisma } from '@/lib/prisma';
+import { leerSaldoNoNegativo } from '@/lib/validacion';
 
 export async function GET(
   request: Request,
@@ -31,13 +32,17 @@ export async function PUT(
     const { id } = await params;
     const body = await request.json();
     const { nombre, tipo, saldoActual, notas } = body;
+    const saldo = saldoActual !== undefined ? leerSaldoNoNegativo(saldoActual) : undefined;
+    if (saldoActual !== undefined && saldo === null) {
+      return Response.json({ error: 'El saldo debe ser un número mayor o igual a cero' }, { status: 400 });
+    }
 
     const ahorro = await prisma.ahorroLugar.update({
       where: { id: parseInt(id) },
       data: {
         ...(nombre && { nombre }),
         ...(tipo && { tipo }),
-        ...(saldoActual !== undefined && { saldoActual: parseFloat(saldoActual) }),
+        ...(saldo !== undefined && { saldoActual: saldo }),
         ...(notas && { notas }),
       },
     });

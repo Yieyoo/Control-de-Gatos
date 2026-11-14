@@ -2,15 +2,15 @@
 import { prisma } from '@/lib/prisma';
 import { montoUtilizadoDeposito, obtenerPorcentajesDestino } from '@/lib/finanzas';
 import { construirPeriodo, CORTE_1, CORTE_2 } from '@/lib/periodo';
-import { gastoNeto, calcularDeudaTarjeta, calcularEstadoDeposito, calcularDineroDisponible } from '@/utils/finanzas';
+import { gastoNeto, calcularMontoMensualMSI, calcularEstadoDeposito, calcularDineroDisponible } from '@/utils/finanzas';
 import {
   calcularProximaFechaMensual,
   calcularProximaFechaDesdeInicio,
   calcularProximaFechaSemanal,
   rangoMesActual,
+  finDelDia,
   periodoQuincenaActual,
   periodoQuincenaSiguiente,
-  cicloTarjetaActual,
   ocurrenciasDeGastoEnRangos,
   ocurrenciasSemanales,
   ocurrenciasDesdeCreacion,
@@ -138,6 +138,13 @@ function combinarConExtra(periodo: IResumenPeriodo, extraInicial: number): IResu
 
 export async function GET() {
   try {
+    const hoy = hoyMexico();
+    const rangoMes = rangoMesActual(hoy);
+    const periodoActual = periodoQuincenaActual(hoy, CORTE_1, CORTE_2);
+    const periodoProximo = periodoQuincenaSiguiente(periodoActual, CORTE_1, CORTE_2);
+    const inicioComprasPeriodo = periodoActual.inicio < rangoMes.inicio ? periodoActual.inicio : rangoMes.inicio;
+    const finComprasPeriodo = finDelDia(periodoProximo.fin > rangoMes.fin ? periodoProximo.fin : rangoMes.fin);
+
     const [
       ingresos,
       ahorrosLugares,
@@ -159,24 +166,26 @@ export async function GET() {
       prisma.gastoFijo.findMany({ where: { activo: true }, include: { categoria: true } }),
       prisma.gastoVariable.findMany({ include: { categoria: true, devoluciones: true } }),
       prisma.tarjetaCredito.findMany({ where: { activa: true } }),
-      prisma.compraTarjeta.findMany({ include: { categoria: true, devoluciones: true } }),
+      prisma.compraTarjeta.findMany({
+        where: {
+          OR: [
+            { numeroMeses: { gt: 1 }, fecha: { lte: finDelDia(rangoMes.fin) } },
+            { fecha: { gte: inicioComprasPeriodo, lte: finComprasPeriodo } },
+          ],
+        },
+        include: { categoria: true, devoluciones: true },
+      }),
       prisma.pagoTarjeta.findMany(),
       prisma.movimientoAhorro.findMany(),
-      prisma.depositoTercero.findMany({ include: { gastosVariables: true, pagosTarjeta: true } }),
+      prisma.depositoTercero.findMany({ include: { gastosVariables: { include: { devoluciones: true } }, pagosTarjeta: true } }),
       obtenerPorcentajesDestino(),
     ]);
-
-    const hoy = hoyMexico();
 
     const ahorroTotal = ahorrosLugares.reduce((sum: number, ahorro) => sum + ahorro.saldoActual, 0);
     const dineroTerceroPendiente = depositosTerceros.reduce(
       (sum, d) => sum + calcularEstadoDeposito(d.cantidad, montoUtilizadoDeposito(d)).pendiente,
       0
     );
-
-    const rangoMes = rangoMesActual(hoy);
-    const periodoActual = periodoQuincenaActual(hoy, CORTE_1, CORTE_2);
-    const periodoProximo = periodoQuincenaSiguiente(periodoActual, CORTE_1, CORTE_2);
 
     // Ocurrencias de cargos domiciliados de tarjeta que ya se confirmaron con
     // un monto real (ver confirmarCargoTarjetaDomiciliado) -- esas ya cuentan
@@ -193,23 +202,39 @@ export async function GET() {
         .map((c) => `${c.gastoDomiciliadoOrigenId}|${new Date(c.fecha).getTime()}`)
     );
 
-    // Deuda de tarjetas: todo lo que llevas comprado (haya cortado o no, incluye MSI
-    // completo), menos devoluciones, más los gastos domiciliados ligados a esta
-    // tarjeta que ya cayeron y no se marcaron como pagados, menos lo que ya abonaste.
+    // En el dashboard se muestra lo que corresponde pagar este mes: compras
+    // normales del mes y solo la mensualidad vigente de cada MSI.
     const deudaTarjetas: IDeudaTarjeta[] = tarjetas.map((t) => {
       const comprado = comprasTarjeta
-        .filter((c) => c.tarjetaId === t.id)
-        .reduce((sum, c) => sum + neto(c), 0);
+        .filter((c) => {
+          if (c.tarjetaId !== t.id) return false;
+          const fecha = new Date(c.fecha);
+          const esDelMes = fechaEnRangos(fecha, [rangoMes]);
+          if (c.numeroMeses && c.numeroMeses > 1) {
+            const mesCompra = fecha.getUTCFullYear() * 12 + fecha.getUTCMonth();
+            const mesActual = hoy.getUTCFullYear() * 12 + hoy.getUTCMonth();
+            return mesActual >= mesCompra && mesActual < mesCompra + c.numeroMeses;
+          }
+          return esDelMes;
+        })
+        .reduce((sum, c) => {
+          const netoCompra = neto(c);
+          const esMSI = !!c.numeroMeses && c.numeroMeses > 1;
+          const mensualidad = esMSI ? calcularMontoMensualMSI(netoCompra, c.numeroMeses!) : netoCompra;
+          const pagadoDeEstaCompra = pagosTarjeta
+            .filter((p) => p.tarjetaId === t.id && p.compraTarjetaId === c.id && fechaEnRangos(p.fecha, [rangoMes]))
+            .reduce((total, p) => total + p.cantidad, 0);
+          return sum + Math.max(0, mensualidad - pagadoDeEstaCompra);
+        }, 0);
       const pagado = pagosTarjeta
-        .filter((p) => p.tarjetaId === t.id)
+        .filter((p) => p.tarjetaId === t.id && !p.compraTarjetaId && fechaEnRangos(p.fecha, [rangoMes]))
         .reduce((sum, p) => sum + p.cantidad, 0);
 
-      const cicloActualTarjeta = cicloTarjetaActual(hoy, t.diaCorte);
       const cargosDomiciliados = gastosDomiciliados
         .filter((g) => g.activo && g.tarjetaId === t.id)
         .reduce((sum, g) => {
           const ocurrencias = ocurrenciasDesdeCreacion(
-            ocurrenciasDeGastoEnRangos(g, [cicloActualTarjeta], CORTE_1),
+            ocurrenciasDeGastoEnRangos(g, [rangoMes], CORTE_1),
             g.fechaCreacion
           );
           const pendientes = ocurrencias.filter(
@@ -220,7 +245,7 @@ export async function GET() {
           return sum + pendientes.reduce((s, oc) => s + oc.cantidad, 0);
         }, 0);
 
-      const debe = calcularDeudaTarjeta(comprado, pagado, cargosDomiciliados);
+      const debe = Math.max(0, comprado - pagado) + cargosDomiciliados;
       return {
         id: t.id,
         nombre: t.nombre,
@@ -230,6 +255,15 @@ export async function GET() {
       };
     });
     const deudaTarjetasTotal = deudaTarjetas.reduce((sum, t) => sum + t.debe, 0);
+    const mesActualNumero = hoy.getUTCFullYear() * 12 + hoy.getUTCMonth();
+    const comprasDetalleTarjetas = comprasTarjeta.filter((c) => {
+      const fecha = new Date(c.fecha);
+      if (fechaEnRangos(fecha, [rangoMes])) return true;
+      if (!c.numeroMeses || c.numeroMeses <= 1) return false;
+      const mesCompra = fecha.getUTCFullYear() * 12 + fecha.getUTCMonth();
+      return mesActualNumero >= mesCompra && mesActualNumero < mesCompra + c.numeroMeses;
+    });
+    const pagosDetalleTarjetas = pagosTarjeta.filter((p) => fechaEnRangos(new Date(p.fecha), [rangoMes]));
 
     const args = [
       ingresos,
@@ -382,6 +416,12 @@ export async function GET() {
       })),
       deudaTarjetas,
       deudaTarjetasTotal,
+      detalleTarjetas: {
+        // Next serializa las fechas Date a ISO al construir el JSON.
+        compras: comprasDetalleTarjetas as unknown as IDashboardResumen['detalleTarjetas']['compras'],
+        pagos: pagosDetalleTarjetas as unknown as IDashboardResumen['detalleTarjetas']['pagos'],
+        cargosDomiciliados: gastosDomiciliados as unknown as IDashboardResumen['detalleTarjetas']['cargosDomiciliados'],
+      },
       dineroTerceroPendiente,
       gastosPorCategoria,
       proximosMovimientos,

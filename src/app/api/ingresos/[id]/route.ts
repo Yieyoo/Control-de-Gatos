@@ -1,5 +1,6 @@
 // src/app/api/ingresos/[id]/route.ts
 import { prisma } from '@/lib/prisma';
+import { leerFecha, leerMontoPositivo } from '@/lib/validacion';
 
 export async function GET(
   request: Request,
@@ -30,16 +31,21 @@ export async function PUT(
     const { id } = await params;
     const body = await request.json();
     const { nombre, cantidad, frecuencia, activo, notas, fecha } = body;
+    const monto = cantidad !== undefined ? leerMontoPositivo(cantidad) : undefined;
+    const fechaInicio = fecha !== undefined ? leerFecha(`${fecha}T12:00:00Z`) : undefined;
+    if ((cantidad !== undefined && !monto) || (frecuencia !== undefined && !['mensual', 'quincenal', 'unico'].includes(frecuencia)) || (fecha !== undefined && !fechaInicio)) {
+      return Response.json({ error: 'Datos de ingreso inválidos' }, { status: 400 });
+    }
 
     const ingreso = await prisma.ingreso.update({
       where: { id: parseInt(id) },
       data: {
         ...(nombre && { nombre }),
-        ...(cantidad && { cantidad: parseFloat(cantidad) }),
+        ...(monto !== undefined && { cantidad: monto }),
         ...(frecuencia && { frecuencia }),
         ...(activo !== undefined && { activo }),
         ...(notas !== undefined && { notas }),
-        ...(fecha && { fechaInicio: new Date(`${fecha}T12:00:00Z`) }),
+        ...(fechaInicio && { fechaInicio }),
       },
     });
 

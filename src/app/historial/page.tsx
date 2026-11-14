@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react';
 import type { IMovimientoAhorro, IPagoTarjeta, IGastoVariable, ICompraTarjeta } from '@/types';
 import { formatearMoneda, formatearDiaMes } from '@/utils/calculos';
+import { gastoNeto } from '@/utils/finanzas';
 import { History } from 'lucide-react';
 
 type Filtro = 'todos' | 'gastos' | 'ahorros' | 'tarjeta';
@@ -50,7 +51,7 @@ export default function HistorialPage() {
   }, []);
 
   const netoDe = (item: { cantidad: number; devoluciones?: { cantidad: number }[] }) =>
-    item.cantidad - (item.devoluciones ?? []).reduce((s, d) => s + d.cantidad, 0);
+    gastoNeto(item.cantidad, item.devoluciones ?? []);
 
   const items: ItemHistorial[] = [
     // Los movimientos de ahorro que ya vienen de un gasto/pago (origen "pago_gasto"/

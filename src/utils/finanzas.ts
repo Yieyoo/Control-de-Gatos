@@ -128,7 +128,7 @@ export function calcularDineroDisponible(datos: {
  */
 export function gastoNeto(cantidadOriginal: number, devoluciones: { cantidad: number }[]): number {
   const totalDevuelto = devoluciones.reduce((sum, d) => sum + d.cantidad, 0);
-  return cantidadOriginal - totalDevuelto;
+  return Math.max(0, cantidadOriginal - totalDevuelto);
 }
 
 /** Deuda de una tarjeta: todo lo comprado (incluye MSI completo) menos lo pagado, más los cargos domiciliados pendientes. */

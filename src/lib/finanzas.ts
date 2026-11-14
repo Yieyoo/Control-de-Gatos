@@ -14,8 +14,31 @@
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import type { IPorcentajesMeta } from '@/types';
+import { gastoNeto } from '@/utils/finanzas';
+import { hoyMexico } from '@/utils/calculos';
 
 export type FuenteDinero = 'disponible' | 'ahorro' | 'tercero';
+
+export class FondosInsuficientesError extends Error {
+  constructor(message = 'El saldo disponible no alcanza para este movimiento') {
+    super(message);
+    this.name = 'FondosInsuficientesError';
+  }
+}
+
+export class CompraConPagosError extends Error {
+  constructor() {
+    super('Esta compra tiene pagos ligados. Elimina primero esos pagos para conservar el registro correcto.');
+    this.name = 'CompraConPagosError';
+  }
+}
+
+export class CompraTarjetaInvalidaError extends Error {
+  constructor() {
+    super('La compra seleccionada no pertenece a esta tarjeta');
+    this.name = 'CompraTarjetaInvalidaError';
+  }
+}
 
 interface DatosGastoOFuente {
   fuente: FuenteDinero;
@@ -26,6 +49,9 @@ interface DatosGastoOFuente {
 
 /** Valida que, si fuente="ahorro"/"tercero", venga el id correspondiente. */
 export function validarFuente(datos: DatosGastoOFuente): string | null {
+  if (!['disponible', 'ahorro', 'tercero'].includes(datos.fuente)) {
+    return 'Fuente de dinero inválida';
+  }
   if (datos.fuente === 'ahorro' && !datos.ahorroLugarId) {
     return 'Selecciona de qué cuenta de ahorro sale el dinero';
   }
@@ -33,6 +59,37 @@ export function validarFuente(datos: DatosGastoOFuente): string | null {
     return 'Selecciona a qué depósito de tercero corresponde';
   }
   return null;
+}
+
+async function validarSaldoTercero(
+  tx: Prisma.TransactionClient,
+  depositoId: number,
+  cantidad: number
+) {
+  const deposito = await tx.depositoTercero.findUnique({
+    where: { id: depositoId },
+    select: {
+      cantidad: true,
+      gastosVariables: { select: { cantidad: true, devoluciones: { select: { cantidad: true } } } },
+      pagosTarjeta: { select: { cantidad: true } },
+    },
+  });
+  if (!deposito) throw new FondosInsuficientesError('El depósito de tercero ya no existe');
+  const usado = deposito.gastosVariables.reduce((s, g) => s + gastoNeto(g.cantidad, g.devoluciones), 0) +
+    deposito.pagosTarjeta.reduce((s, p) => s + p.cantidad, 0);
+  if (cantidad > deposito.cantidad - usado + 0.000001) {
+    throw new FondosInsuficientesError('El depósito de tercero no tiene saldo suficiente');
+  }
+}
+
+async function validarCompraDeTarjeta(
+  tx: Prisma.TransactionClient,
+  compraId: number | null | undefined,
+  tarjetaId: number
+) {
+  if (!compraId) return;
+  const compra = await tx.compraTarjeta.findUnique({ where: { id: compraId }, select: { tarjetaId: true } });
+  if (!compra || compra.tarjetaId !== tarjetaId) throw new CompraTarjetaInvalidaError();
 }
 
 /**
@@ -50,7 +107,7 @@ export async function crearGastoVariable(datos: {
   ahorroLugarId?: number | null;
   depositoTerceroId?: number | null;
 }) {
-  const fecha = datos.fecha ?? new Date();
+  const fecha = datos.fecha ?? hoyMexico();
 
   if (datos.fuente === 'ahorro' && datos.ahorroLugarId) {
     return prisma.$transaction(async (tx) => {
@@ -64,10 +121,14 @@ export async function crearGastoVariable(datos: {
           origen: 'pago_gasto',
         },
       });
-      await tx.ahorroLugar.update({
-        where: { id: datos.ahorroLugarId! },
+      const resultadoSaldo = await tx.ahorroLugar.updateMany({
+        where: { id: datos.ahorroLugarId!, saldoActual: { gte: datos.cantidad } },
         data: { saldoActual: { decrement: datos.cantidad } },
       });
+      const saldo = await tx.ahorroLugar.findUnique({ where: { id: datos.ahorroLugarId! }, select: { saldoActual: true } });
+      if (!resultadoSaldo.count || !saldo || saldo.saldoActual < -0.000001) {
+        throw new FondosInsuficientesError('El saldo de ahorro no alcanza para este gasto');
+      }
       return tx.gastoVariable.create({
         data: {
           nombre: datos.nombre,
@@ -83,6 +144,25 @@ export async function crearGastoVariable(datos: {
         include: { categoria: true, ahorroLugar: true, depositoTercero: true, devoluciones: true },
       });
     });
+  }
+
+  if (datos.fuente === 'tercero' && datos.depositoTerceroId) {
+    return prisma.$transaction(async (tx) => {
+      await validarSaldoTercero(tx, datos.depositoTerceroId!, datos.cantidad);
+      return tx.gastoVariable.create({
+        data: {
+          nombre: datos.nombre,
+          cantidad: datos.cantidad,
+          categoriaId: datos.categoriaId,
+          fecha,
+          notas: datos.notas,
+          tipoPresupuesto: datos.tipoPresupuesto,
+          fuente: 'tercero',
+          depositoTerceroId: datos.depositoTerceroId,
+        },
+        include: { categoria: true, ahorroLugar: true, depositoTercero: true, devoluciones: true },
+      });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
 
   return prisma.gastoVariable.create({
@@ -132,10 +212,11 @@ export async function crearPagoTarjeta(datos: {
   depositoTerceroId?: number | null;
   compraTarjetaId?: number | null;
 }) {
-  const fecha = datos.fecha ?? new Date();
+  const fecha = datos.fecha ?? hoyMexico();
 
   if (datos.fuente === 'ahorro' && datos.ahorroLugarId) {
     return prisma.$transaction(async (tx) => {
+      await validarCompraDeTarjeta(tx, datos.compraTarjetaId, datos.tarjetaId);
       const movimiento = await tx.movimientoAhorro.create({
         data: {
           ahorroId: datos.ahorroLugarId!,
@@ -146,10 +227,14 @@ export async function crearPagoTarjeta(datos: {
           origen: 'pago_tarjeta',
         },
       });
-      await tx.ahorroLugar.update({
-        where: { id: datos.ahorroLugarId! },
+      const saldoCambio = await tx.ahorroLugar.updateMany({
+        where: { id: datos.ahorroLugarId!, saldoActual: { gte: datos.cantidad } },
         data: { saldoActual: { decrement: datos.cantidad } },
       });
+      const saldo = await tx.ahorroLugar.findUnique({ where: { id: datos.ahorroLugarId! }, select: { saldoActual: true } });
+      if (!saldoCambio.count || !saldo || saldo.saldoActual < -0.000001) {
+        throw new FondosInsuficientesError('El saldo de ahorro no alcanza para este pago');
+      }
       return tx.pagoTarjeta.create({
         data: {
           tarjetaId: datos.tarjetaId,
@@ -166,17 +251,39 @@ export async function crearPagoTarjeta(datos: {
     });
   }
 
-  return prisma.pagoTarjeta.create({
-    data: {
-      tarjetaId: datos.tarjetaId,
-      cantidad: datos.cantidad,
-      concepto: datos.concepto || null,
-      fecha,
-      fuente: datos.fuente,
-      depositoTerceroId: datos.fuente === 'tercero' ? datos.depositoTerceroId : null,
-      compraTarjetaId: datos.compraTarjetaId,
-    },
-    include: { tarjeta: true, ahorroLugar: true, depositoTercero: true },
+  if (datos.fuente === 'tercero' && datos.depositoTerceroId) {
+    return prisma.$transaction(async (tx) => {
+      await validarSaldoTercero(tx, datos.depositoTerceroId!, datos.cantidad);
+      await validarCompraDeTarjeta(tx, datos.compraTarjetaId, datos.tarjetaId);
+      return tx.pagoTarjeta.create({
+        data: {
+          tarjetaId: datos.tarjetaId,
+          cantidad: datos.cantidad,
+          concepto: datos.concepto || null,
+          fecha,
+          fuente: 'tercero',
+          depositoTerceroId: datos.depositoTerceroId,
+          compraTarjetaId: datos.compraTarjetaId,
+        },
+        include: { tarjeta: true, ahorroLugar: true, depositoTercero: true },
+      });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }
+
+  return prisma.$transaction(async (tx) => {
+    await validarCompraDeTarjeta(tx, datos.compraTarjetaId, datos.tarjetaId);
+    return tx.pagoTarjeta.create({
+      data: {
+        tarjetaId: datos.tarjetaId,
+        cantidad: datos.cantidad,
+        concepto: datos.concepto || null,
+        fecha,
+        fuente: datos.fuente,
+        depositoTerceroId: datos.fuente === 'tercero' ? datos.depositoTerceroId : null,
+        compraTarjetaId: datos.compraTarjetaId,
+      },
+      include: { tarjeta: true, ahorroLugar: true, depositoTercero: true },
+    });
   });
 }
 
@@ -316,9 +423,15 @@ export async function deshacerGastoDomiciliado(id: number, fecha: Date): Promise
     return;
   }
 
-  await prisma.compraTarjeta.deleteMany({
-    where: { gastoDomiciliadoOrigenId: id, fecha },
-  });
+  await prisma.$transaction(async (tx) => {
+    const compra = await tx.compraTarjeta.findFirst({
+      where: { gastoDomiciliadoOrigenId: id, fecha },
+      include: { _count: { select: { pagos: true } } },
+    });
+    if (!compra) return;
+    if (compra._count.pagos > 0) throw new CompraConPagosError();
+    await tx.compraTarjeta.delete({ where: { id: compra.id } });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
 /**
@@ -388,12 +501,12 @@ export async function deshacerAhorroDomiciliado(id: number, fecha: Date): Promis
 // --- Depósitos de terceros ---
 
 type DepositoConRelaciones = Prisma.DepositoTerceroGetPayload<{
-  include: { gastosVariables: true; pagosTarjeta: true };
+  include: { gastosVariables: { include: { devoluciones: true } }; pagosTarjeta: true };
 }>;
 
 /** Suma lo ya usado de un depósito (gastos + pagos de tarjeta vinculados). */
 export function montoUtilizadoDeposito(deposito: DepositoConRelaciones): number {
-  const gastos = deposito.gastosVariables.reduce((s, g) => s + g.cantidad, 0);
+  const gastos = deposito.gastosVariables.reduce((s, g) => s + gastoNeto(g.cantidad, g.devoluciones), 0);
   const pagos = deposito.pagosTarjeta.reduce((s, p) => s + p.cantidad, 0);
   return gastos + pagos;
 }

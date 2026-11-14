@@ -1,5 +1,6 @@
 // src/app/api/tarjetas/route.ts
 import { prisma } from '@/lib/prisma';
+import { leerSaldoNoNegativo, leerEnteroPositivo } from '@/lib/validacion';
 
 export async function GET() {
   try {
@@ -17,16 +18,18 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { nombre, diaCorte, pagoQuincenal, notas } = body;
+    const dia = leerEnteroPositivo(diaCorte);
+    const pago = pagoQuincenal == null || pagoQuincenal === '' ? null : leerSaldoNoNegativo(pagoQuincenal);
 
-    if (!nombre || !diaCorte) {
+    if (!nombre || !dia || dia > 31 || (pagoQuincenal != null && pagoQuincenal !== '' && pago === null)) {
       return Response.json({ error: 'Faltan campos requeridos' }, { status: 400 });
     }
 
     const tarjeta = await prisma.tarjetaCredito.create({
       data: {
         nombre,
-        diaCorte: parseInt(diaCorte),
-        pagoQuincenal: pagoQuincenal ? parseFloat(pagoQuincenal) : null,
+        diaCorte: dia,
+        pagoQuincenal: pago,
         notas,
       },
     });

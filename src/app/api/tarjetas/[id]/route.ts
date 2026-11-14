@@ -1,5 +1,6 @@
 // src/app/api/tarjetas/[id]/route.ts
 import { prisma } from '@/lib/prisma';
+import { leerSaldoNoNegativo, leerEnteroPositivo } from '@/lib/validacion';
 
 export async function PUT(
   request: Request,
@@ -9,13 +10,18 @@ export async function PUT(
     const { id } = await params;
     const body = await request.json();
     const { nombre, diaCorte, pagoQuincenal, activa, notas } = body;
+    const dia = diaCorte !== undefined ? leerEnteroPositivo(diaCorte) : undefined;
+    const pago = pagoQuincenal !== undefined ? (pagoQuincenal === null || pagoQuincenal === '' ? null : leerSaldoNoNegativo(pagoQuincenal)) : undefined;
+    if ((diaCorte !== undefined && (!dia || dia > 31)) || (pagoQuincenal !== undefined && pagoQuincenal !== null && pagoQuincenal !== '' && pago === null)) {
+      return Response.json({ error: 'Día de corte o pago quincenal inválido' }, { status: 400 });
+    }
 
     const tarjeta = await prisma.tarjetaCredito.update({
       where: { id: parseInt(id) },
       data: {
         ...(nombre && { nombre }),
-        ...(diaCorte !== undefined && { diaCorte: parseInt(diaCorte) }),
-        ...(pagoQuincenal !== undefined && { pagoQuincenal: pagoQuincenal ? parseFloat(pagoQuincenal) : null }),
+        ...(dia !== undefined && { diaCorte: dia }),
+        ...(pago !== undefined && { pagoQuincenal: pago }),
         ...(activa !== undefined && { activa }),
         ...(notas !== undefined && { notas }),
       },

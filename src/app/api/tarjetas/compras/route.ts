@@ -1,5 +1,8 @@
 // src/app/api/tarjetas/compras/route.ts
 import { prisma } from '@/lib/prisma';
+import { leerEnteroPositivo, leerFecha, leerMontoPositivo } from '@/lib/validacion';
+import { calcularMontoMensualMSI } from '@/utils/finanzas';
+import { hoyMexico } from '@/utils/calculos';
 
 export async function GET() {
   try {
@@ -19,24 +22,25 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { nombre, cantidad, fecha, tarjetaId, categoriaId, notas, tipoPresupuesto, numeroMeses } = body;
 
-    if (!nombre || !cantidad || !tarjetaId) {
+    const cantidadFinal = leerMontoPositivo(cantidad);
+    const tarjetaIdFinal = leerEnteroPositivo(tarjetaId);
+    const numeroMesesFinal = numeroMeses == null || numeroMeses === '' ? null : leerEnteroPositivo(numeroMeses);
+    const fechaFinal = fecha ? leerFecha(fecha) : hoyMexico();
+    if (!nombre || !cantidadFinal || !tarjetaIdFinal || !fechaFinal || (numeroMeses != null && numeroMeses !== '' && !numeroMesesFinal)) {
       return Response.json({ error: 'Faltan campos requeridos' }, { status: 400 });
     }
-
-    const cantidadFinal = parseFloat(cantidad);
-    const numeroMesesFinal = numeroMeses ? parseInt(numeroMeses) : null;
 
     const compra = await prisma.compraTarjeta.create({
       data: {
         nombre,
         cantidad: cantidadFinal,
-        fecha: fecha ? new Date(fecha) : new Date(),
-        tarjetaId: parseInt(tarjetaId),
+        fecha: fechaFinal,
+        tarjetaId: tarjetaIdFinal,
         categoriaId: categoriaId ? parseInt(categoriaId) : null,
         notas,
         tipoPresupuesto: tipoPresupuesto || null,
         numeroMeses: numeroMesesFinal,
-        montoMensual: numeroMesesFinal ? cantidadFinal / numeroMesesFinal : null,
+        montoMensual: numeroMesesFinal ? calcularMontoMensualMSI(cantidadFinal, numeroMesesFinal) : null,
       },
       include: { categoria: true, tarjeta: true },
     });

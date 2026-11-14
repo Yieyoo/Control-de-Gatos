@@ -32,7 +32,7 @@ export interface IGastoDomiciliado {
   id: number;
   nombre: string;
   cantidad: number;
-  fechaCobro?: number;
+  fechaCobro?: number | null;
   frecuencia: 'mensual' | 'quincenal' | 'semanal';
   diasSemana?: string;
   categoriaId: number;
@@ -318,6 +318,11 @@ export interface IDashboardResumen {
   ahorrosLugares: IAhorroLugar[];
   deudaTarjetas: IDeudaTarjeta[];
   deudaTarjetasTotal: number;
+  detalleTarjetas: {
+    compras: ICompraTarjeta[];
+    pagos: IPagoTarjeta[];
+    cargosDomiciliados: IGastoDomiciliado[];
+  };
   /** Suma de "pendiente" de todos los depósitos de terceros (regla 12: "dinero de terceros"). */
   dineroTerceroPendiente: number;
   gastosPorCategoria: IGastoPorCategoria[];

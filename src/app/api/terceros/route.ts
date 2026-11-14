@@ -2,11 +2,13 @@
 import { prisma } from '@/lib/prisma';
 import { montoUtilizadoDeposito } from '@/lib/finanzas';
 import { calcularEstadoDeposito } from '@/utils/finanzas';
+import { leerFecha, leerMontoPositivo } from '@/lib/validacion';
+import { hoyMexico } from '@/utils/calculos';
 
 export async function GET() {
   try {
     const depositos = await prisma.depositoTercero.findMany({
-      include: { gastosVariables: true, pagosTarjeta: true },
+      include: { gastosVariables: { include: { devoluciones: true } }, pagosTarjeta: true },
       orderBy: { fecha: 'desc' },
     });
 
@@ -43,17 +45,19 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { persona, cantidad, concepto, fecha, pagoRelacionado, notas } = body;
+    const monto = leerMontoPositivo(cantidad);
+    const fechaFinal = fecha ? leerFecha(fecha) : hoyMexico();
 
-    if (!persona || !cantidad || !concepto) {
+    if (!persona || !monto || !concepto || !fechaFinal) {
       return Response.json({ error: 'Faltan campos requeridos' }, { status: 400 });
     }
 
     const deposito = await prisma.depositoTercero.create({
       data: {
         persona,
-        cantidad: parseFloat(cantidad),
+        cantidad: monto,
         concepto,
-        fecha: fecha ? new Date(fecha) : new Date(),
+        fecha: fechaFinal,
         pagoRelacionado: pagoRelacionado || null,
         notas: notas || null,
       },

@@ -1,6 +1,6 @@
 'use client';
 
-import { formatearMoneda } from '@/utils/calculos';
+import { formatearMoneda, fechaUTC, hoyMexico } from '@/utils/calculos';
 import type { IProximoMovimiento } from '@/types';
 import { PiggyBank, Repeat } from 'lucide-react';
 
@@ -19,13 +19,13 @@ const etiquetaFrecuencia: Record<string, string> = {
 // así no se recorre un día al convertir a la hora del navegador.
 function formatearFecha(fechaISO: string): string {
   const fecha = new Date(fechaISO);
-  const hoy = new Date();
-  const mañana = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + 1);
+  const hoy = hoyMexico();
+  const mañana = fechaUTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), hoy.getUTCDate() + 1);
 
   const mismoDiaUTC = (fechaUTC: Date, fechaLocal: Date) =>
-    fechaUTC.getUTCFullYear() === fechaLocal.getFullYear() &&
-    fechaUTC.getUTCMonth() === fechaLocal.getMonth() &&
-    fechaUTC.getUTCDate() === fechaLocal.getDate();
+    fechaUTC.getUTCFullYear() === fechaLocal.getUTCFullYear() &&
+    fechaUTC.getUTCMonth() === fechaLocal.getUTCMonth() &&
+    fechaUTC.getUTCDate() === fechaLocal.getUTCDate();
 
   if (mismoDiaUTC(fecha, hoy)) return 'Hoy';
   if (mismoDiaUTC(fecha, mañana)) return 'Mañana';

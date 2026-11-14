@@ -1,6 +1,8 @@
 // src/app/api/ingresos/route.ts
 import { prisma } from '@/lib/prisma';
 import type { Ingreso } from '@prisma/client';
+import { leerFecha, leerMontoPositivo } from '@/lib/validacion';
+import { hoyMexico } from '@/utils/calculos';
 
 export async function GET() {
   try {
@@ -19,7 +21,9 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { nombre, cantidad, frecuencia, activo = true, notas, fecha } = body;
 
-    if (!nombre || !cantidad || !frecuencia) {
+    const monto = leerMontoPositivo(cantidad);
+    const fechaInicio = fecha ? leerFecha(`${fecha}T12:00:00Z`) : hoyMexico();
+    if (!nombre || !monto || !['mensual', 'quincenal', 'unico'].includes(frecuencia) || !fechaInicio) {
       return Response.json(
         { error: 'Faltan campos requeridos' },
         { status: 400 }
@@ -29,14 +33,14 @@ export async function POST(request: Request) {
     const ingreso = await prisma.ingreso.create({
       data: {
         nombre,
-        cantidad: parseFloat(cantidad),
+        cantidad: monto,
         frecuencia,
         activo,
         notas,
         // "fecha" (YYYY-MM-DD) permite registrar un dinero extra que llegó
         // otro día (ej. el aguinaldo de ayer). Se guarda a mediodía UTC para
         // que la zona horaria no lo corra al día anterior.
-        fechaInicio: fecha ? new Date(`${fecha}T12:00:00Z`) : new Date(),
+        fechaInicio,
       },
     });
 

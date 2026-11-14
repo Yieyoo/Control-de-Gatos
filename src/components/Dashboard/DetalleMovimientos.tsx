@@ -46,10 +46,14 @@ export function DetalleMovimientos({ etiqueta, movimientos, onActualizar }: Deta
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fecha: m.fecha }),
       });
-      if (!resp.ok) throw new Error('Error al actualizar');
+      if (!resp.ok) {
+        const datos = await resp.json().catch(() => null);
+        throw new Error(datos?.error || 'Error al actualizar');
+      }
       onActualizar();
     } catch (err) {
       console.error(err);
+      window.alert(err instanceof Error ? err.message : 'Error al actualizar el movimiento');
     } finally {
       setConfirmando(null);
     }

@@ -1,18 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   formatearMoneda,
   formatearDiaMes,
   hoyMexico,
-  periodoQuincenaActual,
-  periodoQuincenaSiguiente,
   rangoMesActual,
   ocurrenciasDeGastoEnRangos,
   ocurrenciasDesdeCreacion,
-  type RangoFechas,
 } from '@/utils/calculos';
-import type { IDashboardResumen, IResumenPeriodo, ICompraTarjeta, IPagoTarjeta, IGastoDomiciliado, IMovimientoPeriodo } from '@/types';
+import type { IDashboardResumen, IResumenPeriodo, IMovimientoPeriodo } from '@/types';
+import { calcularMontoMensualMSI, gastoNeto } from '@/utils/finanzas';
 import {
   CreditCard,
   ChevronUp,
@@ -42,7 +40,6 @@ interface ResumenFinancieroProps {
 
 const PIN_AHORRO = '1296';
 const CORTE_1 = 10;
-const CORTE_2 = 25;
 
 interface CargoDomiciliadoResumen {
   nombre: string;
@@ -53,33 +50,15 @@ interface CargoDomiciliadoResumen {
 
 function DeudaTarjetasExpandible({
   tarjetas,
+  tarjetasDetalle,
   vista,
 }: {
   tarjetas: IDashboardResumen['deudaTarjetas'];
+  tarjetasDetalle: IDashboardResumen['detalleTarjetas'];
   vista: Vista;
 }) {
-  const [cargado, setCargado] = useState(false);
   const [expandido, setExpandido] = useState(false);
-  const [compras, setCompras] = useState<ICompraTarjeta[]>([]);
-  const [pagos, setPagos] = useState<IPagoTarjeta[]>([]);
-  const [gastosDomiciliados, setGastosDomiciliados] = useState<IGastoDomiciliado[]>([]);
-
-  // Se carga siempre (no solo al expandir) porque el total de arriba también
-  // depende de la quincena que se esté viendo -- necesita los cargos
-  // domiciliados de una vez para calcularlo bien, esté o no expandido.
-  useEffect(() => {
-    if (cargado) return;
-    Promise.all([
-      fetch('/api/tarjetas/compras').then((r) => (r.ok ? r.json() : [])),
-      fetch('/api/tarjetas/pagos').then((r) => (r.ok ? r.json() : [])),
-      fetch('/api/gastos/domiciliados').then((r) => (r.ok ? r.json() : [])),
-    ]).then(([c, p, g]) => {
-      setCompras(c);
-      setPagos(p);
-      setGastosDomiciliados(g);
-      setCargado(true);
-    });
-  }, [cargado]);
+  const { compras, pagos, cargosDomiciliados: gastosDomiciliados } = tarjetasDetalle;
 
   if (tarjetas.length === 0) return null;
 
@@ -87,18 +66,9 @@ function DeudaTarjetasExpandible({
   // En "Próxima" solo interesa lo que falta pagar (rojo); en "Actual" y "Mes"
   // se ve el panorama completo (lo pagado en gris + lo pendiente en rojo).
   const soloPendientes = vista === 'quincena2';
-  // Los cargos domiciliados de tarjeta (Claude, Plan Telcel, etc.) se cuentan
-  // según la quincena/mes que se esté viendo, no según el ciclo de corte de
-  // la tarjeta -- así uno que cobra el día 28 solo suma a la deuda (y aparece
-  // en la lista) en el periodo donde realmente cae, no antes. "Mes" usa el
-  // calendario completo (1 al último día), igual que Dinero disponible/real
-  // y Gastos fijos de esa misma tarjeta -- no la suma de las dos quincenas,
-  // que se sale del mes de calendario.
-  const periodoActual = periodoQuincenaActual(hoy, CORTE_1, CORTE_2);
-  const periodoProximo = periodoQuincenaSiguiente(periodoActual, CORTE_1, CORTE_2);
+  // El resumen de tarjeta muestra las compras y los cargos domiciliados del
+  // mes de calendario actual, igual que Gastos fijos de esa misma tarjeta.
   const rangoMes = rangoMesActual(hoy);
-  const rangosCargos: RangoFechas[] =
-    vista === 'quincena1' ? [periodoActual] : vista === 'quincena2' ? [periodoProximo] : [rangoMes];
 
   // Ocurrencias de cargos domiciliados que ya tienen una CompraTarjeta real
   // ligada (confirmadas con monto variable, ej. gasolina) -- ver el filtro
@@ -109,22 +79,38 @@ function DeudaTarjetasExpandible({
       .map((c) => `${c.gastoDomiciliadoOrigenId}|${new Date(c.fecha).getTime()}`)
   );
 
-  // Comprado/pagado siempre cuentan todo el historial (las compras y los pagos
-  // no dependen de qué quincena se esté viendo); solo los cargos domiciliados
-  // pendientes se acotan a `rangosCargos`. Se calcula una sola vez por tarjeta
-  // y de ahí sale tanto "debes $X" (arriba y en cada tarjeta) como la lista.
-  const detalleTarjetas = cargado
-    ? tarjetas.map((t) => {
+  const inicioMesActual = rangoMes.inicio;
+  const mesActual = inicioMesActual.getUTCFullYear() * 12 + inicioMesActual.getUTCMonth();
+  const enMesActual = (fecha: string) => {
+    const f = new Date(fecha);
+    return f.getUTCFullYear() === inicioMesActual.getUTCFullYear() && f.getUTCMonth() === inicioMesActual.getUTCMonth();
+  };
+
+  // El desglose de compras y cargos domiciliados corresponde siempre al mes
+  // calendario actual, independientemente de la vista de quincena seleccionada.
+  const detalleTarjetas = tarjetas.map((t) => {
         const comprasBase = compras
-          .filter((c) => c.tarjetaId === t.id)
+          .filter((c) => {
+            if (c.tarjetaId !== t.id) return false;
+            if (c.numeroMeses && c.numeroMeses > 1) {
+              const fechaCompra = new Date(c.fecha);
+              const mesCompra = fechaCompra.getUTCFullYear() * 12 + fechaCompra.getUTCMonth();
+              return mesActual >= mesCompra && mesActual < mesCompra + c.numeroMeses;
+            }
+            return enMesActual(c.fecha);
+          })
           .map((c) => {
+            const netoCompra = gastoNeto(c.cantidad, c.devoluciones ?? []);
+            // En la vista mensual, un MSI representa solo la mensualidad de
+            // este mes. Los pagos de otras mensualidades no reducen esta cuota.
+            const esMSI = !!c.numeroMeses && c.numeroMeses > 1;
+            const neto = esMSI ? calcularMontoMensualMSI(netoCompra, c.numeroMeses!) : netoCompra;
             const montoPagado = pagos
-              .filter((p) => p.compraTarjetaId === c.id)
+              .filter((p) => p.compraTarjetaId === c.id && (!esMSI || enMesActual(p.fecha)))
               .reduce((s, p) => s + p.cantidad, 0);
-            const neto = c.cantidad - (c.devoluciones ?? []).reduce((s, d) => s + d.cantidad, 0);
             const pagada = montoPagado >= neto - 0.01;
             const saldoPendiente = Math.max(0, neto - montoPagado);
-            return { compra: c, montoPagado, neto, pagada, saldoPendiente };
+            return { compra: c, montoPagado, neto, pagada, saldoPendiente, esMSI };
           });
         const cargosBase: CargoDomiciliadoResumen[] = gastosDomiciliados
           .filter((g) => g.activo && g.tarjetaId === t.id)
@@ -136,7 +122,7 @@ function DeudaTarjetasExpandible({
             // esto, la misma ocurrencia se contaba dos veces: una vez como
             // compra real y otra como estimado todavía pendiente.
             const ocurrencias = ocurrenciasDesdeCreacion(
-              ocurrenciasDeGastoEnRangos(g, rangosCargos, CORTE_1),
+              ocurrenciasDeGastoEnRangos(g, [rangoMes], CORTE_1),
               g.fechaCreacion
             ).filter((oc) => !comprasConfirmadasKeys.has(`${g.id}|${oc.fecha.getTime()}`));
             const fechaMasReciente = ocurrencias.reduce<Date | null>(
@@ -154,9 +140,11 @@ function DeudaTarjetasExpandible({
           .filter((c) => c.fecha !== null);
 
         const comprado = comprasBase.reduce((s, c) => s + c.neto, 0);
-        const pagado = pagos.filter((p) => p.tarjetaId === t.id).reduce((s, p) => s + p.cantidad, 0);
+        const pagado = comprasBase.reduce((s, c) => s + Math.min(c.neto, c.montoPagado), 0) + pagos
+          .filter((p) => p.tarjetaId === t.id && !p.compraTarjetaId && enMesActual(p.fecha))
+          .reduce((s, p) => s + p.cantidad, 0);
         const cargosPendientes = cargosBase.filter((c) => !c.pagadoAdelantado).reduce((s, c) => s + c.monto, 0);
-        const debeVista = comprado - pagado + cargosPendientes;
+        const debeVista = Math.max(0, comprado - pagado) + cargosPendientes;
 
         return {
           tarjeta: t,
@@ -164,15 +152,9 @@ function DeudaTarjetasExpandible({
           comprasTarjeta: comprasBase.filter((c) => !soloPendientes || !c.pagada),
           cargosDomiciliados: cargosBase.filter((c) => !soloPendientes || !c.pagadoAdelantado),
         };
-      })
-    : null;
+      });
 
-  // Mientras carga, se usa el total del servidor (ciclo de corte de la
-  // tarjeta) como aproximación; en cuanto carga, se reemplaza por el de la
-  // quincena que se está viendo.
-  const total = detalleTarjetas
-    ? detalleTarjetas.reduce((s, d) => s + d.debeVista, 0)
-    : tarjetas.reduce((s, t) => s + t.debe, 0);
+  const total = detalleTarjetas.reduce((s, d) => s + d.debeVista, 0);
 
   return (
     <div className="mt-4 pt-3 border-t border-gray-100">
@@ -196,10 +178,7 @@ function DeudaTarjetasExpandible({
 
       {expandido && (
         <div className="mt-3 space-y-4">
-          {!detalleTarjetas ? (
-            <p className="text-xs text-gray-400">Cargando...</p>
-          ) : (
-            detalleTarjetas.map(({ tarjeta: t, debeVista, comprasTarjeta, cargosDomiciliados }) => {
+          {detalleTarjetas.map(({ tarjeta: t, debeVista, comprasTarjeta, cargosDomiciliados }) => {
               if (comprasTarjeta.length === 0 && cargosDomiciliados.length === 0) {
                 return null;
               }
@@ -210,7 +189,7 @@ function DeudaTarjetasExpandible({
                     {t.nombre} · debes {formatearMoneda(debeVista)}
                   </p>
                   <ul className="space-y-1">
-                    {comprasTarjeta.map(({ compra: c, montoPagado, neto, pagada, saldoPendiente }) => (
+                    {comprasTarjeta.map(({ compra: c, montoPagado, neto, pagada, saldoPendiente, esMSI }) => (
                       <li key={`compra-${c.id}`} className="flex items-center justify-between gap-2 text-sm">
                         <span
                           className={`min-w-0 flex-1 truncate ${
@@ -218,6 +197,11 @@ function DeudaTarjetasExpandible({
                           }`}
                         >
                           {c.nombre}
+                          {esMSI && (
+                            <span className="text-[10px] text-gray-500 ml-1">
+                              (mensualidad {formatearMoneda(neto)} de {c.numeroMeses} MSI)
+                            </span>
+                          )}
                           {!pagada && montoPagado > 0 && (
                             <span className="text-[10px] text-green-600 ml-1">
                               (pagado {formatearMoneda(montoPagado)})
@@ -253,8 +237,7 @@ function DeudaTarjetasExpandible({
                   </ul>
                 </div>
               );
-            })
-          )}
+            })}
           <p className="text-[11px] text-gray-400">
             {soloPendientes
               ? 'En rojo lo que falta pagar. Cambia a "Actual" o "Mes" para ver también lo ya pagado.'
@@ -661,7 +644,11 @@ export function ResumenFinanciero({ resumen, vista, onCambiarVista, onActualizar
         </div>
       </div>
 
-      <DeudaTarjetasExpandible tarjetas={resumen.deudaTarjetas} vista={vista} />
+      <DeudaTarjetasExpandible
+        tarjetas={resumen.deudaTarjetas}
+        tarjetasDetalle={resumen.detalleTarjetas}
+        vista={vista}
+      />
       <GastosDomiciliados items={gastosGasolinaItems} onActualizar={onActualizar} />
 
       {tileAbierto && (

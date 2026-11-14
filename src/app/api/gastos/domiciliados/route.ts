@@ -1,5 +1,6 @@
 // src/app/api/gastos/domiciliados/route.ts
 import { prisma } from '@/lib/prisma';
+import { leerEnteroPositivo, leerMontoPositivo, validarDiasSemana } from '@/lib/validacion';
 
 export async function GET() {
   try {
@@ -18,30 +19,37 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { nombre, cantidad, categoriaId, fechaCobro, frecuencia, diasSemana, cuentaPago, tarjetaId, tipoPresupuesto, notas } = body;
+    const monto = leerMontoPositivo(cantidad);
+    const categoriaIdFinal = leerEnteroPositivo(categoriaId);
+    const tarjetaIdFinal = tarjetaId ? leerEnteroPositivo(tarjetaId) : null;
+    const fechaCobroFinal = fechaCobro ? Number(fechaCobro) : null;
 
-    if (!nombre || !cantidad || !categoriaId || !frecuencia || !cuentaPago) {
+    if (!nombre || !monto || !categoriaIdFinal || !['mensual', 'quincenal', 'semanal'].includes(frecuencia) || !cuentaPago || (tarjetaId && !tarjetaIdFinal)) {
       return Response.json(
         { error: 'Faltan campos requeridos' },
         { status: 400 }
       );
     }
-    if (frecuencia === 'semanal' && !diasSemana) {
+    if (frecuencia === 'semanal' && !validarDiasSemana(diasSemana)) {
       return Response.json({ error: 'Selecciona al menos un día de la semana' }, { status: 400 });
     }
     if (frecuencia !== 'semanal' && !fechaCobro) {
       return Response.json({ error: 'Falta el día de cobro' }, { status: 400 });
     }
+    if (frecuencia !== 'semanal' && (!Number.isInteger(fechaCobroFinal) || fechaCobroFinal! < 1 || fechaCobroFinal! > 31)) {
+      return Response.json({ error: 'El día de cobro debe estar entre 1 y 31' }, { status: 400 });
+    }
 
     const gasto = await prisma.gastoDomiciliado.create({
       data: {
         nombre,
-        cantidad: parseFloat(cantidad),
-        categoriaId: parseInt(categoriaId),
-        fechaCobro: frecuencia === 'semanal' ? null : parseInt(fechaCobro),
+        cantidad: monto,
+        categoriaId: categoriaIdFinal,
+        fechaCobro: frecuencia === 'semanal' ? null : fechaCobroFinal,
         frecuencia,
         diasSemana: frecuencia === 'semanal' ? diasSemana : null,
         cuentaPago,
-        tarjetaId: tarjetaId ? parseInt(tarjetaId) : null,
+        tarjetaId: tarjetaIdFinal,
         tipoPresupuesto: tipoPresupuesto || null,
         notas,
       },

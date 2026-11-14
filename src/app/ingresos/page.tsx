@@ -4,7 +4,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { IIngreso } from '@/types';
-import { formatearMoneda, formatearDiaMes } from '@/utils/calculos';
+import { formatearMoneda, formatearDiaMes, hoyMexico } from '@/utils/calculos';
 import { TrendingUp, Trash2, Gift } from 'lucide-react';
 
 export default function IngresosPage() {
@@ -127,15 +127,15 @@ function IngresosContenido() {
     return sum + ing.cantidad;
   }, 0);
 
-  const hoy = new Date();
+  const hoy = hoyMexico();
   const extraEsteMes = extras.reduce((sum, ing) => {
     if (!ing.activo) return sum;
     const f = new Date(ing.fechaInicio);
-    return f.getUTCMonth() === hoy.getMonth() && f.getUTCFullYear() === hoy.getFullYear() ? sum + ing.cantidad : sum;
+    return f.getUTCMonth() === hoy.getUTCMonth() && f.getUTCFullYear() === hoy.getUTCFullYear() ? sum + ing.cantidad : sum;
   }, 0);
   const extraEsteAño = extras.reduce((sum, ing) => {
     if (!ing.activo) return sum;
-    return new Date(ing.fechaInicio).getUTCFullYear() === hoy.getFullYear() ? sum + ing.cantidad : sum;
+    return new Date(ing.fechaInicio).getUTCFullYear() === hoy.getUTCFullYear() ? sum + ing.cantidad : sum;
   }, 0);
 
   return (

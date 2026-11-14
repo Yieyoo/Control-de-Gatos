@@ -15,6 +15,7 @@ import type {
 import { formatearMoneda, formatearDiaMes } from '@/utils/calculos';
 import { SelectorDiasSemana } from '@/components/SelectorDiasSemana';
 import { Receipt, Pencil, Trash2, Repeat, Undo2, X } from 'lucide-react';
+import { gastoNeto } from '@/utils/finanzas';
 
 const ETIQUETA_FUENTE: Record<IFuenteDinero, string> = {
   disponible: 'Disponible',
@@ -344,7 +345,10 @@ function GastosContenido() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...formDevolucion, gastoVariableId }),
       });
-      if (!resp.ok) throw new Error('Error al registrar devolución');
+      if (!resp.ok) {
+        const datos = await resp.json().catch(() => null);
+        throw new Error(datos?.error || 'Error al registrar devolución');
+      }
       setFormDevolucion({ cantidad: '', concepto: '' });
       setFormDevolucionAbierto(null);
       cargarGastos();
@@ -354,7 +358,7 @@ function GastosContenido() {
   };
 
   const netoDe = (gasto: IGastoVariable) =>
-    gasto.cantidad - (gasto.devoluciones ?? []).reduce((s, d) => s + d.cantidad, 0);
+    gastoNeto(gasto.cantidad, gasto.devoluciones ?? []);
 
   // Mismo cálculo que ya usa /tarjetas -- cuánto de cada compra sigue sin
   // pagarse, para poder ofrecerla como destino de un pago desde este formulario.
@@ -363,7 +367,7 @@ function GastosContenido() {
       const montoPagado = pagosTarjeta
         .filter((p) => p.compraTarjetaId === c.id)
         .reduce((s, p) => s + p.cantidad, 0);
-      const neto = c.cantidad - (c.devoluciones ?? []).reduce((s, d) => s + d.cantidad, 0);
+      const neto = gastoNeto(c.cantidad, c.devoluciones ?? []);
       const saldoPendiente = Math.max(0, neto - montoPagado);
       return { ...c, montoPagado, neto, saldoPendiente, pagada: saldoPendiente <= 0.01 };
     })
