@@ -21,6 +21,7 @@ import {
   cicloTarjetaAnterior,
   ocurrenciasDeGastoEnRangos,
   ocurrenciasDesdeCreacion,
+  claveFechaCalendario,
 } from '@/utils/calculos';
 import { CreditCard, Trash2, Pencil, CheckCircle2, Wallet, Undo2 } from 'lucide-react';
 import { calcularDeudaTarjeta, gastoNeto, calcularMontoMensualMSI } from '@/utils/finanzas';
@@ -468,7 +469,7 @@ function TarjetasContenido() {
         const comprasConfirmadasKeys = new Set(
           compras
             .filter((c) => c.gastoDomiciliadoOrigenId != null)
-            .map((c) => `${c.gastoDomiciliadoOrigenId}|${new Date(c.fecha).getTime()}`)
+            .map((c) => `${c.gastoDomiciliadoOrigenId}|${claveFechaCalendario(c.fecha)}`)
         );
 
         const cargosDomiciliadosTarjeta = gastosDomiciliados
@@ -477,7 +478,7 @@ function TarjetasContenido() {
             const ocurrencias = ocurrenciasDesdeCreacion(
               ocurrenciasDeGastoEnRangos(g, [cicloActual], CORTE_1),
               g.fechaCreacion
-            ).filter((oc) => !comprasConfirmadasKeys.has(`${g.id}|${oc.fecha.getTime()}`));
+            ).filter((oc) => !comprasConfirmadasKeys.has(`${g.id}|${claveFechaCalendario(oc.fecha)}`));
             const fechaMasReciente = ocurrencias.reduce<Date | null>(
               (max, oc) => (!max || oc.fecha > max ? oc.fecha : max),
               null

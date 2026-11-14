@@ -9,6 +9,7 @@ import {
   calcularProximaFechaSemanal,
   rangoMesActual,
   finDelDia,
+  claveFechaCalendario,
   periodoQuincenaActual,
   periodoQuincenaSiguiente,
   ocurrenciasDeGastoEnRangos,
@@ -199,7 +200,7 @@ export async function GET() {
     const cargosConCompraReal = new Set(
       comprasTarjeta
         .filter((c) => c.gastoDomiciliadoOrigenId != null)
-        .map((c) => `${c.gastoDomiciliadoOrigenId}|${new Date(c.fecha).getTime()}`)
+        .map((c) => `${c.gastoDomiciliadoOrigenId}|${claveFechaCalendario(c.fecha)}`)
     );
 
     // En el dashboard se muestra lo que corresponde pagar este mes: compras
@@ -220,11 +221,17 @@ export async function GET() {
         .reduce((sum, c) => {
           const netoCompra = neto(c);
           const esMSI = !!c.numeroMeses && c.numeroMeses > 1;
-          const mensualidad = esMSI ? calcularMontoMensualMSI(netoCompra, c.numeroMeses!) : netoCompra;
-          const pagadoDeEstaCompra = pagosTarjeta
-            .filter((p) => p.tarjetaId === t.id && p.compraTarjetaId === c.id && fechaEnRangos(p.fecha, [rangoMes]))
+          const montoMensual = esMSI ? calcularMontoMensualMSI(netoCompra, c.numeroMeses!) : netoCompra;
+          const pagosDeCompra = pagosTarjeta.filter((p) => p.tarjetaId === t.id && p.compraTarjetaId === c.id);
+          const pagadoAcumulado = pagosDeCompra.reduce((total, p) => total + p.cantidad, 0);
+          const pagadoEsteMes = pagosDeCompra
+            .filter((p) => fechaEnRangos(p.fecha, [rangoMes]))
             .reduce((total, p) => total + p.cantidad, 0);
-          return sum + Math.max(0, mensualidad - pagadoDeEstaCompra);
+          if (esMSI && pagadoAcumulado >= netoCompra - 0.01) return sum;
+          const mensualidad = esMSI
+            ? Math.min(montoMensual, Math.max(0, netoCompra - pagadoAcumulado + pagadoEsteMes))
+            : montoMensual;
+          return sum + Math.max(0, mensualidad - pagadoEsteMes);
         }, 0);
       const pagado = pagosTarjeta
         .filter((p) => p.tarjetaId === t.id && !p.compraTarjetaId && fechaEnRangos(p.fecha, [rangoMes]))
@@ -239,7 +246,7 @@ export async function GET() {
           );
           const pendientes = ocurrencias.filter(
             (oc) =>
-              !cargosConCompraReal.has(`${g.id}|${oc.fecha.getTime()}`) &&
+              !cargosConCompraReal.has(`${g.id}|${claveFechaCalendario(oc.fecha)}`) &&
               (!g.pagadoAdelantadoHasta || g.pagadoAdelantadoHasta < oc.fecha)
           );
           return sum + pendientes.reduce((s, oc) => s + oc.cantidad, 0);
@@ -263,7 +270,10 @@ export async function GET() {
       const mesCompra = fecha.getUTCFullYear() * 12 + fecha.getUTCMonth();
       return mesActualNumero >= mesCompra && mesActualNumero < mesCompra + c.numeroMeses;
     });
-    const pagosDetalleTarjetas = pagosTarjeta.filter((p) => fechaEnRangos(new Date(p.fecha), [rangoMes]));
+    const idsComprasDetalle = new Set(comprasDetalleTarjetas.map((c) => c.id));
+    const pagosDetalleTarjetas = pagosTarjeta.filter((p) =>
+      fechaEnRangos(new Date(p.fecha), [rangoMes]) || (p.compraTarjetaId != null && idsComprasDetalle.has(p.compraTarjetaId))
+    );
 
     const args = [
       ingresos,
@@ -335,7 +345,7 @@ export async function GET() {
     const comprasConfirmadasKeys = new Set(
       comprasTarjeta
         .filter((c) => c.gastoDomiciliadoOrigenId != null)
-        .map((c) => `${c.gastoDomiciliadoOrigenId}|${new Date(c.fecha).getTime()}`)
+        .map((c) => `${c.gastoDomiciliadoOrigenId}|${claveFechaCalendario(c.fecha)}`)
     );
 
     gastosFijos.forEach((g) => acumular(g.categoriaId, g.categoria, g.cantidad));
@@ -349,7 +359,7 @@ export async function GET() {
             ? ocurrenciasSemanales(parseDiasSemana(g.diasSemana), g.cantidad, [rangoMes])
             : ocurrenciasDeGastoEnRangos(g, [rangoMes], CORTE_1),
           g.fechaCreacion
-        ).filter((oc) => !comprasConfirmadasKeys.has(`${g.id}|${oc.fecha.getTime()}`));
+        ).filter((oc) => !comprasConfirmadasKeys.has(`${g.id}|${claveFechaCalendario(oc.fecha)}`));
         acumular(g.categoriaId, g.categoria, ocurrencias.reduce((sum, oc) => sum + oc.cantidad, 0));
       });
     gastosVariables.forEach((g) => {

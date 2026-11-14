@@ -6,6 +6,7 @@ import {
   formatearDiaMes,
   hoyMexico,
   rangoMesActual,
+  claveFechaCalendario,
   ocurrenciasDeGastoEnRangos,
   ocurrenciasDesdeCreacion,
 } from '@/utils/calculos';
@@ -76,7 +77,7 @@ function DeudaTarjetasExpandible({
   const comprasConfirmadasKeys = new Set(
     compras
       .filter((c) => c.gastoDomiciliadoOrigenId != null)
-      .map((c) => `${c.gastoDomiciliadoOrigenId}|${new Date(c.fecha).getTime()}`)
+      .map((c) => `${c.gastoDomiciliadoOrigenId}|${claveFechaCalendario(c.fecha)}`)
   );
 
   const inicioMesActual = rangoMes.inicio;
@@ -105,12 +106,18 @@ function DeudaTarjetasExpandible({
             // este mes. Los pagos de otras mensualidades no reducen esta cuota.
             const esMSI = !!c.numeroMeses && c.numeroMeses > 1;
             const neto = esMSI ? calcularMontoMensualMSI(netoCompra, c.numeroMeses!) : netoCompra;
-            const montoPagado = pagos
-              .filter((p) => p.compraTarjetaId === c.id && (!esMSI || enMesActual(p.fecha)))
+            const pagosDeEstaCompra = pagos.filter((p) => p.compraTarjetaId === c.id);
+            const pagadoAcumulado = pagosDeEstaCompra.reduce((s, p) => s + p.cantidad, 0);
+            const saldoTotalCompra = Math.max(0, netoCompra - pagadoAcumulado);
+            const cuotaVigente = esMSI ? Math.min(neto, saldoTotalCompra + pagosDeEstaCompra
+              .filter((p) => enMesActual(p.fecha))
+              .reduce((s, p) => s + p.cantidad, 0)) : neto;
+            const montoPagado = pagosDeEstaCompra
+              .filter((p) => !esMSI || enMesActual(p.fecha))
               .reduce((s, p) => s + p.cantidad, 0);
-            const pagada = montoPagado >= neto - 0.01;
-            const saldoPendiente = Math.max(0, neto - montoPagado);
-            return { compra: c, montoPagado, neto, pagada, saldoPendiente, esMSI };
+            const pagada = saldoTotalCompra <= 0.01 || montoPagado >= cuotaVigente - 0.01;
+            const saldoPendiente = Math.max(0, cuotaVigente - montoPagado);
+            return { compra: c, montoPagado, neto: cuotaVigente, pagada, saldoPendiente, esMSI };
           });
         const cargosBase: CargoDomiciliadoResumen[] = gastosDomiciliados
           .filter((g) => g.activo && g.tarjetaId === t.id)
@@ -124,7 +131,7 @@ function DeudaTarjetasExpandible({
             const ocurrencias = ocurrenciasDesdeCreacion(
               ocurrenciasDeGastoEnRangos(g, [rangoMes], CORTE_1),
               g.fechaCreacion
-            ).filter((oc) => !comprasConfirmadasKeys.has(`${g.id}|${oc.fecha.getTime()}`));
+            ).filter((oc) => !comprasConfirmadasKeys.has(`${g.id}|${claveFechaCalendario(oc.fecha)}`));
             const fechaMasReciente = ocurrencias.reduce<Date | null>(
               (max, oc) => (!max || oc.fecha > max ? oc.fecha : max),
               null

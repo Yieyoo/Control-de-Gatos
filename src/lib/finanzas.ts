@@ -16,6 +16,7 @@ import { Prisma } from '@prisma/client';
 import type { IPorcentajesMeta } from '@/types';
 import { gastoNeto } from '@/utils/finanzas';
 import { hoyMexico } from '@/utils/calculos';
+import { fechaUTC } from '@/utils/calculos';
 
 export type FuenteDinero = 'disponible' | 'ahorro' | 'tercero';
 
@@ -327,11 +328,20 @@ export async function eliminarPagoTarjeta(id: number) {
 export async function confirmarGastoDomiciliado(id: number, fecha: Date, montoReal?: number) {
   const gasto = await prisma.gastoDomiciliado.findUnique({ where: { id } });
   if (!gasto) return null;
+  const fechaOcurrencia = fechaUTC(fecha.getUTCFullYear(), fecha.getUTCMonth(), fecha.getUTCDate());
 
   // Si está ligado a una tarjeta (ej. gasolina que se paga con crédito), no es
   // un gasto en efectivo -- confirmar crea una compra de tarjeta real, no un
   // GastoVariable (ver confirmarCargoTarjetaDomiciliado).
-  if (gasto.tarjetaId) return confirmarCargoTarjetaDomiciliado(gasto, fecha, montoReal);
+  if (gasto.tarjetaId) return confirmarCargoTarjetaDomiciliado(gasto, fechaOcurrencia, montoReal);
+
+  const inicioDia = fechaOcurrencia;
+  const finDia = new Date(inicioDia.getTime() + 24 * 60 * 60 * 1000);
+  const yaConfirmado = await prisma.gastoVariable.findFirst({
+    where: { gastoDomiciliadoOrigenId: id, fecha: { gte: inicioDia, lt: finDia } },
+    include: { categoria: true, ahorroLugar: true, depositoTercero: true, devoluciones: true },
+  });
+  if (yaConfirmado) return yaConfirmado;
 
   try {
     return await prisma.gastoVariable.create({
@@ -339,7 +349,7 @@ export async function confirmarGastoDomiciliado(id: number, fecha: Date, montoRe
         nombre: gasto.nombre,
         cantidad: montoReal ?? gasto.cantidad,
         categoriaId: gasto.categoriaId,
-        fecha,
+        fecha: fechaOcurrencia,
         tipoPresupuesto: gasto.tipoPresupuesto,
         fuente: 'disponible',
         gastoDomiciliadoOrigenId: gasto.id,
@@ -352,7 +362,7 @@ export async function confirmarGastoDomiciliado(id: number, fecha: Date, montoRe
     // existente en vez de crear otra.
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       const existente = await prisma.gastoVariable.findFirst({
-        where: { gastoDomiciliadoOrigenId: id, fecha },
+        where: { gastoDomiciliadoOrigenId: id, fecha: { gte: inicioDia, lt: finDia } },
       });
       if (existente) return existente;
     }
@@ -388,13 +398,21 @@ async function confirmarCargoTarjetaDomiciliado(
   montoReal?: number
 ) {
   if (!gasto.tarjetaId) return null;
+  const fechaOcurrencia = fechaUTC(fecha.getUTCFullYear(), fecha.getUTCMonth(), fecha.getUTCDate());
+  const inicioDia = fechaOcurrencia;
+  const finDia = new Date(inicioDia.getTime() + 24 * 60 * 60 * 1000);
+  const yaConfirmada = await prisma.compraTarjeta.findFirst({
+    where: { gastoDomiciliadoOrigenId: gasto.id, fecha: { gte: inicioDia, lt: finDia } },
+    include: { categoria: true, devoluciones: true, tarjeta: true },
+  });
+  if (yaConfirmada) return yaConfirmada;
 
   try {
     return await prisma.compraTarjeta.create({
       data: {
         nombre: gasto.nombre,
         cantidad: montoReal ?? gasto.cantidad,
-        fecha,
+        fecha: fechaOcurrencia,
         tarjetaId: gasto.tarjetaId,
         categoriaId: gasto.categoriaId,
         tipoPresupuesto: gasto.tipoPresupuesto,
@@ -405,7 +423,7 @@ async function confirmarCargoTarjetaDomiciliado(
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       const existente = await prisma.compraTarjeta.findFirst({
-        where: { gastoDomiciliadoOrigenId: gasto.id, fecha },
+        where: { gastoDomiciliadoOrigenId: gasto.id, fecha: { gte: inicioDia, lt: finDia } },
       });
       if (existente) return existente;
     }
@@ -415,8 +433,10 @@ async function confirmarCargoTarjetaDomiciliado(
 
 /** Deshace la confirmación de una ocurrencia específica de un gasto domiciliado (en efectivo o de tarjeta). */
 export async function deshacerGastoDomiciliado(id: number, fecha: Date): Promise<void> {
+  const inicioDia = fechaUTC(fecha.getUTCFullYear(), fecha.getUTCMonth(), fecha.getUTCDate());
+  const finDia = new Date(inicioDia.getTime() + 24 * 60 * 60 * 1000);
   const gastoVariable = await prisma.gastoVariable.findFirst({
-    where: { gastoDomiciliadoOrigenId: id, fecha },
+    where: { gastoDomiciliadoOrigenId: id, fecha: { gte: inicioDia, lt: finDia } },
   });
   if (gastoVariable) {
     await prisma.gastoVariable.delete({ where: { id: gastoVariable.id } });
@@ -425,7 +445,7 @@ export async function deshacerGastoDomiciliado(id: number, fecha: Date): Promise
 
   await prisma.$transaction(async (tx) => {
     const compra = await tx.compraTarjeta.findFirst({
-      where: { gastoDomiciliadoOrigenId: id, fecha },
+      where: { gastoDomiciliadoOrigenId: id, fecha: { gte: inicioDia, lt: finDia } },
       include: { _count: { select: { pagos: true } } },
     });
     if (!compra) return;

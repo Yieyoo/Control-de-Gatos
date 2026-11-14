@@ -17,6 +17,7 @@ import {
   mesesTocados,
   diaMexico,
   calcularPorcentaje,
+  claveFechaCalendario,
   type RangoFechas,
 } from '@/utils/calculos';
 import type {
@@ -136,7 +137,7 @@ export function construirPeriodo(
   const montoRealCargoTarjeta = new Map(
     comprasTarjeta
       .filter((c) => c.gastoDomiciliadoOrigenId != null)
-      .map((c) => [`${c.gastoDomiciliadoOrigenId}|${new Date(c.fecha).getTime()}`, neto(c)])
+      .map((c) => [`${c.gastoDomiciliadoOrigenId}|${claveFechaCalendario(c.fecha)}`, neto(c)])
   );
 
   // "Pagado" de un cargo de tarjeta: primero se checa si ESA ocurrencia
@@ -149,11 +150,11 @@ export function construirPeriodo(
   // fue el bug: confirmar la ocurrencia de hoy adelantaba la fecha y con eso
   // "pagaba" también la ocurrencia anterior sin compra real de por medio.
   const estaMarcadoPagado = (g: GastoDomiciliadoConCategoria, fecha: Date) => {
-    if (montoRealCargoTarjeta.has(`${g.id}|${fecha.getTime()}`)) return true;
+    if (montoRealCargoTarjeta.has(`${g.id}|${claveFechaCalendario(fecha)}`)) return true;
     return !!(g.pagadoAdelantadoHasta && new Date(g.pagadoAdelantadoHasta) >= fecha);
   };
   const montoDeCargo = (g: GastoDomiciliadoConCategoria, fecha: Date, estimado: number) =>
-    montoRealCargoTarjeta.get(`${g.id}|${fecha.getTime()}`) ?? estimado;
+    montoRealCargoTarjeta.get(`${g.id}|${claveFechaCalendario(fecha)}`) ?? estimado;
 
   // Cada ocurrencia de un domiciliado (gasto en efectivo o ahorro) es una
   // transferencia independiente -- confirmar la de esta quincena no implica
@@ -163,10 +164,10 @@ export function construirPeriodo(
   const gastoDomiciliadoConfirmado = new Set(
     gastosVariables
       .filter((g) => g.gastoDomiciliadoOrigenId != null)
-      .map((g) => `${g.gastoDomiciliadoOrigenId}|${new Date(g.fecha).getTime()}`)
+      .map((g) => `${g.gastoDomiciliadoOrigenId}|${claveFechaCalendario(g.fecha)}`)
   );
   const estaConfirmadoGasto = (g: GastoDomiciliadoConCategoria, fecha: Date) =>
-    gastoDomiciliadoConfirmado.has(`${g.id}|${fecha.getTime()}`);
+    gastoDomiciliadoConfirmado.has(`${g.id}|${claveFechaCalendario(fecha)}`);
 
   const ahorroDomiciliadoEnviado = new Set(
     movimientosAhorro

@@ -22,6 +22,12 @@ export function fechaUTC(año: number, mes: number, dia: number): Date {
   return new Date(Date.UTC(año, mes, dia));
 }
 
+/** Clave estable para comparar ocurrencias por día aunque la hora almacenada cambie. */
+export function claveFechaCalendario(fecha: Date | string): string {
+  const d = fecha instanceof Date ? fecha : new Date(fecha);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+}
+
 /** Día del mes (1-31) que marcaba el calendario en México en el momento de esa fecha/hora. */
 export function diaMexico(fecha: Date): number {
   const ajustado = new Date(fecha.getTime() - OFFSET_MEXICO_HORAS * 60 * 60 * 1000);
