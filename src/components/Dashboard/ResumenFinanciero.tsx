@@ -153,10 +153,18 @@ function DeudaTarjetasExpandible({
         const cargosPendientes = cargosBase.filter((c) => !c.pagadoAdelantado).reduce((s, c) => s + c.monto, 0);
         const debeVista = Math.max(0, comprado - pagado) + cargosPendientes;
 
+        const comprasTarjeta = comprasBase.filter((c) => !soloPendientes || !c.pagada);
+        comprasTarjeta.sort((a, b) => {
+          if (a.pagada !== b.pagada) return a.pagada ? 1 : -1;
+          const montoA = a.pagada ? a.neto : a.saldoPendiente;
+          const montoB = b.pagada ? b.neto : b.saldoPendiente;
+          return montoB - montoA;
+        });
+
         return {
           tarjeta: t,
           debeVista,
-          comprasTarjeta: comprasBase.filter((c) => !soloPendientes || !c.pagada),
+          comprasTarjeta,
           cargosDomiciliados: cargosBase.filter((c) => !soloPendientes || !c.pagadoAdelantado),
         };
       });
