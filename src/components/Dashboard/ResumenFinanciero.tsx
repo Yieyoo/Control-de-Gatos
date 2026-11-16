@@ -49,6 +49,19 @@ interface CargoDomiciliadoResumen {
   pagadoAdelantado: boolean;
 }
 
+function apartadosMensualidad(compra: {
+  cantidad: number;
+  devoluciones?: { cantidad: number }[];
+  numeroMeses?: number;
+  apartadoQuincena1?: number | null;
+  apartadoQuincena2?: number | null;
+}) {
+  const mensualidad = calcularMontoMensualMSI(gastoNeto(compra.cantidad, compra.devoluciones ?? []), compra.numeroMeses ?? 1);
+  const quincena1 = compra.apartadoQuincena1 ?? Math.round((mensualidad / 2) * 100) / 100;
+  const quincena2 = compra.apartadoQuincena2 ?? Math.round((mensualidad - quincena1) * 100) / 100;
+  return { quincena1, quincena2 };
+}
+
 function DeudaTarjetasExpandible({
   tarjetas,
   tarjetasDetalle,
@@ -215,6 +228,10 @@ function DeudaTarjetasExpandible({
                           {esMSI && (
                             <span className="text-[10px] text-gray-500 ml-1">
                               (mensualidad {formatearMoneda(neto)} de {c.numeroMeses} MSI)
+                              {(() => {
+                                const apartado = apartadosMensualidad(c);
+                                return ` · Q1 ${formatearMoneda(apartado.quincena1)} / Q2 ${formatearMoneda(apartado.quincena2)}`;
+                              })()}
                             </span>
                           )}
                           {!pagada && montoPagado > 0 && (
@@ -269,8 +286,8 @@ function DeudaTarjetasExpandible({
  * gasolina) que varían de monto cada vez -- se quedan siempre en la lista
  * (no desaparecen al confirmarlos, solo cambian a gris) para llevar el
  * control de todos, pendientes y ya pagados. Un lápiz edita el monto real
- * antes de confirmar; la palomita confirma directo con el estimado, o
- * deshace la confirmación si ya estaba marcado.
+ * antes de confirmar; la palomita confirma con el estimado. En gasolina de
+ * tarjeta también registra el pago desde disponible.
  */
 function GastosDomiciliados({
   items,
@@ -294,7 +311,7 @@ function GastosDomiciliados({
       const resp = await fetch(`/api/gastos/domiciliados/${m.gastoDomiciliadoId}/confirmar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fecha: m.fecha, monto: montoReal }),
+        body: JSON.stringify({ fecha: m.fecha, monto: montoReal, pagarDesdeDisponible: !!m.credito }),
       });
       if (!resp.ok) throw new Error('Error al confirmar');
       setEditando(null);
@@ -365,10 +382,21 @@ function GastosDomiciliados({
                   checked={m.pagado}
                   disabled={enviando === clave}
                   onChange={() => (m.pagado ? deshacer(m) : confirmar(m))}
-                  title={m.pagado ? 'Ya pagado -- destildar para deshacer' : 'Ya le puse -- confirmar con el estimado'}
+                  title={m.pagado
+                    ? m.credito
+                      ? 'Deshacer confirmación y pago; devolver el cargo al pendiente'
+                      : 'Ya cobrado -- destildar para deshacer'
+                    : m.credito
+                      ? 'Confirmar el monto y pagarlo desde disponible'
+                      : 'Confirmar que se cobró con el estimado'}
                   className="w-4 h-4 flex-shrink-0"
                 />
               </div>
+              {m.credito && (
+                <p className="pl-1 text-[10px] text-blue-700">
+                  {m.pagado ? 'Pagado desde disponible' : 'Al confirmar, se paga desde disponible'}
+                </p>
+              )}
               {editando === clave && (
                 <form
                   onSubmit={(e) => {

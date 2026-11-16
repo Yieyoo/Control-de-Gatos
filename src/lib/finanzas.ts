@@ -325,7 +325,7 @@ export async function eliminarPagoTarjeta(id: number) {
  * gasolina, que varía cada vez) en vez de asumir el monto estimado de la
  * regla; si no se manda, se usa ese estimado tal cual.
  */
-export async function confirmarGastoDomiciliado(id: number, fecha: Date, montoReal?: number) {
+export async function confirmarGastoDomiciliado(id: number, fecha: Date, montoReal?: number, pagarDesdeDisponible = false) {
   const gasto = await prisma.gastoDomiciliado.findUnique({ where: { id } });
   if (!gasto) return null;
   const fechaOcurrencia = fechaUTC(fecha.getUTCFullYear(), fecha.getUTCMonth(), fecha.getUTCDate());
@@ -333,7 +333,7 @@ export async function confirmarGastoDomiciliado(id: number, fecha: Date, montoRe
   // Si está ligado a una tarjeta (ej. gasolina que se paga con crédito), no es
   // un gasto en efectivo -- confirmar crea una compra de tarjeta real, no un
   // GastoVariable (ver confirmarCargoTarjetaDomiciliado).
-  if (gasto.tarjetaId) return confirmarCargoTarjetaDomiciliado(gasto, fechaOcurrencia, montoReal);
+  if (gasto.tarjetaId) return confirmarCargoTarjetaDomiciliado(gasto, fechaOcurrencia, montoReal, pagarDesdeDisponible);
 
   const inicioDia = fechaOcurrencia;
   const finDia = new Date(inicioDia.getTime() + 24 * 60 * 60 * 1000);
@@ -376,8 +376,9 @@ export async function confirmarGastoDomiciliado(id: number, fecha: Date, montoRe
  * los cargos fijos de tarjeta (Netflix, Colegiatura), que solo marcan
  * `pagadoAdelantadoHasta` sin crear ninguna fila real (se asume que se pagan
  * solos vía domiciliación bancaria), este SÍ crea una CompraTarjeta real con
- * el monto capturado -- así "Deuda de tarjetas" refleja el monto exacto y
- * queda pendiente de pagarse como cualquier otra compra.
+ * el monto capturado -- así "Deuda de tarjetas" refleja el monto exacto. Si
+ * `pagarDesdeDisponible` está activo, también registra el pago desde disponible
+ * en la misma transacción.
  *
  * A propósito NO toca `pagadoAdelantadoHasta`: ese marcador es "pagado hasta
  * la fecha X" (válido para cargos fijos, que se asume se pagan en orden),
@@ -395,7 +396,8 @@ export async function confirmarGastoDomiciliado(id: number, fecha: Date, montoRe
 async function confirmarCargoTarjetaDomiciliado(
   gasto: { id: number; nombre: string; cantidad: number; categoriaId: number; tipoPresupuesto: string | null; tarjetaId: number | null },
   fecha: Date,
-  montoReal?: number
+  montoReal?: number,
+  pagarDesdeDisponible = false
 ) {
   if (!gasto.tarjetaId) return null;
   const fechaOcurrencia = fechaUTC(fecha.getUTCFullYear(), fecha.getUTCMonth(), fecha.getUTCDate());
@@ -408,17 +410,34 @@ async function confirmarCargoTarjetaDomiciliado(
   if (yaConfirmada) return yaConfirmada;
 
   try {
-    return await prisma.compraTarjeta.create({
-      data: {
-        nombre: gasto.nombre,
-        cantidad: montoReal ?? gasto.cantidad,
-        fecha: fechaOcurrencia,
-        tarjetaId: gasto.tarjetaId,
-        categoriaId: gasto.categoriaId,
-        tipoPresupuesto: gasto.tipoPresupuesto,
-        gastoDomiciliadoOrigenId: gasto.id,
-      },
-      include: { categoria: true, devoluciones: true, tarjeta: true },
+    return await prisma.$transaction(async (tx) => {
+      const cantidad = montoReal ?? gasto.cantidad;
+      const compra = await tx.compraTarjeta.create({
+        data: {
+          nombre: gasto.nombre,
+          cantidad,
+          fecha: fechaOcurrencia,
+          tarjetaId: gasto.tarjetaId!,
+          categoriaId: gasto.categoriaId,
+          tipoPresupuesto: gasto.tipoPresupuesto,
+          gastoDomiciliadoOrigenId: gasto.id,
+        },
+        include: { categoria: true, devoluciones: true, tarjeta: true },
+      });
+      if (pagarDesdeDisponible) {
+        await tx.pagoTarjeta.create({
+          data: {
+            tarjetaId: gasto.tarjetaId!,
+            cantidad,
+            concepto: `Pago al confirmar cargo: ${gasto.nombre}`,
+            fecha: fechaOcurrencia,
+            fuente: 'disponible',
+            compraTarjetaId: compra.id,
+            automaticaConfirmacion: true,
+          },
+        });
+      }
+      return compra;
     });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
@@ -446,10 +465,14 @@ export async function deshacerGastoDomiciliado(id: number, fecha: Date): Promise
   await prisma.$transaction(async (tx) => {
     const compra = await tx.compraTarjeta.findFirst({
       where: { gastoDomiciliadoOrigenId: id, fecha: { gte: inicioDia, lt: finDia } },
-      include: { _count: { select: { pagos: true } } },
+      include: { pagos: { select: { id: true, automaticaConfirmacion: true } } },
     });
     if (!compra) return;
-    if (compra._count.pagos > 0) throw new CompraConPagosError();
+    const pagosManuales = compra.pagos.filter((p) => !p.automaticaConfirmacion);
+    if (pagosManuales.length > 0) throw new CompraConPagosError();
+    if (compra.pagos.length > 0) {
+      await tx.pagoTarjeta.deleteMany({ where: { compraTarjetaId: compra.id, automaticaConfirmacion: true } });
+    }
     await tx.compraTarjeta.delete({ where: { id: compra.id } });
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
