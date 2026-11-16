@@ -11,7 +11,17 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { nombre, cantidad, fecha, categoriaId, notas, tipoPresupuesto, numeroMeses } = body;
+    const {
+      nombre,
+      cantidad,
+      fecha,
+      categoriaId,
+      notas,
+      tipoPresupuesto,
+      numeroMeses,
+      apartadoQuincena1,
+      apartadoQuincena2,
+    } = body;
 
     const existente = await prisma.compraTarjeta.findUnique({
       where: { id: parseInt(id) },
@@ -36,6 +46,28 @@ export async function PUT(
       return Response.json({ error: 'El importe no puede ser menor que pagos y devoluciones ya registrados' }, { status: 400 });
     }
 
+    const seEditanApartados = apartadoQuincena1 !== undefined || apartadoQuincena2 !== undefined;
+    const limpiarApartados = (cantidadFinal !== existente.cantidad || numeroMesesFinal !== existente.numeroMeses) && !seEditanApartados;
+    let apartado1Final: number | null = limpiarApartados ? null : existente.apartadoQuincena1;
+    let apartado2Final: number | null = limpiarApartados ? null : existente.apartadoQuincena2;
+    if (seEditanApartados) {
+      const apartado1 = Number(apartadoQuincena1);
+      const apartado2 = Number(apartadoQuincena2);
+      const mensualidad = numeroMesesFinal && numeroMesesFinal > 1
+        ? calcularMontoMensualMSI(Math.max(0, cantidadFinal - devoluciones), numeroMesesFinal)
+        : null;
+      if (
+        apartadoQuincena1 === undefined || apartadoQuincena2 === undefined ||
+        !Number.isFinite(apartado1) || !Number.isFinite(apartado2) ||
+        apartado1 < 0 || apartado2 < 0 || mensualidad === null ||
+        Math.abs(apartado1 + apartado2 - mensualidad) > 0.011
+      ) {
+        return Response.json({ error: 'Los dos apartados deben sumar la mensualidad de la compra' }, { status: 400 });
+      }
+      apartado1Final = apartado1;
+      apartado2Final = apartado2;
+    }
+
     const compra = await prisma.compraTarjeta.update({
       where: { id: parseInt(id) },
       data: {
@@ -47,6 +79,8 @@ export async function PUT(
         ...(tipoPresupuesto !== undefined && { tipoPresupuesto: tipoPresupuesto || null }),
         numeroMeses: numeroMesesFinal,
         montoMensual: numeroMesesFinal ? calcularMontoMensualMSI(cantidadFinal, numeroMesesFinal) : null,
+        apartadoQuincena1: apartado1Final,
+        apartadoQuincena2: apartado2Final,
       },
       include: { categoria: true, tarjeta: true },
     });
