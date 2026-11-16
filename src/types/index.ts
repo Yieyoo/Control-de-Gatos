@@ -128,8 +128,6 @@ export interface ICompraTarjeta {
   /** Meses sin intereses; null/undefined = de contado. */
   numeroMeses?: number;
   montoMensual?: number;
-  apartadoQuincena1?: number | null;
-  apartadoQuincena2?: number | null;
   devoluciones?: IDevolucion[];
   /** Si viene de confirmar (con monto real) un cargo domiciliado de tarjeta de monto variable, ej. gasolina. */
   gastoDomiciliadoOrigenId?: number;

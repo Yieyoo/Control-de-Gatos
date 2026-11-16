@@ -8,7 +8,7 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const { fecha, monto, pagarDesdeDisponible } = await request.json();
+    const { fecha, monto } = await request.json();
     const idFinal = leerEnteroPositivo(id);
     const fechaFinal = leerFecha(fecha);
     if (!idFinal || !fechaFinal) {
@@ -19,7 +19,7 @@ export async function POST(
       return Response.json({ error: 'Monto inválido' }, { status: 400 });
     }
     const montoReal = montoRealLeido ?? undefined;
-    const gasto = await confirmarGastoDomiciliado(idFinal, fechaFinal, montoReal, pagarDesdeDisponible === true);
+    const gasto = await confirmarGastoDomiciliado(idFinal, fechaFinal, montoReal);
     if (!gasto) {
       return Response.json({ error: 'Gasto domiciliado no encontrado' }, { status: 404 });
     }

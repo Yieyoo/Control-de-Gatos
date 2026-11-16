@@ -76,8 +76,6 @@ function TarjetasContenido() {
     tipoPresupuesto: 'gusto' as 'necesidad' | 'gusto',
     fecha: '',
   });
-  const [apartadosCompra, setApartadosCompra] = useState<Record<number, { quincena1: string; quincena2: string }>>({});
-  const [guardandoApartadoId, setGuardandoApartadoId] = useState<number | null>(null);
 
   const [formDevolucionAbierto, setFormDevolucionAbierto] = useState<number | null>(null);
   const [formDevolucion, setFormDevolucion] = useState({ cantidad: '', concepto: '' });
@@ -271,66 +269,6 @@ function TarjetasContenido() {
   };
 
   const pagosDeCompra = (compraId: number) => pagos.filter((p) => p.compraTarjetaId === compraId);
-
-  const apartadoCompra = (compra: ICompraTarjeta) => {
-    const mensualidad = calcularMontoMensualMSI(netoCompra(compra), compra.numeroMeses ?? 1);
-    const mitad = Math.round((mensualidad / 2) * 100) / 100;
-    return apartadosCompra[compra.id] ?? {
-      quincena1: (compra.apartadoQuincena1 ?? mitad).toFixed(2),
-      quincena2: (compra.apartadoQuincena2 ?? Math.round((mensualidad - mitad) * 100) / 100).toFixed(2),
-    };
-  };
-
-  const cambiarApartadoCompra = (compra: ICompraTarjeta, quincena: 'quincena1' | 'quincena2', valor: string) => {
-    const actual = apartadoCompra(compra);
-    const mensualidad = calcularMontoMensualMSI(netoCompra(compra), compra.numeroMeses ?? 1);
-    const otroCampo = quincena === 'quincena1' ? 'quincena2' : 'quincena1';
-    const otroValor = Number(valor);
-    setApartadosCompra((prev) => ({
-      ...prev,
-      [compra.id]: {
-        ...actual,
-        [quincena]: valor,
-        ...(valor !== '' && Number.isFinite(otroValor)
-          ? { [otroCampo]: Math.max(0, Math.round((mensualidad - otroValor) * 100) / 100).toFixed(2) }
-          : {}),
-      },
-    }));
-  };
-
-  const guardarApartadoCompra = async (compra: ICompraTarjeta) => {
-    const apartado = apartadoCompra(compra);
-    const mensualidad = calcularMontoMensualMSI(netoCompra(compra), compra.numeroMeses ?? 1);
-    const quincena1 = Number(apartado.quincena1);
-    const quincena2 = Number(apartado.quincena2);
-    if (!Number.isFinite(quincena1) || !Number.isFinite(quincena2) || quincena1 < 0 || quincena2 < 0 || Math.abs(quincena1 + quincena2 - mensualidad) > 0.011) {
-      setError('Los dos apartados deben sumar la mensualidad.');
-      return;
-    }
-    setGuardandoApartadoId(compra.id);
-    setError(null);
-    try {
-      const resp = await fetch(`/api/tarjetas/compras/${compra.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apartadoQuincena1: quincena1, apartadoQuincena2: quincena2 }),
-      });
-      if (!resp.ok) {
-        const datos = await resp.json().catch(() => null);
-        throw new Error(datos?.error || 'Error al guardar los apartados');
-      }
-      setApartadosCompra((prev) => {
-        const siguiente = { ...prev };
-        delete siguiente[compra.id];
-        return siguiente;
-      });
-      await cargarCompras();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al guardar los apartados');
-    } finally {
-      setGuardandoApartadoId(null);
-    }
-  };
 
   const abrirPagoCompra = (compra: ICompraTarjeta, cantidadSugerida: number) => {
     setFormPagoCompraAbierto(compra.id);
@@ -844,41 +782,6 @@ function TarjetasContenido() {
                             </button>
                           </div>
                         </div>
-
-                        {!!c.numeroMeses && c.numeroMeses > 1 && (
-                          <div className="rounded bg-blue-50 px-3 py-2 space-y-2">
-                            <p className="text-xs font-medium text-blue-900">
-                              Aparta la mensualidad ({formatearMoneda(calcularMontoMensualMSI(netoCompra(c), c.numeroMeses))})
-                            </p>
-                            <div className="flex flex-wrap items-end gap-2">
-                              {(['quincena1', 'quincena2'] as const).map((quincena, indice) => (
-                                <label key={quincena} className="text-[11px] text-blue-800">
-                                  {indice === 0 ? 'Quincena 1' : 'Quincena 2'}
-                                  <span className="mt-0.5 flex items-center gap-1">
-                                    <span>$</span>
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      step="0.01"
-                                      value={apartadoCompra(c)[quincena]}
-                                      onChange={(e) => cambiarApartadoCompra(c, quincena, e.target.value)}
-                                      aria-label={`Apartado de ${c.nombre}, ${indice === 0 ? 'quincena 1' : 'quincena 2'}`}
-                                      className="w-24 rounded border border-blue-200 bg-white px-2 py-1 text-sm text-gray-800"
-                                    />
-                                  </span>
-                                </label>
-                              ))}
-                              <button
-                                type="button"
-                                onClick={() => guardarApartadoCompra(c)}
-                                disabled={guardandoApartadoId === c.id}
-                                className="rounded bg-blue-700 px-2.5 py-1.5 text-xs text-white hover:bg-blue-800 disabled:opacity-50"
-                              >
-                                {guardandoApartadoId === c.id ? 'Guardando…' : 'Guardar apartados'}
-                              </button>
-                            </div>
-                          </div>
-                        )}
 
                         {formDevolucionAbierto === c.id ? (
                           <form

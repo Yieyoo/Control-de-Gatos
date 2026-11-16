@@ -242,8 +242,6 @@ model CompraTarjeta {
   // solo para mostrar "$X/mes, N meses" -- el pago real sigue siendo PagoTarjeta.
   numeroMeses         Int?
   montoMensual        Float?
-  apartadoQuincena1   Float?
-  apartadoQuincena2   Float?
 
   // Si esta compra viene de confirmar (con el monto real) un cargo domiciliado
   // de tarjeta que varía cada vez (ej. gasolina) -- ver gastoDomiciliadoOrigenId
@@ -283,7 +281,6 @@ model PagoTarjeta {
   // Atribución opcional: a qué compra específica corresponde este pago (útil para MSI)
   compraTarjetaId     Int?
   compraTarjeta       CompraTarjeta? @relation(fields: [compraTarjetaId], references: [id], onDelete: SetNull)
-  automaticaConfirmacion Boolean @default(false)
 
   @@map("pagos_tarjeta")
 }
